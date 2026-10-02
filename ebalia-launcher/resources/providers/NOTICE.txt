@@ -1,0 +1,9 @@
+Provider logos
+
+These logos identify the modpack and mod services EBALIA can browse and import from:
+ATLauncher, CurseForge, Feed The Beast (FTB and FTB Legacy), Modrinth and Technic.
+They are trademarks of their respective owners and are used only to identify each service.
+
+The images were rasterized to 96 px from the copies distributed with Prism Launcher
+(https://github.com/PrismLauncher/PrismLauncher, launcher/resources/multimc,
+commit 323609694d04a4715e88a087ccf7de05696c998c).

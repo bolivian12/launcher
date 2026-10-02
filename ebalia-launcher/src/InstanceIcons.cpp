@@ -27,13 +27,15 @@ QIcon InstanceIcons::icon(const QString &value,const QString &dir){
     return icons::alpha(s);
 }
 QIcon InstanceIcons::provider(const QString &provider){
-    // Neutral badges instead of third-party logos.
-    static const QHash<QString,QPair<QString,QColor>> badges{{"custom",{"",{}}},{"import",{"",{}}},{"atlauncher",{"AT",QColor(213,72,62)}},{"curseforge",{"CF",QColor(241,100,54)}},
-        {"ftb",{"FTB",QColor(122,86,196)}},{"legacy_ftb",{"FTB",QColor(96,96,110)}},{"import_ftb",{"FTB",QColor(60,130,190)}},{"modrinth",{"M",QColor(27,217,106)}},{"technic",{"T",QColor(60,110,200)}}};
+    // Each service's own logo (resources/providers/NOTICE.txt); custom and import use EBALIA's pixel icons.
     if(provider=="custom")return icons::alpha(48);if(provider=="import")return icons::folder(48);
-    auto badge=badges.value(provider,{"?",QColor(120,120,120)});QPixmap pixmap(48,48);pixmap.fill(Qt::transparent);
-    QPainter p(&pixmap);p.setRenderHint(QPainter::Antialiasing);p.setBrush(badge.second);p.setPen(Qt::NoPen);p.drawRoundedRect(QRectF(2,2,44,44),10,10);
-    p.setPen(Qt::white);auto font=p.font();font.setBold(true);font.setPixelSize(badge.first.size()>2?15:19);p.setFont(font);p.drawText(QRect(0,0,48,48),Qt::AlignCenter,badge.first);
-    if(provider=="import_ftb"){p.setBrush(QColor(255,255,255,230));p.setPen(Qt::NoPen);p.drawEllipse(QRectF(31,31,14,14));p.setPen(QPen(badge.second,2.5));p.drawLine(38,34,38,42);p.drawLine(34,38,38,42);p.drawLine(42,38,38,42);}
+    const bool app=provider=="import_ftb";QPixmap logo(":/providers/"+QString(app?"ftb":provider)+".png");
+    if(logo.isNull())return icons::alpha(48);
+    QPixmap pixmap(96,96);pixmap.fill(Qt::transparent);QPainter p(&pixmap);p.setRenderHint(QPainter::Antialiasing);p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const auto scaled=logo.scaled(app?80:96,app?80:96,Qt::KeepAspectRatio,Qt::SmoothTransformation);p.drawPixmap((96-scaled.width())/2,(96-scaled.height())/2,scaled);
+    if(app){ // the FTB App import: FTB logo with a download badge
+        p.setPen(Qt::NoPen);p.setBrush(QColor(60,133,39));p.drawEllipse(QRectF(58,58,36,36));p.setPen(QPen(Qt::white,5,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+        p.drawLine(QPointF(76,66),QPointF(76,84));p.drawLine(QPointF(68,77),QPointF(76,85));p.drawLine(QPointF(84,77),QPointF(76,85));
+    }
     return pixmap;
 }

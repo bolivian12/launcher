@@ -18,6 +18,8 @@ class QCloseEvent;
 class QPushButton;
 class QHBoxLayout;
 class QVBoxLayout;
+class QGridLayout;
+class QScrollArea;
 class QNetworkAccessManager;
 class PatreonAuth;
 class InstanceGrid;
@@ -49,6 +51,7 @@ private:
     void refreshAccounts();
     void refreshLost();
     void refreshNews(bool network=true);
+    void arrangeHomeNews();
     void loadImage(const QString &url,std::function<void(const QPixmap &)> done);
     void accountMenu();
     void instancePickerMenu();
@@ -97,7 +100,7 @@ private:
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
     QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr;
     QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;QWidget *m_lostImage=nullptr;
-    QHBoxLayout *m_homeNews=nullptr;
+    QGridLayout *m_homeNews=nullptr;QScrollArea *m_home=nullptr;QWidget *m_hero=nullptr,*m_playBar=nullptr;
     QJsonArray m_packData,m_hits;
     QSet<QString> m_installing,m_launchAfterInstall;
     int m_jobs=0,m_offset=0;

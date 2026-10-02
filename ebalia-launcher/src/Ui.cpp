@@ -2,7 +2,15 @@
 #include <QtWidgets>
 namespace {
 int windowsOpen=0;
+class ResizeWatcher:public QObject {
+public:
+    ResizeWatcher(QWidget *watched,std::function<void()> callback):QObject(watched),m_callback(std::move(callback)){watched->installEventFilter(this);}
+    bool eventFilter(QObject *,QEvent *event) override {if(event->type()==QEvent::Resize)m_callback();return false;}
+private:
+    std::function<void()> m_callback;
+};
 }
+void Ui::onResize(QWidget *watched,std::function<void()> callback){new ResizeWatcher(watched,std::move(callback));}
 QPixmap Ui::pixmap(const QString &name,int size,const QColor &color){
     static QHash<QString,QPixmap> cache;const auto key=name+"|"+QString::number(size)+"|"+color.name(QColor::HexArgb);
     if(auto it=cache.constFind(key);it!=cache.cend())return *it;

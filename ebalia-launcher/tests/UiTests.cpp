@@ -112,6 +112,9 @@ private slots:
         QFrame *card=nullptr;for(auto c:window.findChildren<QFrame*>("instanceCard"))if(c->property("dir").toString()==first)card=c;QVERIFY(card);
         QTest::mouseClick(card,Qt::LeftButton,{},QPoint(20,20));QTest::qWait(80);QVERIFY(window.findChild<QWidget*>("instanceDetail")->isVisible());QVERIFY(window.grab().save(out+"/"+language+"-detail.png"));
         for(auto page:{MainWindow::Lost,MainWindow::Explore,MainWindow::Packs,MainWindow::Skins,MainWindow::News,MainWindow::Settings}){window.showPage(page);QTest::qWait(50);QVERIFY(window.grab().save(out+"/"+language+"-page"+QString::number(page)+".png"));}
+        window.resize(1900,1000);QTest::qWait(50);window.showPage(MainWindow::Home);QTest::qWait(50);QVERIFY(window.grab().save(out+"/"+language+"-home-large.png"));
+        {auto picker=window.findChild<QPushButton*>("instancePicker");QVERIFY(picker->width()>=340);} // full screen: the picker shows the whole name
+        {auto home=window.findChild<QScrollArea*>("homePage");QVERIFY(home->verticalScrollBar()->maximum()>0);home->verticalScrollBar()->setValue(home->verticalScrollBar()->maximum());QTest::qWait(30);QVERIFY(window.grab().save(out+"/"+language+"-home-scrolled.png"));home->verticalScrollBar()->setValue(0);}
         window.resize(900,600);QTest::qWait(50);window.showPage(MainWindow::Home);QTest::qWait(50);QVERIFY(window.grab().save(out+"/"+language+"-home-small.png"));window.showPage(MainWindow::Instances);QTest::qWait(50);QVERIFY(window.grab().save(out+"/"+language+"-detail-small.png"));window.resize(1280,820);
         {SetupDialog setup(&window);setup.show();QTest::qWait(1500);QVERIFY(setup.grab().save(out+"/"+language+"-setup.png"));}
         window.showPage(0);

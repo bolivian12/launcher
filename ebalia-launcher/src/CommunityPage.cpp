@@ -10,14 +10,6 @@ QString trc(const char *s){return Language::key(QString::fromUtf8(s));}
 QLabel *label(const QString &text,QVBoxLayout *l,const char *name="muted"){auto w=new QLabel(text);w->setTextFormat(Qt::PlainText);w->setWordWrap(true);w->setObjectName(name);l->addWidget(w);return w;}
 QPushButton *button(const QString &text,QBoxLayout *l,QObject *context,std::function<void()> action){auto b=new QPushButton(text);l->addWidget(b);QObject::connect(b,&QPushButton::clicked,context,action);return b;}
 void link(const QString &text,const QString &url,QBoxLayout *l,QObject *context){auto b=button(text+"  ↗",l,context,[url]{QDesktopServices::openUrl(QUrl(url));});b->setToolTip(url);}
-// Calls back when the watched widget changes size (the fan art grid reflows to the window width).
-class OnResize:public QObject {
-public:
-    OnResize(QWidget *watched,std::function<void()> callback):QObject(watched),m_callback(std::move(callback)){watched->installEventFilter(this);}
-    bool eventFilter(QObject *,QEvent *event) override {if(event->type()==QEvent::Resize)m_callback();return false;}
-private:
-    std::function<void()> m_callback;
-};
 QJsonObject resource(const char *path){QFile f(QString::fromUtf8(path));if(!f.open(QIODevice::ReadOnly))return {};return QJsonDocument::fromJson(f.readAll()).object();}
 }
 CommunityPage::CommunityPage(int section,const QString &root,PatreonAuth *auth,QWidget *parent):QWidget(parent){
@@ -29,7 +21,7 @@ CommunityPage::CommunityPage(int section,const QString &root,PatreonAuth *auth,Q
             connect(card,&QToolButton::clicked,this,[this,file,artist]{QDialog d(this);d.setObjectName("fanartViewer");d.setWindowTitle(artist);Ui::fitToScreen(&d,{850,640});QVBoxLayout layout(&d);auto area=new QScrollArea;area->setWidgetResizable(true);auto image=new QLabel;image->setAlignment(Qt::AlignCenter);QPixmap p(file);image->setPixmap(p.scaled(800,540,Qt::KeepAspectRatio,Qt::SmoothTransformation));area->setWidget(image);layout.addWidget(area);auto credit=new QLabel(artist);layout.addWidget(credit);QDialogButtonBox close(QDialogButtonBox::Close);layout.addWidget(&close);connect(&close,&QDialogButtonBox::rejected,&d,&QDialog::reject);Ui::openWindow(d);});
         }
         auto columns=std::make_shared<int>(3);
-        new OnResize(scroll->viewport(),[grid,cards,columns,scroll]{
+        Ui::onResize(scroll->viewport(),[grid,cards,columns,scroll]{
             const int fit=qBound(1,(scroll->viewport()->width()-12+12)/(cards.isEmpty()?260:cards.first()->sizeHint().width()+12),4);if(fit==*columns)return;*columns=fit;
             for(auto card:cards)grid->removeWidget(card);for(int n=0;n<cards.size();++n)grid->addWidget(cards[n],n/fit,n%fit);
         });

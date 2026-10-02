@@ -2,6 +2,7 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QString>
+#include <functional>
 class QDialog;
 class QWidget;
 // Shared look of the launcher: Lucide icons (resources/icons/ui, ISC license), the dark theme and window helpers.
@@ -22,4 +23,6 @@ QString artFor(const QString &key);
 int openWindow(QDialog &dialog);
 int openWindows();
 void fitToScreen(QWidget *window,QSize preferred);
+// Runs callback whenever watched changes size (layouts that reflow with the window).
+void onResize(QWidget *watched,std::function<void()> callback);
 }

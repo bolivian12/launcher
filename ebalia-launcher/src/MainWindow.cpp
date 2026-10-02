@@ -171,27 +171,43 @@ QWidget *MainWindow::buildSidebar() {
     return bar;
 }
 QWidget *MainWindow::buildHome() {
-    auto home=new QWidget;home->setObjectName("homePage");auto l=new QVBoxLayout(home);l->setContentsMargins(0,0,0,0);l->setSpacing(0);
-    auto hero=new GameBanner(":/art/f1_2.jpg");auto hl=new QVBoxLayout(hero);hl->setContentsMargins(40,34,40,22);hl->setSpacing(0);
+    // A page that scrolls: the artwork and the play bar fill the window, the news continue below.
+    m_home=new QScrollArea;m_home->setObjectName("homePage");m_home->setWidgetResizable(true);m_home->setFrameShape(QFrame::NoFrame);m_home->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto content=new QWidget;content->setObjectName("homeContent");m_home->setWidget(content);auto l=new QVBoxLayout(content);l->setContentsMargins(0,0,0,0);l->setSpacing(0);
+    auto hero=new GameBanner(":/art/f1_2.jpg");m_hero=hero;auto hl=new QVBoxLayout(hero);hl->setContentsMargins(40,34,40,22);hl->setSpacing(0);
     label("MINECRAFT",hl,"heroTitle",false);label("JAVA EDITION",hl,"heroEdition",false);hl->addStretch();label(k("Your next adventure"),hl,"heroTagline",false);
-    l->addWidget(hero,1);
-    auto bar=new QFrame;bar->setObjectName("playBar");auto bl=new QGridLayout(bar);bl->setContentsMargins(28,14,28,16);bl->setHorizontalSpacing(16);
-    m_instancePicker=new QPushButton;m_instancePicker->setObjectName("instancePicker");m_instancePicker->setCursor(Qt::PointingHandCursor);m_instancePicker->setFixedHeight(62);m_instancePicker->setMinimumWidth(190);m_instancePicker->setMaximumWidth(310);m_instancePicker->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
+    l->addWidget(hero);
+    auto bar=new QFrame;bar->setObjectName("playBar");m_playBar=bar;auto bl=new QGridLayout(bar);bl->setContentsMargins(28,14,28,16);bl->setHorizontalSpacing(16);
+    // Picker on the left and player on the right sit in equal columns, so PLAY stays centered at any width.
+    auto left=new QWidget;auto leftLayout=new QHBoxLayout(left);leftLayout->setContentsMargins(0,0,0,0);
+    m_instancePicker=new QPushButton;m_instancePicker->setObjectName("instancePicker");m_instancePicker->setCursor(Qt::PointingHandCursor);m_instancePicker->setFixedHeight(62);m_instancePicker->setMinimumWidth(200);m_instancePicker->setMaximumWidth(360);m_instancePicker->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
     auto pl=new QHBoxLayout(m_instancePicker);pl->setContentsMargins(10,8,12,8);pl->setSpacing(10);m_pickerIcon=new QLabel;m_pickerIcon->setFixedSize(40,40);m_pickerIcon->setAlignment(Qt::AlignCenter);pl->addWidget(m_pickerIcon);
     auto pickerText=new QVBoxLayout;pickerText->setSpacing(1);pl->addLayout(pickerText,1);m_pickerName=elided(pickerText,"pickerName");m_pickerSub=elided(pickerText,"pickerSub");
     auto up=new QLabel;up->setPixmap(Ui::pixmap("chevron-down",16,dim).transformed(QTransform().rotate(180)));pl->addWidget(up);
     for(QWidget *w:{static_cast<QWidget*>(m_pickerIcon),static_cast<QWidget*>(m_pickerName),static_cast<QWidget*>(m_pickerSub),static_cast<QWidget*>(up)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
-    connect(m_instancePicker,&QPushButton::clicked,this,[this]{instancePickerMenu();});bl->addWidget(m_instancePicker,0,0,Qt::AlignLeft|Qt::AlignVCenter);
+    connect(m_instancePicker,&QPushButton::clicked,this,[this]{instancePickerMenu();});leftLayout->addWidget(m_instancePicker,3);leftLayout->addStretch(1);bl->addWidget(left,0,0);
     m_playButton=new QPushButton;m_playButton->setObjectName("homePlay");m_playButton->setProperty("play",true);m_playButton->setCursor(Qt::PointingHandCursor);m_playButton->setMinimumSize(250,64);m_playButton->setIconSize(QSize(24,24));
     connect(m_playButton,&QPushButton::clicked,this,[this]{play();});bl->addWidget(m_playButton,0,1,Qt::AlignCenter);
-    auto player=new QWidget;player->setMaximumWidth(310);auto playerLayout=new QHBoxLayout(player);playerLayout->setContentsMargins(0,0,0,0);playerLayout->setSpacing(10);
-    auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
+    auto player=new QWidget;auto playerLayout=new QHBoxLayout(player);playerLayout->setContentsMargins(0,0,0,0);playerLayout->setSpacing(10);playerLayout->addStretch(1);
+    auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,3);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
     bl->addWidget(player,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
-    auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,14,28,20);nl->setSpacing(12);
+    auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,18,28,26);nl->setSpacing(14);
     auto head=new QHBoxLayout;nl->addLayout(head);label(k("What's new"),head,"sectionTitle",false);head->addStretch();
     auto all=button(k("See all"),head,[this]{showPage(News);},this);all->setProperty("link",true);all->setIcon(Ui::icon("chevron-right",green));all->setLayoutDirection(Qt::RightToLeft);
-    m_homeNews=new QHBoxLayout;m_homeNews->setSpacing(14);nl->addLayout(m_homeNews);l->addWidget(news);
-    return home;
+    m_homeNews=new QGridLayout;m_homeNews->setHorizontalSpacing(16);m_homeNews->setVerticalSpacing(16);nl->addLayout(m_homeNews);l->addWidget(news);l->addStretch();
+    Ui::onResize(m_home->viewport(),[this]{
+        // The artwork fills what the play bar leaves, minus a strip that shows the news begin below.
+        m_hero->setFixedHeight(qMax(230,m_home->viewport()->height()-m_playBar->sizeHint().height()-150));arrangeHomeNews();
+    });
+    return m_home;
+}
+// News cards in rows of three (two when narrow); pictures keep their shape as the cards widen.
+void MainWindow::arrangeHomeNews(){
+    if(!m_homeNews||!m_home)return;QList<QWidget*> cards;for(int n=0;n<m_homeNews->count();++n)if(auto w=m_homeNews->itemAt(n)->widget())cards<<w;
+    const int width=m_home->viewport()->width()-56,columns=width>=760?3:2,cardWidth=(width-(columns-1)*16)/columns,cover=qBound(110,cardWidth*11/20,300);
+    for(auto card:cards)m_homeNews->removeWidget(card);
+    for(int n=0;n<cards.size();++n){m_homeNews->addWidget(cards[n],n/columns,n%columns);cards[n]->setFixedHeight(cover+80);if(auto c=cards[n]->findChild<QWidget*>("newsCover"))c->setFixedHeight(cover);}
+    for(int c=0;c<3;++c)m_homeNews->setColumnStretch(c,c<columns?1:0);
 }
 QWidget *MainWindow::buildInstances() {
     m_library=new QStackedWidget;m_library->setObjectName("instancesPage");m_grid=new InstanceGrid;m_detail=new InstanceDetail;m_library->addWidget(m_grid);m_library->addWidget(m_detail);
@@ -624,16 +640,16 @@ void MainWindow::refreshNews(bool network){
     auto render=[this](QJsonObject o){
         while(auto item=m_homeNews->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
         auto addCard=[this](const QString &title,const QString &meta,const QString &art,const QString &image,std::function<void()> open){
-            auto card=new QPushButton;card->setObjectName("newsCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(title);card->setToolTip(title);card->setMinimumWidth(150);card->setFixedHeight(190);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
-            auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setFixedHeight(118);cover->setPixmap(QPixmap(art));cl->addWidget(cover);
+            auto card=new QPushButton;card->setObjectName("newsCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(title);card->setToolTip(title);card->setMinimumWidth(150);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
+            auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setObjectName("newsCover");cover->setPixmap(QPixmap(art));cl->addWidget(cover);
             auto body=new QVBoxLayout;body->setContentsMargins(14,0,14,0);body->setSpacing(4);cl->addLayout(body);
             auto m=elided(body,"newsMeta");m->setText(meta);auto t=label(title,body,"newsTitle");t->setAlignment(Qt::AlignLeft|Qt::AlignTop);t->setMaximumHeight(t->fontMetrics().lineSpacing()*2+4);body->addStretch(); // long titles keep their first two lines
-            for(auto w:{m,t})w->setAttribute(Qt::WA_TransparentForMouseEvents);connect(card,&QPushButton::clicked,this,std::move(open));m_homeNews->addWidget(card,1);
+            for(auto w:{m,t})w->setAttribute(Qt::WA_TransparentForMouseEvents);connect(card,&QPushButton::clicked,this,std::move(open));m_homeNews->addWidget(card,m_homeNews->count(),0);
             loadImage(image,[cover=QPointer<Cover>(cover)](const QPixmap &p){if(cover)cover->setPixmap(p);});
         };
         QList<QJsonObject> java,other;for(const auto &v:o["entries"].toArray()){const auto e=v.toObject();if(e["title"].toString().isEmpty())continue;(e["category"].toString().contains("Java")?java:other)<<e;}
         auto cards=java+other;
-        for(int n=0;n<qMin(3,int(cards.size()));++n){
+        for(int n=0;n<qMin(9,int(cards.size()));++n){
             const auto entry=cards[n];const auto link=QUrl(entry["readMoreLink"].toString(entry["link"].toString()));
             const auto image=entry["playPageImage"].toObject()["url"].toString(entry["newsPageImage"].toObject()["url"].toString());
             addCard(entry["title"].toString(),QString(entry["category"].toString()).remove("Minecraft: ").toUpper()+"  ·  "+entry["date"].toString().left(10),Ui::artFor(entry["title"].toString()),image.isEmpty()?QString():"https://launchercontent.mojang.com"+image,[this,link]{if(minecraftLink(link))QDesktopServices::openUrl(link);else showPage(News);});
@@ -643,6 +659,7 @@ void MainWindow::refreshNews(bool network){
             addCard(k("Discover mods"),"MODRINTH  ·  CURSEFORGE",":/art/f2_6.jpg",{},[this]{showPage(Explore);});
             addCard(k("Lost versions"),"EBALIA",":/art/f3_6.jpg",{},[this]{showPage(Lost);});
         }
+        arrangeHomeNews();
         m_news->clear();
         for(const auto &e:java+other){
             const auto image=e["newsPageImage"].toObject()["url"].toString(e["playPageImage"].toObject()["url"].toString());const auto url=image.isEmpty()?QString():"https://launchercontent.mojang.com"+image;
