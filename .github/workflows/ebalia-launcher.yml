@@ -1,0 +1,73 @@
+name: EBALIA Launcher
+on:
+  push:
+    paths: ['ebalia-launcher/**', '.github/workflows/ebalia-launcher.yml']
+  pull_request:
+    paths: ['ebalia-launcher/**', '.github/workflows/ebalia-launcher.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: ebalia-launcher
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev qt6-image-formats-plugins libarchive-dev libgl1-mesa-dev fonts-noto-cjk
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build
+      - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - run: cmake --install build --prefix package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-linux-x64
+          path: ebalia-launcher/package
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+      - name: Libarchive
+        shell: pwsh
+        run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install libarchive:x64-windows'
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+      - run: cmake --build build --config Release --parallel
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          ctest --test-dir build -C Release --output-on-failure
+      - name: Package without elevation or executable compression
+        shell: pwsh
+        run: |
+          cmake --install build --config Release --prefix package
+          windeployqt --release --no-translations package/bin/ebalia-launcher.exe
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/*.dll" package/bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-windows-x64-unsigned
+          path: ebalia-launcher/package/bin
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install qt libarchive ninja
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix libarchive)"
+      - run: cmake --build build
+      - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - run: cmake --install build --prefix package
+      - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -dmg -always-overwrite'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-macos-unsigned
+          path: ebalia-launcher/package/*.dmg

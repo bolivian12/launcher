@@ -1,0 +1,135 @@
+0	 aktive Mods	 mods actifs	 mod attive	 активных модов	 個の有効なMOD	 활성 모드	 个已启用模组
+1	 Versionen	 versions	 versioni	 версий	 バージョン	 버전	 个版本
+2	 · Installiert	 · Installée	 · Installata	 · Установлена	 · インストール済み	 · 설치됨	 · 已安装
+4	?  Anleitung & Tutorial	?  Guide et tutoriel	?  Guida e tutorial	?  Руководство	?  ガイドとチュートリアル	?  가이드 및 튜토리얼	?  指南与教程
+5	Ein Pack merkt sich deine Lieblingsmods und sucht passende Versionen für die Zielinstanz.	Un pack mémorise vos mods favoris et recherche les versions compatibles avec l’instance cible.	Un pack ricorda le tue mod preferite e trova le versioni compatibili con l’istanza di destinazione.	Набор сохраняет список любимых модов и находит совместимые версии для выбранной сборки.	パックはお気に入りのMODを記録し、適用先のインスタンスに対応するバージョンを探します。	팩은 즐겨 쓰는 모드를 기억하고 대상 인스턴스에 맞는 버전을 찾습니다.	模组包会记录你喜爱的模组，并查找适用于目标实例的版本。
+6	Ein Platz für jede Welt	Une place pour chaque monde	Un posto per ogni mondo	Место для каждого мира	ワールドごとに専用の場所を	모든 월드를 위한 공간	每个世界都有自己的空间
+7	Konten, Speicher und Launcher-Einstellungen.	Comptes, stockage et préférences du launcher.	Account, archiviazione e preferenze del launcher.	Учётные записи, хранилище и настройки лаунчера.	アカウント、保存場所、ランチャーの設定。	계정, 저장 공간 및 런처 설정.	账户、存储与启动器偏好设置。
+8	Microsoft-Konto hinzufügen	Ajouter un compte Microsoft	Aggiungi account Microsoft	Добавить учётную запись Microsoft	Microsoftアカウントを追加	Microsoft 계정 추가	添加 Microsoft 账户
+9	Füge zum Spielen ein Konto oder lokales Profil hinzu.	Ajoutez un compte ou un profil local pour jouer.	Aggiungi un account o un profilo locale per giocare.	Добавьте учётную запись или локальный профиль для игры.	プレイするにはアカウントまたはローカルプロフィールを追加してください。	플레이하려면 계정 또는 로컬 프로필을 추가하세요.	请先添加账户或本地档案再开始游戏。
+10	Lokale JAR hinzufügen	Ajouter un JAR local	Aggiungi JAR locale	Добавить локальный JAR	ローカルJARを追加	로컬 JAR 추가	添加本地 JAR
+11	Lokales Profil hinzufügen	Ajouter un profil local	Aggiungi profilo locale	Добавить локальный профиль	ローカルプロフィールを追加	로컬 프로필 추가	添加本地档案
+12	Weitere Instanz mit meinen Mods	Une autre instance avec mes mods	Un’altra istanza con le mie mod	Новая сборка с моими модами	自分のMODで別のインスタンスを作成	내 모드로 다른 인스턴스 만들기	使用我的模组创建另一个实例
+13	Auf eine Instanz anwenden	Appliquer à une instance	Applica a un’istanza	Применить к сборке	インスタンスに適用	인스턴스에 적용	应用到实例
+14	Automatisch (stabil / empfohlen)	Automatique (stable / recommandée)	Automatica (stabile / consigliata)	Автоматически (стабильная / рекомендуемая)	自動（安定版・推奨版）	자동 (안정 / 권장)	自动（稳定版／推荐版）
+15	Automatische Erkennung	Détection automatique	Rilevamento automatico	Автоматическое определение	自動検出	자동 감지	自动检测
+16	Loader-Versionen anzeigen	Voir les versions du chargeur	Vedi versioni del loader	Показать версии загрузчика	ローダーのバージョンを表示	로더 버전 보기	查看加载器版本
+17	Katalog aktualisiert · 	Catalogue à jour · 	Catalogo aggiornato · 	Каталог обновлён · 	カタログ更新済み · 	카탈로그 갱신됨 · 	目录已更新 · 
+18	Versionen und Abhängigkeiten prüfen…	Vérification des versions et dépendances…	Verifica di versioni e dipendenze…	Проверка версий и зависимостей…	バージョンと依存関係を確認中…	버전 및 의존성 확인 중…	正在检查版本与依赖…
+19	Versionen abrufen…	Recherche des versions…	Ricerca delle versioni…	Получение версий…	バージョンを確認中…	버전 확인 중…	正在查询版本…
+20	Java-Programm auswählen	Choisir l’exécutable Java	Scegli eseguibile Java	Выбрать исполняемый файл Java	Java実行ファイルを選択	Java 실행 파일 선택	选择 Java 可执行文件
+21	Schließe laufende Instanzen vor dem Beenden.	Fermez les instances en cours avant de quitter.	Chiudi le istanze in esecuzione prima di uscire.	Перед выходом закройте запущенные сборки.	終了する前に実行中のインスタンスを閉じてください。	종료하기 전에 실행 중인 인스턴스를 닫으세요.	退出前请关闭正在运行的实例。
+22	Schließe das Spiel vor dem Kopieren der Mods.	Fermez le jeu avant de copier ses mods.	Chiudi il gioco prima di copiare le mod.	Закройте игру перед копированием модов.	MODをコピーする前にゲームを閉じてください。	모드를 복사하기 전에 게임을 닫으세요.	复制模组前请先关闭游戏。
+23	Diese Minecraft-Instanz schließen?	Fermer cette instance de Minecraft ?	Chiudere questa istanza di Minecraft?	Закрыть эту сборку Minecraft?	このMinecraftインスタンスを閉じますか？	이 Minecraft 인스턴스를 닫을까요?	关闭此 Minecraft 实例？
+24	Verbindung wird hergestellt…	Connexion…	Connessione…	Подключение…	接続中…	연결 중…	正在连接…
+25	Die Datei konnte nicht geändert werden.	Impossible de modifier le fichier.	Impossibile modificare il file.	Не удалось изменить файл.	ファイルを変更できませんでした。	파일을 변경할 수 없습니다.	无法修改文件。
+26	Die Datei konnte nicht verschoben werden.	Impossible de déplacer le fichier.	Impossibile spostare il file.	Не удалось переместить файл.	ファイルを移動できませんでした。	파일을 이동할 수 없습니다.	无法移动文件。
+27	Erstelle zuerst eine Instanz mit Mod-Loader.	Créez d’abord une instance avec un chargeur de mods.	Crea prima un’istanza con un loader per mod.	Сначала создайте сборку с загрузчиком модов.	先にMODローダー付きのインスタンスを作成してください。	먼저 모드 로더가 있는 인스턴스를 만드세요.	请先创建带有模组加载器的实例。
+28	Instanz erstellen	Créer l’instance	Crea istanza	Создать сборку	インスタンスを作成	인스턴스 만들기	创建实例
+29	Meine erste Instanz erstellen	Créer ma première instance	Crea la mia prima istanza	Создать первую сборку	最初のインスタンスを作成	첫 인스턴스 만들기	创建我的第一个实例
+30	Erstelle deine erste Instanz. Mehrere Instanzen derselben Version können unterschiedliche Mods haben.	Créez votre première instance. Plusieurs instances d’une même version peuvent avoir des mods différents.	Crea la tua prima istanza. Puoi avere più istanze della stessa versione con mod diverse.	Создайте первую сборку. Можно использовать одну версию игры в нескольких сборках с разными модами.	最初のインスタンスを作成しましょう。同じゲームバージョンで異なるMOD構成を使えます。	첫 인스턴스를 만드세요. 같은 게임 버전으로 서로 다른 모드 구성을 사용할 수 있습니다.	创建第一个实例。同一游戏版本可以有多个实例，并使用不同的模组。
+31	Verschollene Version herunterladen und vorbereiten…	Téléchargement et préparation de la version perdue…	Download e preparazione della versione perduta…	Загрузка и подготовка потерянной версии…	失われたバージョンをダウンロードして準備中…	잃어버린 버전 다운로드 및 준비 중…	正在下载并准备失落版本…
+32	Mods herunterladen und überprüfen…	Téléchargement et vérification des mods…	Download e verifica delle mod…	Загрузка и проверка модов…	MODをダウンロードして検証中…	모드 다운로드 및 검증 중…	正在下载并校验模组…
+33	EBALIA 4.0 · Katalog und Nachrichten werden automatisch aktualisiert. Welten, Mods und bestehende Instanzversionen bleiben unverändert.	EBALIA 4.0 · Le catalogue et les actualités se mettent à jour automatiquement. Vos mondes, mods et versions d’instances restent inchangés.	EBALIA 4.0 · L’aggiornamento automatico riguarda catalogo e notizie. Non cambia mondi, mod o versioni delle istanze esistenti.	EBALIA 4.0 · Каталог и новости обновляются автоматически. Миры, моды и версии существующих сборок не изменяются.	EBALIA 4.0 · カタログとニュースは自動更新されます。既存のワールド、MOD、インスタンスのバージョンは変更されません。	EBALIA 4.0 · 카탈로그와 뉴스가 자동 갱신됩니다. 기존 월드, 모드, 인스턴스 버전은 변경되지 않습니다.	EBALIA 4.0 · 自动刷新目录和新闻，不会更改现有世界、模组或实例版本。
+34	Aktivieren / deaktivieren	Activer / désactiver	Attiva / disattiva	Включить / отключить	有効化・無効化	활성화 / 비활성화	启用／停用
+35	Gib einen Namen ein und wähle eine Version aus dem Katalog.	Saisissez un nom et choisissez une version du catalogue.	Inserisci un nome e scegli una versione dal catalogo.	Введите название и выберите версию из каталога.	名前を入力し、カタログからバージョンを選択してください。	이름을 입력하고 카탈로그에서 버전을 선택하세요.	请输入名称并从目录中选择版本。
+36	Jede Instanz hat einen eigenen Ordner. Gleiche Namen oder Versionen überschreiben keine andere Installation.	Chaque instance possède son dossier. Réutiliser un nom ou une version n’écrase aucune autre installation.	Ogni istanza ha la propria cartella. Riutilizzare un nome o una versione non sovrascrive altre installazioni.	У каждой сборки своя папка. Одинаковые названия или версии не перезаписывают другие установки.	各インスタンスには専用フォルダーがあります。同じ名前やバージョンでも他のインストールを上書きしません。	각 인스턴스에는 별도 폴더가 있습니다. 이름이나 버전이 같아도 다른 설치를 덮어쓰지 않습니다.	每个实例都有独立文件夹。重复名称或版本不会覆盖其他安装。
+37	Pack exportieren	Exporter le pack	Esporta pack	Экспорт набора	パックをエクスポート	팩 내보내기	导出模组包
+38	Instanz suchen…	Rechercher une instance…	Cerca un’istanza…	Найти сборку…	インスタンスを検索…	인스턴스 검색…	搜索实例…
+39	Passende Mods finden	Trouver des mods compatibles	Trova mod compatibili	Найти совместимые моды	対応するMODを探す	호환 모드 찾기	查找兼容模组
+40	Entdecke deine nächsten Mods	Découvrez vos prochains mods	Trova le tue prossime mod	Найдите новые моды	次に使うMODを探そう	새로운 모드 찾기	发现更多模组
+41	Mods erkennen…	Identification des mods…	Identificazione delle mod…	Определение модов…	MODを識別中…	모드 식별 중…	正在识别模组…
+42	Deine Mods auf Modrinth erkennen…	Identification de vos mods sur Modrinth…	Identificazione delle tue mod su Modrinth…	Определение ваших модов на Modrinth…	ModrinthでMODを識別中…	Modrinth에서 모드 식별 중…	正在 Modrinth 上识别你的模组…
+43	Pack importieren	Importer un pack	Importa pack	Импорт набора	パックをインポート	팩 가져오기	导入模组包
+44	Anfangs-Pack	Pack initial	Pack iniziale	Начальный набор	初期パック	초기 팩	初始模组包
+45	Installieren	Installer	Installa	Установить	インストール	설치	安装
+46	Nur kompatible Mods installieren; nicht verfügbare überspringen	Installer uniquement les mods compatibles ; ignorer les indisponibles	Installa solo le mod compatibili; salta quelle non disponibili	Установить только совместимые моды; пропустить недоступные	対応するMODのみインストールし、利用できないものをスキップ	호환 모드만 설치하고 사용할 수 없는 모드는 건너뛰기	仅安装兼容模组，跳过不可用模组
+47	Mods installieren	Installer les mods	Installa mod	Установить моды	MODをインストール	모드 설치	安装模组
+48	Installiere diese Version zuerst.	Installez d’abord cette version.	Installa prima questa versione.	Сначала установите эту версию.	先にこのバージョンをインストールしてください。	먼저 이 버전을 설치하세요.	请先安装此版本。
+49	Installation läuft…	Installation…	Installazione…	Установка…	インストール中…	설치 중…	正在安装…
+50	Instanz ist spielbereit	Instance prête à jouer	Istanza pronta per giocare	Сборка готова к игре	インスタンスの準備ができました	인스턴스 플레이 준비 완료	实例已准备就绪
+51	Instanzeinstellungen	Paramètres de l’instance	Impostazioni istanza	Настройки сборки	インスタンス設定	인스턴스 설정	实例设置
+52	Loader-Version	Version du chargeur	Versione del loader	Версия загрузчика	ローダーのバージョン	로더 버전	加载器版本
+53	Lokales Profil	Profil local	Profilo locale	Локальный профиль	ローカルプロフィール	로컬 프로필	本地档案
+54	Protokoll	Journal	Registro	Журнал	ログ	로그	日志
+55	Verschollene Version installiert	Version perdue installée	Versione perduta installata	Потерянная версия установлена	失われたバージョンをインストールしました	잃어버린 버전 설치 완료	失落版本已安装
+56	Verschollene Version läuft	La version perdue est en cours	Versione perduta in esecuzione	Потерянная версия запущена	失われたバージョンを実行中	잃어버린 버전 실행 중	失落版本正在运行
+57	Verschollene Versionen	Versions perdues	Versioni perdute	Потерянные версии	失われたバージョン	잃어버린 버전	失落版本
+58	MINECRAFT-CLIENT · Eigene Welten, Mods und Einstellungen für jede Instanz.	CLIENT MINECRAFT · Mondes, mods et paramètres séparés pour chaque instance.	CLIENT MINECRAFT · Mondi, mod e impostazioni separati per ogni istanza.	КЛИЕНТ MINECRAFT · Отдельные миры, моды и настройки для каждой сборки.	MINECRAFTクライアント · インスタンスごとにワールド、MOD、設定を分離。	MINECRAFT 클라이언트 · 인스턴스마다 별도 월드, 모드 및 설정.	MINECRAFT 客户端 · 每个实例拥有独立的世界、模组和设置。
+59	So, wie du es magst	À votre façon	A modo tuo	По-вашему	自分好みに	나만의 설정	按你的方式
+60	Mods verwalten	Gérer les mods	Gestisci mod	Управление модами	MODを管理	모드 관리	管理模组
+61	Maximaler Arbeitsspeicher	Mémoire maximale	Memoria massima	Максимум памяти	最大メモリー	최대 메모리	最大内存
+62	Mitgliedschaft	Abonnement	Abbonamento	Подписка	メンバーシップ	멤버십	会员
+63	Arbeitsspeicher	Mémoire	Memoria	Память	メモリー	메모리	内存
+64	Mit Microsoft kannst du authentifizierte Server nutzen. Ein lokales Profil ist für das Offline-Spiel.	Microsoft permet d’accéder aux serveurs authentifiés. Un profil local sert à jouer hors ligne.	Microsoft permette di usare server autenticati. Un profilo locale serve per giocare offline.	Учётная запись Microsoft позволяет играть на серверах с авторизацией. Локальный профиль — для игры без сети.	Microsoftアカウントで認証付きサーバーを利用できます。ローカルプロフィールはオフライン用です。	Microsoft 계정으로 인증 서버를 이용할 수 있습니다. 로컬 프로필은 오프라인 플레이용입니다.	Microsoft 账户可用于需要验证的服务器。本地档案用于离线游戏。
+65	Minecraft	Minecraft	Minecraft	Minecraft	Minecraft	Minecraft	Minecraft
+66	Minecraft wurde mit einem Fehler beendet. Öffne das Instanzprotokoll für Details.	Minecraft s’est fermé avec une erreur. Consultez le journal de l’instance.	Minecraft si è chiuso con un errore. Apri il registro dell’istanza per i dettagli.	Minecraft завершился с ошибкой. Подробности в журнале сборки.	Minecraftがエラーで終了しました。インスタンスのログを確認してください。	Minecraft가 오류로 종료되었습니다. 인스턴스 로그를 확인하세요.	Minecraft 异常退出。请打开实例日志查看详情。
+67	Minecraft beendet · Code 	Minecraft terminé · code 	Minecraft terminato · codice 	Minecraft завершён · код 	Minecraft終了 · コード 	Minecraft 종료 · 코드 	Minecraft 已退出 · 代码 
+68	Minecraft läuft	Minecraft est en cours	Minecraft in esecuzione	Minecraft запущен	Minecraftを実行中	Minecraft 실행 중	Minecraft 正在运行
+69	Mod-Loader	Chargeur de mods	Loader per mod	Загрузчик модов	MODローダー	모드 로더	模组加载器
+70	Modrinth · Ergebnisse passend zur Spielversion und zum Loader deiner Instanz.	Modrinth · Résultats filtrés selon la version du jeu et le chargeur de votre instance.	Modrinth · Risultati filtrati per versione del gioco e loader dell’istanza.	Modrinth · Результаты для версии игры и загрузчика вашей сборки.	Modrinth · インスタンスのゲームバージョンとローダーで絞り込み。	Modrinth · 인스턴스의 게임 버전과 로더에 맞춘 결과.	Modrinth · 按实例的游戏版本和加载器筛选结果。
+71	Mods installiert. Deine Instanz ist aktuell.	Mods installés. Votre instance est à jour.	Mod installate. La tua istanza è aggiornata.	Моды установлены. Сборка обновлена.	MODをインストールしました。インスタンスは最新の状態です。	모드가 설치되었습니다. 인스턴스가 갱신되었습니다.	模组安装完成。实例已更新。
+72	Weitere Ergebnisse	Plus de résultats	Altri risultati	Ещё результаты	さらに表示	결과 더 보기	更多结果
+73	Instanz in den Papierkorb verschieben	Mettre l’instance à la corbeille	Sposta istanza nel cestino	Переместить сборку в корзину	インスタンスをゴミ箱へ移動	인스턴스를 휴지통으로 이동	将实例移到回收站
+74	Diese Instanz mit ihren Welten in den lokalen Papierkorb verschieben?	Déplacer cette instance et ses mondes vers la corbeille locale ?	Spostare questa istanza e i suoi mondi nel cestino locale?	Переместить сборку и её миры в локальную корзину?	このインスタンスとワールドをローカルのゴミ箱へ移動しますか？	이 인스턴스와 월드를 로컬 휴지통으로 이동할까요?	将此实例及其世界移到本地回收站？
+75	Name	Nom	Nome	Название	名前	이름	名称
+76	Neue Instanz	Nouvelle instance	Nuova istanza	Новая сборка	新しいインスタンス	새 인스턴스	新建实例
+77	Neue Instanz mit diesen Mods	Nouvelle instance avec ces mods	Nuova istanza con queste mod	Новая сборка с этими модами	このMOD構成で新規作成	이 모드로 새 인스턴스	使用这些模组创建实例
+78	Nachrichten offline: letzte gespeicherte Kopie bleibt erhalten.	Actualités hors ligne : dernière copie conservée.	Notizie offline: manteniamo l’ultima copia salvata.	Новости недоступны: сохранена последняя копия.	ニュースはオフラインです。保存済みの内容を表示します。	뉴스 오프라인: 마지막 저장본을 유지합니다.	新闻离线：保留最近的缓存副本。
+79	Kein Konto	Aucun compte	Nessun account	Нет учётной записи	アカウントなし	계정 없음	未添加账户
+80	Keine gespeicherten Nachrichten. Verbinde dich und klicke auf Aktualisieren.	Aucune actualité enregistrée. Connectez-vous et cliquez sur Actualiser.	Nessuna notizia salvata. Connettiti e premi Aggiorna.	Нет сохранённых новостей. Подключитесь к сети и нажмите «Обновить».	保存済みニュースがありません。接続して更新してください。	저장된 뉴스가 없습니다. 연결 후 새로고침하세요.	暂无缓存新闻。请联网后点击刷新。
+81	Keine kompatiblen Loader-Versionen gefunden.	Aucune version compatible du chargeur.	Nessuna versione compatibile del loader.	Совместимые версии загрузчика не найдены.	対応するローダーのバージョンがありません。	호환되는 로더 버전이 없습니다.	未找到兼容的加载器版本。
+82	Noch kein Protokoll.	Aucun journal pour le moment.	Nessun registro disponibile.	Журнала пока нет.	ログはまだありません。	아직 로그가 없습니다.	暂无日志。
+83	Keine weiteren kompatiblen Mods gefunden.	Aucun autre mod compatible trouvé.	Nessun’altra mod compatibile trovata.	Других совместимых модов не найдено.	他に対応するMODは見つかりませんでした。	호환되는 모드가 더 없습니다.	没有更多兼容模组。
+84	Kein Pack	Aucun pack	Nessun pack	Без набора	パックなし	팩 없음	不使用模组包
+85	Noch keine Packs. Speichere die Mods einer Instanz, um anzufangen.	Aucun pack. Enregistrez les mods d’une instance pour commencer.	Nessun pack. Salva le mod di un’istanza per iniziare.	Наборов пока нет. Сохраните моды сборки, чтобы начать.	パックはまだありません。インスタンスのMODを保存して始めましょう。	아직 팩이 없습니다. 인스턴스의 모드를 저장해 시작하세요.	暂无模组包。先保存一个实例的模组即可开始。
+86	Noch nicht installiert	Pas encore installée	Non ancora installata	Ещё не установлена	未インストール	아직 설치되지 않음	尚未安装
+87	Offizielle Nachrichten. Öffne einen Artikel auf Minecraft.net.	Actualités officielles. Ouvrez un article sur Minecraft.net.	Notizie ufficiali. Apri un articolo su Minecraft.net.	Официальные новости. Откройте статью на Minecraft.net.	公式ニュース。記事を開いてMinecraft.netで読みましょう。	공식 뉴스. Minecraft.net에서 기사를 읽으세요.	官方新闻。打开文章以在 Minecraft.net 阅读。
+88	Datenordner öffnen	Ouvrir le dossier de données	Apri cartella dati	Открыть папку данных	データフォルダーを開く	데이터 폴더 열기	打开数据文件夹
+89	Instanz-Papierkorb öffnen	Ouvrir la corbeille des instances	Apri cestino delle istanze	Открыть корзину сборок	インスタンスのゴミ箱を開く	인스턴스 휴지통 열기	打开实例回收站
+90	Zielinstanz des Packs	Destination du pack	Destinazione del pack	Целевая сборка	パックの適用先	팩 적용 대상	模组包目标实例
+91	Pack-Name	Nom du pack	Nome del pack	Название набора	パック名	팩 이름	模组包名称
+92	Spielername	Nom du joueur	Nome giocatore	Имя игрока	プレイヤー名	플레이어 이름	玩家名称
+93	Installation und Abhängigkeiten prüfen	Voir l’installation et les dépendances	Anteprima installazione e dipendenze	Проверить установку и зависимости	インストールと依存関係を確認	설치 및 의존성 미리 보기	预览安装与依赖
+94	Artikel lesen	Lire l’article	Leggi articolo	Читать статью	記事を読む	기사 읽기	阅读文章
+95	Bereit	Prêt	Pronto	Готово	準備完了	준비 완료	就绪
+96	Spielbereit	Prête à jouer	Pronta per giocare	Готова к игре	プレイ可能	플레이 준비 완료	可以开始游戏
+97	Aktualisieren	Actualiser	Aggiorna	Обновить	更新	새로고침	刷新
+98	Versionskatalog aktualisieren	Actualiser le catalogue des versions	Aggiorna catalogo versioni	Обновить каталог версий	バージョンカタログを更新	버전 카탈로그 새로고침	刷新版本目录
+99	Sitzung erneuern…	Renouvellement de la session…	Rinnovo della sessione…	Обновление сеанса…	セッションを更新中…	세션 갱신 중…	正在刷新登录状态…
+100	Aktives Konto entfernen	Retirer le compte actif	Rimuovi account attivo	Удалить активную учётную запись	使用中のアカウントを削除	활성 계정 제거	移除当前账户
+101	Mod entfernen	Retirer le mod	Rimuovi mod	Убрать мод	MODを削除	모드 제거	移除模组
+102	Dieses Konto aus dem Launcher entfernen?	Retirer ce compte du launcher ?	Rimuovere questo account dal launcher?	Удалить эту учётную запись из лаунчера?	このアカウントをランチャーから削除しますか？	런처에서 이 계정을 제거할까요?	从启动器中移除此账户？
+103	Installation reparieren	Réparer l’installation	Ripara installazione	Восстановить установку	インストールを修復	설치 복구	修复安装
+104	Erforderliche Abhängigkeiten sind enthalten. Prüfe übersprungene Mods vor dem Fortfahren.	Les dépendances requises sont incluses. Vérifiez les mods ignorés avant de continuer.	Le dipendenze obbligatorie sono incluse. Controlla le mod saltate prima di continuare.	Обязательные зависимости включены. Проверьте пропущенные моды перед продолжением.	必須の依存MODも含まれます。続行する前にスキップされるMODを確認してください。	필수 의존성이 포함됩니다. 계속하기 전에 건너뛸 모드를 확인하세요.	已包含必需依赖。继续前请检查将被跳过的模组。
+105	Installation prüfen	Vérifier l’installation	Controlla installazione	Проверка установки	インストール内容を確認	설치 확인	检查安装内容
+106	Läuft	En cours	In esecuzione	Запущена	実行中	실행 중	正在运行
+107	Mods als Pack speichern	Enregistrer les mods en pack	Salva mod come pack	Сохранить моды как набор	MODをパックとして保存	모드를 팩으로 저장	将模组保存为模组包
+108	Pack speichern	Enregistrer le pack	Salva pack	Сохранить набор	パックを保存	팩 저장	保存模组包
+109	Suchen	Rechercher	Cerca	Поиск	検索	검색	搜索
+110	Nach Name oder Kategorie suchen…	Rechercher par nom ou catégorie…	Cerca per nome o categoria…	Поиск по названию или категории…	名前やカテゴリで検索…	이름 또는 카테고리로 검색…	按名称或分类搜索…
+111	Modrinth durchsuchen…	Recherche sur Modrinth…	Ricerca su Modrinth…	Поиск на Modrinth…	Modrinthを検索中…	Modrinth 검색 중…	正在搜索 Modrinth…
+112	Snapshots und ältere Versionen anzeigen	Afficher les snapshots et anciennes versions	Mostra snapshot e versioni precedenti	Показать снапшоты и старые версии	スナップショットと古いバージョンを表示	스냅샷 및 이전 버전 표시	显示快照与旧版本
+113	Schritt für Schritt ins Spiel	Commencez à jouer, étape par étape	Inizia a giocare, passo dopo passo	Начните играть шаг за шагом	一歩ずつプレイを始めよう	차근차근 시작하기	一步步开始游戏
+114	Das EBALIA-Archiv. Jede Version behält ihre Installation und ursprüngliche Startmethode.	Les archives EBALIA. Chaque version conserve son installation et sa méthode de lancement d’origine.	L’archivio EBALIA. Ogni versione mantiene la propria installazione e il metodo di avvio originale.	Архив EBALIA. У каждой версии своя установка и исходный способ запуска.	EBALIAアーカイブ。各バージョンは専用のインストールと元の起動方法を維持します。	EBALIA 보관소. 각 버전은 자체 설치와 원래 실행 방식을 유지합니다.	EBALIA 档案库。每个版本保留独立安装和原始启动方式。
+115	Der Katalog ist noch nicht verfügbar. Prüfe deine Verbindung und versuche es erneut.	Le catalogue n’est pas encore disponible. Vérifiez la connexion et réessayez.	Il catalogo non è ancora disponibile. Controlla la connessione e riprova.	Каталог пока недоступен. Проверьте подключение и повторите попытку.	カタログを利用できません。接続を確認して再試行してください。	아직 카탈로그를 사용할 수 없습니다. 연결을 확인하고 다시 시도하세요.	目录暂不可用。请检查连接后重试。
+116	Die Datei existiert bereits oder kann nicht kopiert werden.	Le fichier existe déjà ou ne peut pas être copié.	Il file esiste già o non può essere copiato.	Файл уже существует или не может быть скопирован.	ファイルが既に存在するか、コピーできません。	파일이 이미 있거나 복사할 수 없습니다.	文件已存在或无法复制。
+117	Die Instanz wird verwendet.	L’instance est en cours d’utilisation.	L’istanza è in uso.	Сборка используется.	インスタンスは使用中です。	인스턴스가 사용 중입니다.	实例正在使用中。
+118	Diese Anleitung ist jederzeit in der Seitenleiste verfügbar.	Ce guide reste disponible dans la barre latérale.	Questa guida è sempre disponibile nella barra laterale.	Это руководство всегда доступно в боковой панели.	このガイドはサイドバーからいつでも開けます。	이 가이드는 사이드바에서 언제든지 볼 수 있습니다.	随时可从侧栏打开本指南。
+119	Pack erstellen: Meine Instanzen → Mods als Pack speichern. Keine Archive oder Ordnerkopien nötig.	Pour créer un pack : Mes instances → Enregistrer les mods en pack. Sans archive ni copie de dossiers.	Per creare un pack: Le mie istanze → Salva mod come pack. Senza archivi o copie di cartelle.	Создать набор: Мои сборки → Сохранить моды как набор. Архивы и копирование папок не нужны.	パックの作成：マイインスタンス → MODをパックとして保存。圧縮やフォルダーのコピーは不要です。	팩 만들기: 내 인스턴스 → 모드를 팩으로 저장. 압축 파일이나 폴더 복사가 필요 없습니다.	创建模组包：我的实例 → 将模组保存为模组包。无需压缩或复制文件夹。
+120	Verwende 3–16 Buchstaben, Zahlen oder Unterstriche.	Utilisez 3 à 16 lettres, chiffres ou traits de soulignement.	Usa da 3 a 16 lettere, numeri o trattini bassi.	Используйте 3–16 латинских букв, цифр или символов подчёркивания.	英数字とアンダースコアを3～16文字で入力してください。	영문, 숫자, 밑줄을 3~16자 사용하세요.	请使用 3–16 个英文字母、数字或下划线。
+121	Warte vor dem Schließen, bis alle Vorgänge abgeschlossen sind.	Attendez la fin des opérations avant de fermer.	Attendi il completamento delle operazioni prima di chiudere.	Дождитесь завершения операций перед закрытием.	処理が完了してから閉じてください。	작업이 끝난 후 닫으세요.	请等待操作完成后再关闭。
+122	Neues aus Minecraft	Les nouveautés de Minecraft	Novità di Minecraft	Новости Minecraft	Minecraftの最新情報	Minecraft 새 소식	Minecraft 最新动态
+123	Windows-Pakete benötigen Windows oder Wine. Die Verfügbarkeit hängt vom Originalarchiv ab.	Les packs Windows nécessitent Windows ou Wine. Leur disponibilité dépend de l’archive d’origine.	I pacchetti Windows richiedono Windows o Wine. La disponibilità dipende dall’archivio originale.	Пакетам Windows нужна Windows или Wine. Доступность зависит от исходного архива.	Windows用パッケージにはWindowsまたはWineが必要です。利用可否は元のアーカイブに依存します。	Windows 패키지는 Windows 또는 Wine이 필요합니다. 원본 보관 파일의 상태에 따라 이용 가능 여부가 달라집니다.	Windows 安装包需要 Windows 或 Wine。可用性取决于原始档案。
+124	Deine Mods, bereit für die nächste Runde	Vos mods, prêts à être réutilisés	Le tue mod, pronte da riusare	Ваши моды для новых сборок	お気に入りのMODを何度でも	다시 사용할 준비가 된 내 모드	你的模组，随时复用
+125	Dein nächstes Abenteuer	Votre prochaine aventure	La tua prossima avventura	Ваше следующее приключение	次の冒険へ	다음 모험을 향해	开启下一场冒险
+126	▣  Meine Packs	▣  Mes packs	▣  I miei pack	▣  Мои наборы	▣  マイパック	▣  내 팩	▣  我的模组包
+127	▶  Spielen / Installieren	▶  Jouer / Installer	▶  Gioca / Installa	▶  Играть / Установить	▶  プレイ・インストール	▶  플레이 / 설치	▶  开始游戏／安装
+128	▶ Spielen	▶ Jouer	▶ Gioca	▶ Играть	▶ プレイ	▶ 플레이	▶ 开始游戏
+129	◇  Verschollene Versionen	◇  Versions perdues	◇  Versioni perdute	◇  Потерянные версии	◇  失われたバージョン	◇  잃어버린 버전	◇  失落版本
+130	◈  Meine Instanzen	◈  Mes instances	◈  Le mie istanze	◈  Мои сборки	◈  マイインスタンス	◈  내 인스턴스	◈  我的实例
+131	◎  Nachrichten	◎  Actualités	◎  Notizie	◎  Новости	◎  ニュース	◎  뉴스	◎  新闻
+132	⚙  Konten & Einstellungen	⚙  Comptes et paramètres	⚙  Account e impostazioni	⚙  Аккаунты и настройки	⚙  アカウントと設定	⚙  계정 및 설정	⚙  账户与设置
+133	＋  Mods entdecken	＋  Découvrir des mods	＋  Esplora mod	＋  Найти моды	＋  MODを探す	＋  모드 찾기	＋  探索模组
+134	＋ Neue Instanz	＋ Nouvelle instance	＋ Nuova istanza	＋ Новая сборка	＋ 新規インスタンス	＋ 새 인스턴스	＋ 新建实例
+135	📂 Instanzordner öffnen	📂 Ouvrir le dossier de l’instance	📂 Apri cartella dell’istanza	📂 Открыть папку сборки	📂 インスタンスフォルダーを開く	📂 인스턴스 폴더 열기	📂 打开实例文件夹
