@@ -56,6 +56,15 @@ protected:
 private:
     QPixmap m_pixmap,m_scaled;int m_radius;bool m_all;
 };
+// One-line label that shrinks with "…" instead of being cut (picker, account and player names).
+class Elided:public QLabel {
+public:
+    using QLabel::QLabel;
+    QSize minimumSizeHint() const override {return {0,QLabel::minimumSizeHint().height()};}
+protected:
+    void paintEvent(QPaintEvent *) override {QPainter p(this);const auto r=contentsRect();style()->drawItemText(&p,r,int(alignment()),palette(),isEnabled(),fontMetrics().elidedText(text(),Qt::ElideRight,r.width()),foregroundRole());}
+};
+QLabel *elided(QLayout *layout,const char *name,Qt::Alignment alignment=Qt::AlignLeft|Qt::AlignVCenter){auto l=new Elided;l->setObjectName(name);l->setAlignment(alignment);l->setTextFormat(Qt::PlainText);layout->addWidget(l);return l;}
 QPushButton *button(const QString &label,QLayout *layout,std::function<void()> action,QObject *owner,bool primary=false,const QString &icon={}) {
     auto b=new QPushButton(icon.isEmpty()||label.isEmpty()?label:" "+label);b->setCursor(Qt::PointingHandCursor);if(primary)b->setProperty("play",true);
     if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,primary?QColor(Qt::white):QColor(225,225,230)));b->setIconSize(QSize(18,18));}
@@ -142,8 +151,7 @@ QWidget *MainWindow::buildSidebar() {
     m_accountButton=new QPushButton;m_accountButton->setObjectName("accountButton");m_accountButton->setCursor(Qt::PointingHandCursor);m_accountButton->setFixedHeight(62);
     auto al=new QHBoxLayout(m_accountButton);al->setContentsMargins(10,8,12,8);al->setSpacing(10);
     m_accountAvatar=new QLabel;m_accountAvatar->setFixedSize(40,40);al->addWidget(m_accountAvatar);
-    auto names=new QVBoxLayout;names->setSpacing(1);al->addLayout(names,1);m_accountName=label({},names,"accountName",false);m_accountType=label({},names,"accountType",false);
-    for(auto w:{m_accountName,m_accountType})w->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+    auto names=new QVBoxLayout;names->setSpacing(1);al->addLayout(names,1);m_accountName=elided(names,"accountName");m_accountType=elided(names,"accountType");
     auto chevron=new QLabel;chevron->setPixmap(Ui::pixmap("chevron-down",16,dim));al->addWidget(chevron);
     for(QWidget *w:{static_cast<QWidget*>(m_accountAvatar),static_cast<QWidget*>(m_accountName),static_cast<QWidget*>(m_accountType),static_cast<QWidget*>(chevron)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
     connect(m_accountButton,&QPushButton::clicked,this,[this]{accountMenu();});l->addWidget(m_accountButton);
@@ -170,15 +178,14 @@ QWidget *MainWindow::buildHome() {
     auto bar=new QFrame;bar->setObjectName("playBar");auto bl=new QGridLayout(bar);bl->setContentsMargins(28,14,28,16);bl->setHorizontalSpacing(16);
     m_instancePicker=new QPushButton;m_instancePicker->setObjectName("instancePicker");m_instancePicker->setCursor(Qt::PointingHandCursor);m_instancePicker->setFixedHeight(62);m_instancePicker->setMinimumWidth(190);m_instancePicker->setMaximumWidth(310);m_instancePicker->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
     auto pl=new QHBoxLayout(m_instancePicker);pl->setContentsMargins(10,8,12,8);pl->setSpacing(10);m_pickerIcon=new QLabel;m_pickerIcon->setFixedSize(40,40);m_pickerIcon->setAlignment(Qt::AlignCenter);pl->addWidget(m_pickerIcon);
-    auto pickerText=new QVBoxLayout;pickerText->setSpacing(1);pl->addLayout(pickerText,1);m_pickerName=label({},pickerText,"pickerName",false);m_pickerSub=label({},pickerText,"pickerSub",false);
+    auto pickerText=new QVBoxLayout;pickerText->setSpacing(1);pl->addLayout(pickerText,1);m_pickerName=elided(pickerText,"pickerName");m_pickerSub=elided(pickerText,"pickerSub");
     auto up=new QLabel;up->setPixmap(Ui::pixmap("chevron-down",16,dim).transformed(QTransform().rotate(180)));pl->addWidget(up);
-    for(QWidget *w:{static_cast<QWidget*>(m_pickerIcon),static_cast<QWidget*>(m_pickerName),static_cast<QWidget*>(m_pickerSub),static_cast<QWidget*>(up)}){w->setAttribute(Qt::WA_TransparentForMouseEvents);if(w!=m_pickerIcon&&w!=up)w->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);}
+    for(QWidget *w:{static_cast<QWidget*>(m_pickerIcon),static_cast<QWidget*>(m_pickerName),static_cast<QWidget*>(m_pickerSub),static_cast<QWidget*>(up)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
     connect(m_instancePicker,&QPushButton::clicked,this,[this]{instancePickerMenu();});bl->addWidget(m_instancePicker,0,0,Qt::AlignLeft|Qt::AlignVCenter);
     m_playButton=new QPushButton;m_playButton->setObjectName("homePlay");m_playButton->setProperty("play",true);m_playButton->setCursor(Qt::PointingHandCursor);m_playButton->setMinimumSize(250,64);m_playButton->setIconSize(QSize(24,24));
     connect(m_playButton,&QPushButton::clicked,this,[this]{play();});bl->addWidget(m_playButton,0,1,Qt::AlignCenter);
     auto player=new QWidget;player->setMaximumWidth(310);auto playerLayout=new QHBoxLayout(player);playerLayout->setContentsMargins(0,0,0,0);playerLayout->setSpacing(10);
-    auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=label({},playerText,"playerName",false);m_playerType=label({},playerText,"playerType",false);
-    for(auto w:{m_playerName,m_playerType}){w->setAlignment(Qt::AlignRight|Qt::AlignVCenter);w->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);}
+    auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
     bl->addWidget(player,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
     auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,14,28,20);nl->setSpacing(12);
     auto head=new QHBoxLayout;nl->addLayout(head);label(k("What's new"),head,"sectionTitle",false);head->addStretch();
@@ -264,7 +271,7 @@ QWidget *MainWindow::buildNews() {
     return s.widget;
 }
 QWidget *MainWindow::buildCommunity() {
-    auto s=section(k("Community"),{});auto tabs=new QTabWidget;tabs->setObjectName("communityTabs");tabs->setIconSize(QSize(18,18));tabs->setDocumentMode(true);s.layout->addWidget(tabs,1);
+    auto s=section(k("Community"),{});auto tabs=new QTabWidget;tabs->setObjectName("communityTabs");tabs->setIconSize(QSize(18,18));tabs->setDocumentMode(true);tabs->setUsesScrollButtons(false);tabs->setElideMode(Qt::ElideRight);s.layout->addWidget(tabs,1);
     const QList<QPair<QString,QString>> sections{{"image",k("Fan arts")},{"globe",k("Servers")},{"book-open",k("Learn")},{"heart",k("Support & community")},{"sparkles",k("EBALIA · Patreon")}};
     for(int n=0;n<sections.size();++n)tabs->addTab(new CommunityPage(n,m_root,m_patreon),Ui::icon(sections[n].first),sections[n].second);
     return s.widget;
@@ -386,8 +393,7 @@ void MainWindow::refreshInstances(){
 void MainWindow::selection(){
     auto i=selected();const bool running=m_mc->isRunning(i.dir),busy=!i.dir.isEmpty()&&(m_installing.contains(i.dir)||m_mc->isInstalling(i.dir));
     const QColor white(Qt::white);
-    if(i.dir.isEmpty()){m_playButton->setText("  "+k("New instance").toUpper());m_playButton->setIcon(Ui::icon("plus",white));}
-    else if(running){m_playButton->setText("  "+k("Stop").toUpper());m_playButton->setIcon(Ui::icon("square",white));}
+    if(running){m_playButton->setText("  "+k("Stop").toUpper());m_playButton->setIcon(Ui::icon("square",white));}
     else if(busy){m_playButton->setText(k("Installing…"));m_playButton->setIcon({});}
     else{m_playButton->setText("  "+k("Play").toUpper());m_playButton->setIcon(Ui::icon("play",white));}
     m_playButton->setEnabled(!busy);m_playButton->setProperty("danger",running);m_playButton->setProperty("play",!running);m_playButton->style()->unpolish(m_playButton);m_playButton->style()->polish(m_playButton);
@@ -621,7 +627,7 @@ void MainWindow::refreshNews(bool network){
             auto card=new QPushButton;card->setObjectName("newsCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(title);card->setToolTip(title);card->setMinimumWidth(150);card->setFixedHeight(190);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
             auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setFixedHeight(118);cover->setPixmap(QPixmap(art));cl->addWidget(cover);
             auto body=new QVBoxLayout;body->setContentsMargins(14,0,14,0);body->setSpacing(4);cl->addLayout(body);
-            auto m=label(meta,body,"newsMeta",false);auto t=label(title,body,"newsTitle");t->setMaximumHeight(t->fontMetrics().lineSpacing()*2+6);body->addStretch();
+            auto m=elided(body,"newsMeta");m->setText(meta);auto t=label(title,body,"newsTitle");t->setAlignment(Qt::AlignLeft|Qt::AlignTop);t->setMaximumHeight(t->fontMetrics().lineSpacing()*2+4);body->addStretch(); // long titles keep their first two lines
             for(auto w:{m,t})w->setAttribute(Qt::WA_TransparentForMouseEvents);connect(card,&QPushButton::clicked,this,std::move(open));m_homeNews->addWidget(card,1);
             loadImage(image,[cover=QPointer<Cover>(cover)](const QPixmap &p){if(cover)cover->setPixmap(p);});
         };
@@ -630,7 +636,7 @@ void MainWindow::refreshNews(bool network){
         for(int n=0;n<qMin(3,int(cards.size()));++n){
             const auto entry=cards[n];const auto link=QUrl(entry["readMoreLink"].toString(entry["link"].toString()));
             const auto image=entry["playPageImage"].toObject()["url"].toString(entry["newsPageImage"].toObject()["url"].toString());
-            addCard(entry["title"].toString(),entry["category"].toString().toUpper()+"  ·  "+entry["date"].toString().left(10),Ui::artFor(entry["title"].toString()),image.isEmpty()?QString():"https://launchercontent.mojang.com"+image,[this,link]{if(minecraftLink(link))QDesktopServices::openUrl(link);else showPage(News);});
+            addCard(entry["title"].toString(),QString(entry["category"].toString()).remove("Minecraft: ").toUpper()+"  ·  "+entry["date"].toString().left(10),Ui::artFor(entry["title"].toString()),image.isEmpty()?QString():"https://launchercontent.mojang.com"+image,[this,link]{if(minecraftLink(link))QDesktopServices::openUrl(link);else showPage(News);});
         }
         if(cards.isEmpty()){ // offline first start: shortcuts to the main sections instead of empty space
             addCard(k("New instance"),"EBALIA",":/art/f2_2.jpg",{},[this]{createInstance();});
