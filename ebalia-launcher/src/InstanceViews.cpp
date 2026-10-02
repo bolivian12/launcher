@@ -110,7 +110,8 @@ void InstanceGrid::rebuild(){
         auto create=new QPushButton("＋  "+t("New instance"));create->setProperty("play",true);create->setMaximumWidth(260);el->addWidget(create);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
         layout->addWidget(empty);
     }else if(order.isEmpty())layout->addWidget(muted(t("No instances match this search.")));
-    layout->addStretch();m_scroll->setWidget(content);m_content=content;
+    // The click that triggered this rebuild may come from a card inside the old content: delete it later, not now.
+    layout->addStretch();if(auto old=m_scroll->takeWidget())old->deleteLater();m_scroll->setWidget(content);m_content=content;
     QTimer::singleShot(0,m_scroll,[bar=m_scroll->verticalScrollBar(),scroll]{bar->setValue(scroll);});
 }
 InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){

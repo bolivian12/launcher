@@ -1,6 +1,6 @@
 # EBALIA Launcher 4
 
-Reconstrucción nativa en C++20 / Qt 6. El inicio sigue el flujo de Minecraft Launcher: selector de instancia, acceso directo a su carpeta y botón principal para instalar/jugar. La pestaña de instalaciones conserva las herramientas avanzadas.
+Reconstrucción nativa en C++20 / Qt 6. La pestaña **Jugar** sigue el flujo de Minecraft Launcher: imagen principal, selector de instancia, botón verde grande para instalar/jugar y el jugador activo. **Mis instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página con mods, paquetes de recursos, shaders y mundos.
 
 ## Incluido
 
@@ -14,6 +14,12 @@ Reconstrucción nativa en C++20 / Qt 6. El inicio sigue el flujo de Minecraft La
 - Captura de mods locales mediante su hash de Modrinth. No se adivina la compatibilidad de archivos desconocidos. Los desactivados no se incluyen.
 - Exportación/importación JSON de packs, activación/desactivación, JAR locales y carpeta de mods retirados.
 - Papelera reversible de instancias, reparación del cliente y visor de registros.
+- **Mis instancias**: tarjetas por grupo (se pliegan, renombran o quitan), pestañas Todas / Vanilla / Con mods / Modpacks, búsqueda, botón verde Jugar y engranaje de ajustes en cada tarjeta, menú contextual y tecla Supr. La página de una instancia muestra cargador, versión, memoria y grupo, y permite jugar, abrir registro o carpeta, exportar, copiar, cambiar de grupo, buscar mods, guardar los mods como pack y eliminar.
+- **Eliminar instancia** mueve la carpeta a la papelera local con sus mundos. Si Windows bloquea la carpeta porque un programa usa un archivo, se intenta la papelera del sistema y, si tampoco se puede, se explica qué cerrar.
+- **Copiar instancia** duplica mundos, mods y ajustes en una instancia independiente. **Exportar** genera un ZIP que se vuelve a abrir con Importar.
+- **Nueva instancia** con el esquema de Prism Launcher: nombre, grupo e ícono arriba; a la izquierda Personalizado, Importar, ATLauncher, CurseForge, FTB, FTB Legacy, Importar app de FTB, Modrinth y Technic. Cada proveedor se busca dentro de la misma ventana (ícono, descripción y versión; se preselecciona la última estable). El nombre se completa solo con la versión o el nombre del pack.
+- **Importar** acepta archivo, carpeta o enlace https, también arrastrándolo a la ventana: Modrinth (.mrpack), CurseForge (.zip), exportaciones o carpetas de Prism Launcher / PolyMC / MultiMC, Technic y ATLauncher (.zip), carpetas de la app de CurseForge y de FTB, exportaciones de EBALIA y packs de EBALIA (.json). Lista las instancias de Prism, PolyMC, MultiMC, CurseForge y la app de FTB que ya existen en el equipo. Las instancias con LiteLoader o mods dentro de minecraft.jar se rechazan con una explicación.
+- **Java automático**: se buscan Java en PATH, JAVA_HOME, el registro de Windows (Oracle, Temurin/Adoptium, Microsoft, Zulu, Liberica, Corretto, Semeru), Program Files, los runtimes del Minecraft Launcher (incluida la versión de Microsoft Store), CurseForge, FTB App, Technic, ATLauncher, Modrinth App, GDLauncher, Prism/PolyMC/MultiMC (y las Java configuradas en ellos), Gradle, IntelliJ, SDKMAN, asdf, mise, scoop, /usr/lib/jvm, /opt y Nix. Se usa la versión exacta que pide Minecraft o la más cercana más nueva cuando el juego ya requiere Java 16+. Si no hay ninguna, se descarga la Java oficial de Mojang que indica la versión (con verificación SHA-1), igual que el Minecraft Launcher.
 - Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz y tutorial incluidos localmente; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
 
 ## Ejecutar en NixOS / Linux de este equipo
@@ -42,7 +48,13 @@ cmake --install build --config Release --prefix package
 
 En Windows se usa MSVC y libarchive mediante vcpkg. En macOS se usa Qt/libarchive de Homebrew y `macdeployqt`. El workflow `.github/workflows/build.yml` compila, prueba y empaqueta por separado en Ubuntu, Windows y macOS. Este workflow debe ejecutarse en un repositorio de EBALIA; su presencia no equivale a una ejecución exitosa en las tres plataformas. Las builds de CI sin credenciales de firma se identifican explícitamente como unsigned.
 
-Fuera del paquete Nix, instalá Java para las versiones que uses. El launcher indica la versión requerida por los metadatos. En Ajustes de instancia podés elegir el ejecutable; también se detectan JAVA_HOME, PATH y ubicaciones habituales. `EBALIA_JAVA_PATHS` permite pasar varias rutas a ejecutables, separadas con el separador de rutas de la plataforma.
+Fuera del paquete Nix no hace falta instalar Java a mano: si no se detecta una compatible, la instancia descarga durante la instalación la Java oficial de Mojang (en `mc/java`). En Ajustes de instancia podés elegir otro ejecutable; si no es compatible, el mensaje indica qué versión tiene y cuál pide Minecraft. `EBALIA_JAVA_PATHS` permite pasar varias rutas a ejecutables, separadas con el separador de rutas de la plataforma. En NixOS no se descarga la Java genérica de Mojang (no funciona allí): se usan las del paquete Nix.
+
+## Versiones perdidas
+
+Los paquetes del archivo son `.bat`/`.exe` originales que llaman a `java` con las bibliotecas nativas de Windows. Al pulsar Jugar, EBALIA usa una Java 8 detectada o instala la `jre-legacy` oficial de Mojang. En Linux y macOS se ejecutan en Wine con un prefijo propio (`<datos>/wine`, o `EBALIA_WINEPREFIX`), con la Java 8 de Windows en `WINEPATH`; no se toca tu configuración de Wine. Detener una versión cierra ese prefijo. Se probó Alpha 1.2.7 hasta su pantalla de título en Wine.
+
+**Preparación y diagnóstico** lista las Java detectadas, comprueba Java 8 (o Wine y la Java 8 de Windows), OpenGL y OpenAL, permite instalar la Java 8 oficial con un clic y volver a comprobar todo. Estos paquetes necesitan OpenAL para el sonido: en Windows se verifica `OpenAL32.dll` en el sistema; abrir el instalador no cuenta como instalado hasta que la comprobación lo encuentra.
 
 ## Cuentas Microsoft
 
@@ -81,6 +93,16 @@ EBALIA_DATA_DIR=/tmp/ebalia-install-test QT_QPA_PLATFORM=offscreen ./build/ebali
 ```
 
 La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. La prueba de UI recorre las siete páginas en los diez idiomas y crea dos instancias homónimas mediante los controles reales.
+
+Otras comprobaciones manuales:
+
+```sh
+./build/ebalia-launcher --javatest                 # Java detectadas
+./build/ebalia-launcher --javadownload 21          # instala la Java oficial de Mojang
+./build/ebalia-launcher --lost-launchtest alpha_1.2.7   # Java 8 + Wine/Windows, 40 s de juego
+EBALIA_TEST_ARTIFACTS=/tmp/shots QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tests screenshots
+EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModpackInstall livePackCatalogs
+```
 
 `EBALIA_TEST_ARTIFACTS` guarda capturas de inicio y guía por idioma. `EBALIA_NO_NETWORK=1` evita consultas de inicio durante pruebas de UI. `--selftest <0..6>` guarda una captura y cierra; `EBALIA_SCREENSHOT` define su destino.
 
