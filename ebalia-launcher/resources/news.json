@@ -1,0 +1,28 @@
+{
+    "news": [
+        {
+            "title": "EBALIA LAUNCHER 3.0",
+            "date": "August 8, 2026",
+            "excerpt": "New modern interface, Patreon memberships, mods section and built-in updater.",
+            "url": "https://www.patreon.com/c/ebalia/membership"
+        },
+        {
+            "title": "MEMBERSHIPS NOW ON PATREON",
+            "date": "August 2026",
+            "excerpt": "Any Patreon tier unlocks the live feed: dev leaks, early builds and announcements.",
+            "url": "https://www.patreon.com/c/ebalia/membership"
+        },
+        {
+            "title": "THE HORROR COLLECTION",
+            "date": "July 2026",
+            "excerpt": "D3ATH.EXE, 554e444546494e45, Ghost, NSSS and more creepypasta builds in one place.",
+            "url": "https://www.youtube.com/@EBALIA"
+        },
+        {
+            "title": "JOIN THE DISCORD",
+            "date": "2026",
+            "excerpt": "Support, sneak peeks and community servers for every EBALIA version.",
+            "url": "https://discord.gg/ZrgMwfdwZB"
+        }
+    ]
+}

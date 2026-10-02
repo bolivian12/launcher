@@ -1,0 +1,38 @@
+{
+    "mods": [
+        {
+            "id": "in-your-world",
+            "name": "In Your World",
+            "author": "EBALIA",
+            "description": "Something is in your world. EBALIA exclusive mod. Java + Forge only.",
+            "icon": "mods/in-your-world.png",
+            "links": [
+                { "label": "1.20.1", "url": "https://www.curseforge.com/minecraft/mc-mods/in-your-world/files/5743570" },
+                { "label": "1.19.4", "url": "https://www.curseforge.com/minecraft/mc-mods/in-your-world/files/5743572" },
+                { "label": "1.19.2", "url": "https://www.curseforge.com/minecraft/mc-mods/in-your-world/files/5743573" }
+            ]
+        },
+        {
+            "id": "the-silence",
+            "name": "The Silence",
+            "author": "EBALIA",
+            "description": "Banned version (gore). The full Silence pack, all versions.",
+            "icon": "mods/the-silence.png",
+            "links": [
+                { "label": "Beta 2 Pack", "url": "https://github.com/use300name/confidencial-uncensored/releases/download/Confidencial-Uncensored/The.Silence.All.Versions.Pack.Beta.2.zip" }
+            ]
+        },
+        {
+            "id": "ooo-jar",
+            "name": "OOO.JAR",
+            "author": "EBALIA",
+            "description": "Experimental EBALIA mod jar.",
+            "icon": "mods/ooo-jar.png",
+            "links": [
+                { "label": "1.20.1", "url": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar/files/5855640" },
+                { "label": "1.19.4", "url": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar/files/5855644" },
+                { "label": "1.19.2", "url": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar/files/5855646" }
+            ]
+        }
+    ]
+}

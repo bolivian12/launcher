@@ -1,0 +1,9 @@
+# Build output and Nix results
+/build/
+/result
+/result-*
+# Test screenshots (EBALIA_TEST_ARTIFACTS)
+/artifacts/
+# Previous Windows launcher binaries and AutoPlay project (kept outside git)
+/Bexe16.4/
+/codigo generacion/

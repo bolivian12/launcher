@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=EBALIA Launcher
+Comment=Minecraft instances, reusable mod packs and lost versions
+Exec=ebalia-launcher
+Icon=ebalia-launcher
+Terminal=false
+Type=Application
+Categories=Game;

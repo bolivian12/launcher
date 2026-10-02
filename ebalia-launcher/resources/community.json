@@ -1,0 +1,128 @@
+{
+  "fanarts": [
+    {
+      "file": "fanarts/f01.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f02.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f03.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f04.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f05.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f06.png",
+      "artist": "awesomegoat152"
+    },
+    {
+      "file": "fanarts/f07.png",
+      "artist": "awesomegoat152"
+    },
+    {
+      "file": "fanarts/f08.png",
+      "artist": "ashorsmth"
+    },
+    {
+      "file": "fanarts/f09.png",
+      "artist": "realtbnrsaiyan"
+    },
+    {
+      "file": "fanarts/f10.png",
+      "artist": "ashorsmth"
+    },
+    {
+      "file": "fanarts/f11.png",
+      "artist": "has0ne"
+    },
+    {
+      "file": "fanarts/f12.png",
+      "artist": "has0ne"
+    },
+    {
+      "file": "fanarts/f13.png",
+      "artist": "ashorsmth"
+    },
+    {
+      "file": "fanarts/f14.png",
+      "artist": "malidactae"
+    },
+    {
+      "file": "fanarts/f15.png",
+      "artist": "ashorsmth"
+    },
+    {
+      "file": "fanarts/f16.png",
+      "artist": "autumnus_"
+    },
+    {
+      "file": "fanarts/f17.png",
+      "artist": "awesomegoat152"
+    },
+    {
+      "file": "fanarts/f18.png",
+      "artist": "anonymousbut2nd"
+    },
+    {
+      "file": "fanarts/f19.png",
+      "artist": "anonymousbut2nd"
+    },
+    {
+      "file": "fanarts/f20.png",
+      "artist": "autumnus_"
+    }
+  ],
+  "servers": [
+    {
+      "name": "Minecraft a1.1.1 Server",
+      "file": "a1.1.1_server.jar",
+      "url": "https://github.com/nnn83/servidores/releases/download/servidores/a1.1.1_server.jar"
+    },
+    {
+      "name": "NSSS Server · a1.1.11_111-1",
+      "file": "a1.1.11_111-1_server.jar",
+      "url": "https://github.com/use300name/nsssserver/releases/download/NSSS-Server/a1.1.11_111-1_server.jar"
+    }
+  ],
+  "addresses": [
+    "erdbeerbaerlp.de:25580",
+    "is-very.dog",
+    "dantdmjace.org"
+  ],
+  "courses": [
+    {
+      "name": "Java — 127 horas",
+      "language": "ES",
+      "url": "https://n9.cl/java127horas"
+    },
+    {
+      "name": "Programación ATS — Java",
+      "language": "ES",
+      "url": "https://n9.cl/programacionatsjava"
+    },
+    {
+      "name": "Java Developer",
+      "language": "ES",
+      "url": "https://acortar.link/JavaDeveloper"
+    },
+    {
+      "name": "Universidad Java 2021",
+      "language": "ES",
+      "url": "https://acortar.link/UniversidadJava2021"
+    },
+    {
+      "name": "Minecraft Modding for Forge",
+      "language": "EN",
+      "url": "https://www.youtube.com/results?search_query=minecraft+forge+modding+course+1.20"
+    }
+  ]
+}
