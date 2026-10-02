@@ -20,8 +20,8 @@ endif()
 configure_file(src/BuildConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.hpp" @ONLY)
 target_include_directories(ebalia-core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(ebalia-core PUBLIC Qt6::Widgets Qt6::Network Qt6::Concurrent LibArchive::LibArchive)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
-  include/MainWindow.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
+  include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
 if(WIN32)
@@ -48,8 +48,8 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
-      include/MainWindow.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
+      include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   target_link_libraries(ebalia-ui-tests PRIVATE ebalia-core Qt6::Test)
   add_test(NAME ui COMMAND ebalia-ui-tests)

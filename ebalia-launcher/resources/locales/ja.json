@@ -381,5 +381,22 @@
   "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "これは Vanilla のインスタンスです。MOD を使うには Fabric、Quilt、Forge、NeoForge のインスタンスを作成してください。",
   "Get a key": "キーを取得",
   "CurseForge rejected this API key.": "CurseForge がこの API キーを拒否しました。",
-  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge には API キーが必要です。アカウントと設定 → プロバイダー設定に貼り付けてください。"
+  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge には API キーが必要です。設定 → プロバイダー設定に貼り付けてください。",
+  "Home": "ホーム",
+  "Instances": "インスタンス",
+  "Discover mods": "Modを探す",
+  "News": "ニュース",
+  "Community": "コミュニティ",
+  "Guide & tutorial": "ガイドとチュートリアル",
+  "Settings": "設定",
+  "Accounts": "アカウント",
+  "Add account": "アカウントを追加",
+  "Language": "言語",
+  "Data": "データ",
+  "What's new": "最新情報",
+  "See all": "すべて表示",
+  "Built-in key in use": "内蔵キーを使用中",
+  "Close the open windows first.": "先に開いているウィンドウを閉じてください。",
+  "Each instance keeps its own worlds, mods and settings.": "インスタンスごとにワールド、Mod、設定が分かれています。",
+  "Java, OpenGL, OpenAL and Wine checks for every version. EBALIA downloads the Java each version needs.": "各バージョンのJava・OpenGL・OpenAL・Wineを確認します。必要なJavaはEBALIAが自動でダウンロードします。"
 }

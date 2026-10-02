@@ -1,6 +1,8 @@
 #pragma once
 #include <QMainWindow>
 #include <QJsonArray>
+#include <QHash>
+#include <QPixmap>
 #include <functional>
 #include "McInstanceManager.hpp"
 class QListWidget;
@@ -14,25 +16,42 @@ class AccountManager;
 class JavaRunner;
 class QCloseEvent;
 class QPushButton;
-class QTabWidget;
 class QHBoxLayout;
+class QVBoxLayout;
+class QNetworkAccessManager;
 class PatreonAuth;
 class InstanceGrid;
 class InstanceDetail;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
+    // Sidebar order, like the Minecraft Launcher: sections on top, Settings at the bottom.
+    enum Page{Home,Instances,Explore,Lost,Packs,Skins,News,Community,Guide,Settings};
     explicit MainWindow(QWidget *parent=nullptr);
     void showPage(int index);
 protected:
     void closeEvent(QCloseEvent *event) override;
 private:
     void build();
+    QWidget *buildSidebar();
+    QWidget *buildHome();
+    QWidget *buildInstances();
+    QWidget *buildExplore();
+    QWidget *buildLost();
+    QWidget *buildPacks();
+    QWidget *buildSkins();
+    QWidget *buildNews();
+    QWidget *buildCommunity();
+    QWidget *buildGuide();
+    QWidget *buildSettings();
     void refreshInstances();
     void refreshPacks();
     void refreshAccounts();
     void refreshLost();
     void refreshNews(bool network=true);
+    void loadImage(const QString &url,std::function<void(const QPixmap &)> done);
+    void accountMenu();
+    void instancePickerMenu();
     void selection();
     McInstance selected() const;
     void createInstance(bool copy=false,int page=0);
@@ -63,18 +82,21 @@ private:
     VersionManager *m_versions;
     AccountManager *m_accounts;
     JavaRunner *m_java;
+    QNetworkAccessManager *m_images=nullptr;
+    QHash<QString,QPixmap> m_imageCache;
     QList<McVersion> m_manifest;
-    QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr;
+    QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr,*m_accountList=nullptr;
     QStackedWidget *m_pages=nullptr;
-    QLabel *m_playerName=nullptr,*m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
+    QPushButton *m_navSettings=nullptr,*m_accountButton=nullptr,*m_instancePicker=nullptr;
+    QLabel *m_accountName=nullptr,*m_accountType=nullptr,*m_accountAvatar=nullptr;
+    QLabel *m_pickerIcon=nullptr,*m_pickerName=nullptr,*m_pickerSub=nullptr,*m_playerName=nullptr,*m_playerType=nullptr;
+    QLabel *m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
     QProgressBar *m_progress=nullptr;
-    QComboBox *m_target=nullptr,*m_account=nullptr;
+    QComboBox *m_target=nullptr,*m_modProvider=nullptr;
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
-    QComboBox *m_playInstance=nullptr,*m_modProvider=nullptr;
     QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr;
-    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;
-    QTabWidget *m_clientTabs=nullptr;
+    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;QWidget *m_lostImage=nullptr;
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;
     QSet<QString> m_installing,m_launchAfterInstall;

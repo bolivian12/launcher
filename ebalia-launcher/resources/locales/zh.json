@@ -381,5 +381,22 @@
   "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "这是原版实例。要使用模组，请创建带 Fabric、Quilt、Forge 或 NeoForge 的实例。",
   "Get a key": "获取密钥",
   "CurseForge rejected this API key.": "CurseForge 拒绝了此 API 密钥。",
-  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge 需要 API 密钥：请粘贴到“账户与设置 → 提供方设置”。"
+  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge 需要 API 密钥：请粘贴到“设置 → 提供方设置”。",
+  "Home": "主页",
+  "Instances": "实例",
+  "Discover mods": "发现模组",
+  "News": "新闻",
+  "Community": "社区",
+  "Guide & tutorial": "指南与教程",
+  "Settings": "设置",
+  "Accounts": "账户",
+  "Add account": "添加账户",
+  "Language": "语言",
+  "Data": "数据",
+  "What's new": "最新动态",
+  "See all": "查看全部",
+  "Built-in key in use": "正在使用内置密钥",
+  "Close the open windows first.": "请先关闭已打开的窗口。",
+  "Each instance keeps its own worlds, mods and settings.": "每个实例都有独立的世界、模组和设置。",
+  "Java, OpenGL, OpenAL and Wine checks for every version. EBALIA downloads the Java each version needs.": "检查每个版本的 Java、OpenGL、OpenAL 和 Wine。EBALIA 会自动下载所需的 Java。"
 }
