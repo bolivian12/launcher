@@ -23,6 +23,9 @@ public:
     QString mcDir() const { return m_root; }
     QString createInstance(const QString &name, const QString &version, const QString &loader, const QString &loaderVersion = {});
     void deleteInstance(const QString &dir);
+    // Copies worlds, mods and settings into a new independent instance.
+    QString copyInstance(const QString &dir, const QString &name);
+    void exportInstance(const QString &dir, const QString &zip);
     void installInstance(const QString &dir);
     void launch(const QString &dir, const QString &name, const QString &uuid, const QString &token, const QString &userType);
     bool isRunning(const QString &dir) const { return m_running.contains(dir); }

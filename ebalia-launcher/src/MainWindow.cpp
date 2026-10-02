@@ -15,6 +15,8 @@
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
 #include "PackService.hpp"
+#include "InstanceViews.hpp"
+#include "InstanceIcons.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
 #include <QFutureWatcher>
@@ -91,42 +93,43 @@ void MainWindow::build() {
     m_pages=new QStackedWidget;body->addWidget(m_pages,1);connect(m_nav,&QListWidget::currentRowChanged,m_pages,&QStackedWidget::setCurrentIndex);
     QVBoxLayout *l;
     page(m_pages,text("Tu próxima aventura","Your next adventure","Sua próxima aventura"),text("CLIENTE MINECRAFT · Mundos, mods y ajustes separados para cada instancia.","MINECRAFT CLIENT · Separate worlds, mods and settings for every instance.","CLIENTE MINECRAFT · Mundos, mods e ajustes separados em cada instância."),l);
-    m_clientTabs=new QTabWidget;l->addWidget(m_clientTabs,1);
+    for(int n=0;n<2;++n)if(auto w=l->itemAt(n)->widget())w->hide(); // the hero banner already carries the title
+    l->setContentsMargins(28,12,28,16);m_clientTabs=new QTabWidget;l->addWidget(m_clientTabs,1);
     auto home=new QWidget;auto homeLayout=new QVBoxLayout(home);homeLayout->setContentsMargins(0,14,0,0);homeLayout->setSpacing(16);
     auto banner=new GameBanner;auto heroLayout=new QVBoxLayout(banner);heroLayout->setContentsMargins(34,30,34,30);
     auto wordmark=label("MINECRAFT",heroLayout);wordmark->setStyleSheet("background:transparent;color:white;font-size:42px;font-weight:900;");
     auto edition=label("JAVA EDITION",heroLayout);edition->setStyleSheet("background:transparent;color:white;font-size:18px;font-weight:700;");heroLayout->addStretch();
     auto welcome=label(text("Tu próxima aventura","Your next adventure","Sua próxima aventura"),heroLayout);welcome->setStyleSheet("background:transparent;color:white;font-size:27px;font-weight:700;");homeLayout->addWidget(banner,1);
-    auto launchBar=new QHBoxLayout;homeLayout->addLayout(launchBar);m_playInstance=new QComboBox;m_playInstance->setMinimumWidth(250);m_playInstance->setPlaceholderText(text("Crear mi primera instancia","Create my first instance","Criar minha primeira instância"));launchBar->addWidget(m_playInstance,1);
+    auto launchBar=new QHBoxLayout;homeLayout->addLayout(launchBar);m_playInstance=new QComboBox;m_playInstance->setMinimumWidth(250);m_playInstance->setPlaceholderText(text("Crear mi primera instancia","Create my first instance","Criar minha primeira instância"));m_playInstance->setIconSize(QSize(24,24));m_playInstance->setFixedWidth(330);launchBar->addWidget(m_playInstance);
     auto folder=button("",launchBar,[this]{auto i=selected();if(!i.dir.isEmpty())QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir));},this);
     folder->setIcon(style()->standardIcon(QStyle::SP_DirOpenIcon));folder->setToolTip(text("📂 Abrir carpeta de instancia","📂 Open instance folder","📂 Abrir pasta da instância"));folder->setAccessibleName(folder->toolTip());
-    m_playButton=button(text("▶ Jugar","▶ Play","▶ Jogar"),launchBar,[this]{play();},this,true);m_playButton->setMinimumSize(220,54);
-    connect(m_playInstance,qOverload<int>(&QComboBox::activated),this,[this]{auto dir=m_playInstance->currentData().toString();m_instanceFilter->clear();for(int n=0;n<m_instances->count();++n)if(m_instances->item(n)->data(Qt::UserRole).toString()==dir)m_instances->setCurrentRow(n);});
+    launchBar->addStretch();m_playButton=button(text("▶ Jugar","▶ Play","▶ Jogar"),launchBar,[this]{play();},this);m_playButton->setObjectName("homePlay");m_playButton->setProperty("play",true);m_playButton->setMinimumSize(280,60);launchBar->addStretch();
+    m_playerName=new QLabel;m_playerName->setObjectName("playerName");m_playerName->setMinimumWidth(150);m_playerName->setAlignment(Qt::AlignRight|Qt::AlignVCenter);launchBar->addWidget(m_playerName);
+    connect(m_playInstance,qOverload<int>(&QComboBox::activated),this,[this]{m_selectedDir=m_playInstance->currentData().toString();refreshInstances();});
     auto shortcuts=new QHBoxLayout;homeLayout->addLayout(shortcuts);
     button(text("＋ Nueva instancia","＋ New instance","＋ Nova instância"),shortcuts,[this]{createInstance();},this);
     button(text("Administrar mods","Manage mods","Gerenciar mods"),shortcuts,[this]{manageMods();},this);
     button(text("Guardar mods como pack","Save mods as a pack","Salvar mods como pack"),shortcuts,[this]{savePack();},this);
     m_homeNews=new QHBoxLayout;homeLayout->addLayout(m_homeNews);
     m_clientTabs->addTab(home,text("▶ Jugar","▶ Play","▶ Jogar"));
-    auto library=new QWidget;auto libraryLayout=new QVBoxLayout(library);libraryLayout->setContentsMargins(0,14,0,0);libraryLayout->setSpacing(14);
+    auto library=new QWidget;auto libraryLayout=new QVBoxLayout(library);libraryLayout->setContentsMargins(0,0,0,0);libraryLayout->setSpacing(8);
     m_clientTabs->addTab(library,text("◈  Mis instancias","◈  My instances","◈  Minhas instâncias"));l=libraryLayout;
-    auto actions=new QHBoxLayout;l->addLayout(actions);m_instanceFilter=new QLineEdit;m_instanceFilter->setPlaceholderText(text("Buscar instancias…","Find an instance…","Buscar instâncias…"));actions->addWidget(m_instanceFilter,1);
-    button(text("＋ Nueva instancia","＋ New instance","＋ Nova instância"),actions,[this]{createInstance();},this,true);
-    connect(m_instanceFilter,&QLineEdit::textChanged,this,[this]{refreshInstances();});
-    auto split=new QHBoxLayout;l->addLayout(split,1);m_instances=new QListWidget;m_instances->setObjectName("instanceList");m_instances->setMinimumWidth(280);split->addWidget(m_instances,3);
-    auto detail=new QFrame;detail->setObjectName("card");auto dl=new QVBoxLayout(detail);dl->setContentsMargins(22,22,22,22);dl->setSpacing(12);split->addWidget(detail,2);
-    m_title=label("",dl,"sectionTitle");m_details=label("",dl,"muted");dl->addStretch();
-    button(text("▶  Jugar / Instalar","▶  Play / Install","▶  Jogar / Instalar"),dl,[this]{play();},this,true);
-    button(text("📂 Abrir carpeta de instancia","📂 Open instance folder","📂 Abrir pasta da instância"),dl,[this]{auto i=selected();if(!i.dir.isEmpty())QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir));},this);
-    button(text("Administrar mods","Manage mods","Gerenciar mods"),dl,[this]{manageMods();},this);
-    button(text("Guardar mods como pack","Save mods as a pack","Salvar mods como pack"),dl,[this]{savePack();},this);
-    button(text("Otra instancia con estos mods","New instance with these mods","Nova instância com estes mods"),dl,[this]{createInstance(true);},this);
-    button(text("Ajustes de instancia","Instance settings","Ajustes da instância"),dl,[this]{editInstance();},this);
-    auto remove=button(Language::key("Delete instance"),dl,[this]{removeInstance();},this);remove->setObjectName("deleteInstance");
-    m_instances->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_instances,&QListWidget::customContextMenuRequested,this,[this](QPoint pos){auto item=m_instances->itemAt(pos);if(!item)return;m_instances->setCurrentItem(item);QMenu menu(this);auto settings=menu.addAction(text("Ajustes de instancia","Instance settings","Ajustes da instância"));auto trash=menu.addAction(Language::key("Delete instance"));auto action=menu.exec(m_instances->viewport()->mapToGlobal(pos));if(action==trash)removeInstance();else if(action==settings)editInstance();});
-    auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_instances);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
-    connect(m_instances,&QListWidget::currentRowChanged,this,[this]{selection();});
+    m_library=new QStackedWidget;l->addWidget(m_library,1);m_grid=new InstanceGrid;m_detail=new InstanceDetail;m_library->addWidget(m_grid);m_library->addWidget(m_detail);
+    auto choose=[this](const QString &dir){m_selectedDir=dir;selection();};
+    m_grid->open=[this,choose](const QString &dir){choose(dir);m_library->setCurrentWidget(m_detail);refreshInstances();};
+    m_grid->play=[this,choose](const QString &dir){choose(dir);play();};
+    m_grid->settings=[this,choose](const QString &dir){choose(dir);editInstance();};
+    m_grid->menu=[this,choose](const QString &dir){choose(dir);instanceMenu();};
+    m_grid->create=[this]{createInstance();};m_grid->importPack=[this]{createInstance(false,CreateInstanceDialog::Import);};
+    m_grid->newGroup=[this]{bool ok;auto name=QInputDialog::getText(this,Language::key("New group"),Language::key("Group name"),QLineEdit::Normal,{},&ok).trimmed();if(!ok||name.isEmpty())return;auto groups=QSettings().value("ui/groups").toStringList();if(!groups.contains(name))groups<<name;QSettings().setValue("ui/groups",groups);refreshInstances();};
+    m_grid->groupMenu=[this](const QString &group){groupMenu(group);};
+    m_detail->back=[this]{m_library->setCurrentWidget(m_grid);refreshInstances();};
+    m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{showLog(selected().dir,this);};
+    m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
+    m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
+    m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(2);m_target->setCurrentIndex(m_target->findData(i.dir));};
+    m_detail->openFolder=[this](const QString &folder){auto i=selected();if(i.dir.isEmpty())return;auto path=folder.isEmpty()?i.dir:i.dir+"/"+folder;QDir().mkpath(path);QDesktopServices::openUrl(QUrl::fromLocalFile(path));};
+    auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_library);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
     m_catalog=label(text("Consultando versiones…","Checking versions…","Consultando versões…"),l,"muted");
     m_clientTabs->addTab(new SkinsPage(m_root,m_accounts,m_mc,[this](const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){work(title,job,done);},this),Language::key("Skins"));
     page(m_pages,text("Versiones perdidas","Lost versions","Versões perdidas"),text("El archivo de EBALIA. Cada versión conserva su instalación y su forma de inicio original.","The EBALIA archive. Each version keeps its own installation and original launch method.","O arquivo da EBALIA. Cada versão mantém sua instalação e sua forma original de iniciar."),l);
@@ -189,28 +192,53 @@ QLineEdit,QComboBox,QSpinBox{background:#1c2530;border:1px solid #364454;border-
 QListWidget,QTextBrowser,QPlainTextEdit{background:#161e28;border:1px solid #303d4c;border-radius:9px;padding:8px;}QListWidget::item{padding:14px;border-bottom:1px solid #273340;}QListWidget::item:selected{background:#2b463e;color:#c0f7db;border-radius:6px;}QListWidget::item:hover{background:#23332f;}
 QProgressBar{border:0;background:#283342;border-radius:5px;min-height:8px;max-height:16px;text-align:center;}QProgressBar::chunk{background:#7edfb1;border-radius:5px;}QScrollBar:vertical{background:#151c25;width:10px;}QScrollBar::handle:vertical{background:#405065;min-height:25px;border-radius:4px;}
 QTabWidget::pane{border:0;}QTabBar::tab{background:#11151b;padding:12px 20px;border-bottom:3px solid transparent;}QTabBar::tab:selected{border-bottom:3px solid #92ebbe;color:#a5f6ce;}
-QToolTip{background:#293542;color:white;border:1px solid #58687a;}QDialog{background:#161d26;}QTextBrowser{padding:18px;font-size:14px;}
+QToolTip{background:#293542;color:white;border:1px solid #58687a;}
+QPushButton[play=true]{background:#3c8527;color:white;border:1px solid #52a535;border-bottom:3px solid #27591b;font-weight:800;}QPushButton[play=true]:hover{background:#4a9e31;}QPushButton[play=true]:disabled{background:#2d4a28;color:#a9c3a3;}
+#homePlay{font-size:17px;}#detailPlay{font-size:16px;}QPushButton[danger=true]{background:#3a1f24;border-color:#7a3340;color:#ffb0b8;}QPushButton[danger=true]:hover{background:#552a31;}
+QPushButton[tab=true]{background:#161e28;border:1px solid #2c3543;border-radius:8px;padding:8px 14px;}QPushButton[tab=true]:checked{background:#24382f;color:#a5f6ce;border-color:#3f7a63;}
+QPushButton[link=true]{background:transparent;border:0;color:#5fd38d;font-weight:800;text-align:left;padding:4px 0;}QPushButton[link=true]:hover{color:#8ff0b5;background:transparent;}
+#groupHeader{background:transparent;border:0;text-align:left;font-size:15px;font-weight:700;padding:6px 2px;}#groupHeader:hover{color:#a5f6ce;background:transparent;}
+#instanceCard{background:#1a222c;border:1px solid #2c3846;border-radius:12px;}#instanceCard:hover{border-color:#4a9e31;}#instanceCard[selected=true]{border:2px solid #5fbf7f;}#instanceCard QLabel{background:transparent;}
+#cardTitle{font-size:15px;font-weight:700;}#cardFooter{color:#7f8b9b;font-size:11px;}#instanceCards,#instanceGrid,#instanceDetail{background:transparent;}
+#cardSettings,#instanceDetail QToolButton{background:#222c38;border:1px solid #364454;border-radius:8px;padding:9px;}#cardSettings:hover,#instanceDetail QToolButton:hover{border-color:#92ebbe;}
+#detailTitle{font-size:26px;font-weight:800;}#detailIcon{background:#141b23;border:1px solid #303e4c;border-radius:14px;}
+#chip{background:#1f2a35;border:1px solid #364454;border-radius:7px;padding:5px 10px;font-weight:600;}#chip[accent=true]{background:#2f6b2a;border-color:#4a9e31;color:white;}
+#statCard{background:#1a222c;border:1px solid #303e4c;border-radius:12px;}#statCard QLabel{background:transparent;}#statTitle{font-size:16px;font-weight:700;}
+QScrollArea{background:transparent;border:0;}QDialog{background:#11151b;}QLabel{background:transparent;}#playerName{font-weight:800;font-size:14px;color:#cfd8e3;}
+QCheckBox::indicator,QRadioButton::indicator{width:15px;height:15px;border:1px solid #5d6f84;background:#1c2530;}QCheckBox::indicator{border-radius:4px;}QRadioButton::indicator{border-radius:8px;}
+QCheckBox::indicator:checked,QRadioButton::indicator:checked{background:#5fbf7f;border-color:#8fe0ad;}QCheckBox::indicator:hover,QRadioButton::indicator:hover{border-color:#92ebbe;}
+QTreeWidget{background:#161e28;border:1px solid #303d4c;border-radius:9px;}QTreeWidget::item{padding:6px 4px;}QTreeWidget::item:selected{background:#2b463e;color:#c0f7db;}
+QHeaderView::section{background:#1c2530;color:#9daabc;border:0;border-bottom:1px solid #303d4c;padding:7px 6px;font-weight:700;}QSplitter::handle{background:transparent;}
+#instanceSources::item{padding:6px 8px;border-bottom:0;}QTextBrowser{padding:18px;font-size:14px;}
 )");
     refreshAccounts();refreshInstances();refreshPacks();refreshLost();m_nav->setCurrentRow(0);
 }
 void MainWindow::showPage(int i){m_nav->setCurrentRow(i);}
 void MainWindow::error(const QString &e){QMessageBox::warning(this,"EBALIA",Language::message(e));}
-void MainWindow::refreshAccounts(){m_account->blockSignals(true);m_account->clear();for(const auto &a:m_accounts->accounts())m_account->addItem(a.name+(a.type=="msa"?" · Microsoft":" · "+Language::key("Local profile")),a.uuid);if(m_account->count()==0)m_account->addItem(text("Sin cuenta","No account","Sem conta"));m_account->setCurrentIndex(qMax(0,m_account->findData(m_accounts->active().uuid)));m_account->blockSignals(false);}
-McInstance MainWindow::selected() const {auto dir=filename(m_instances);for(const auto &i:m_mc->instances())if(i.dir==dir)return i;return {};}
+void MainWindow::refreshAccounts(){if(m_playerName)m_playerName->setText(m_accounts->active().name);m_account->blockSignals(true);m_account->clear();for(const auto &a:m_accounts->accounts())m_account->addItem(a.name+(a.type=="msa"?" · Microsoft":" · "+Language::key("Local profile")),a.uuid);if(m_account->count()==0)m_account->addItem(text("Sin cuenta","No account","Sem conta"));m_account->setCurrentIndex(qMax(0,m_account->findData(m_accounts->active().uuid)));m_account->blockSignals(false);}
+McInstance MainWindow::selected() const {if(m_selectedDir.isEmpty())return {};for(const auto &i:m_mc->instances())if(i.dir==m_selectedDir)return i;return {};}
 void MainWindow::refreshInstances(){
-    auto selectedDir=filename(m_instances),target=m_target->currentData().toString();m_instances->clear();m_target->clear();m_playInstance->blockSignals(true);m_playInstance->clear();
-    for(const auto &i:m_mc->instances()){
-        m_playInstance->addItem(i.name+" · "+i.mcVersion+" / "+i.loader,i.dir);
-        if(i.loader!="vanilla")m_target->addItem(i.name+" · "+i.mcVersion+" / "+i.loader,i.dir);
-        if(!i.name.contains(m_instanceFilter->text(),Qt::CaseInsensitive))continue;
-        QString state=m_mc->isRunning(i.dir)?text("En ejecución","Running","Em execução"):m_installing.contains(i.dir)?text("Instalando…","Installing…","Instalando…"):i.ready?text("Lista para jugar","Ready to play","Pronta para jogar"):text("Pendiente de instalación","Not installed yet","Ainda não instalada");
+    auto target=m_target->currentData().toString();m_target->clear();m_playInstance->blockSignals(true);m_playInstance->clear();
+    auto all=m_mc->instances();std::stable_sort(all.begin(),all.end(),[](const McInstance &a,const McInstance &b){return a.lastPlayed>b.lastPlayed;}); // most recently played first, like the Minecraft Launcher
+    if(std::none_of(all.begin(),all.end(),[this](const McInstance &i){return i.dir==m_selectedDir;}))m_selectedDir=all.isEmpty()?QString():all.first().dir;
+    QList<InstanceInfo> infos;QStringList used;InstanceInfo current;
+    for(const auto &i:all){
         QJsonObject meta;try{meta=ModRepository::read(i.dir+"/instance.json");}catch(...){}
-        auto item=new QListWidgetItem(i.name+(meta["group"].toString().isEmpty()?QString():" · "+meta["group"].toString())+"\n"+i.mcVersion+"  ·  "+i.loader.toUpper()+"  ·  "+state,m_instances);item->setData(Qt::UserRole,i.dir);item->setSizeHint(QSize(280,88));if(i.dir==selectedDir)m_instances->setCurrentItem(item);
+        InstanceInfo info{i,meta["group"].toString().trimmed(),meta["icon"].toString(),meta["loaderVersion"].toString(),!meta["packProvider"].toString().isEmpty(),m_mc->isRunning(i.dir),m_installing.contains(i.dir)||m_mc->isInstalling(i.dir)};
+        infos<<info;used<<info.group;if(i.dir==m_selectedDir)current=info;
+        const auto label=i.name+"  ·  "+InstanceText::loader(i.loader)+" "+i.mcVersion;
+        m_playInstance->addItem(InstanceIcons::icon(info.icon,i.dir),label,i.dir);if(i.loader!="vanilla")m_target->addItem(label,i.dir);
     }
-    if(m_instances->currentRow()<0&&m_instances->count())m_instances->setCurrentRow(0);
+    QStringList emptyGroups;for(const auto &g:QSettings().value("ui/groups").toStringList())if(!used.contains(g))emptyGroups<<g;
+    m_grid->setInstances(infos,emptyGroups,m_selectedDir);
+    if(m_library->currentWidget()==m_detail){if(current.base.dir.isEmpty())m_library->setCurrentWidget(m_grid);else m_detail->showInstance(current);}
     int idx=m_target->findData(target);if(idx>=0)m_target->setCurrentIndex(idx);m_playInstance->blockSignals(false);selection();
 }
-void MainWindow::selection(){auto i=selected();m_playInstance->setCurrentIndex(m_playInstance->findData(i.dir));m_playButton->setText(i.dir.isEmpty()?text("Crear instancia","Create instance","Criar instância"):m_mc->isRunning(i.dir)?Language::standard("Close"):i.ready?text("▶ Jugar","▶ Play","▶ Jogar"):text("Instalar","Install","Instalar"));m_playButton->setEnabled(!m_installing.contains(i.dir));if(i.dir.isEmpty()){m_title->setText(text("Un lugar para cada mundo","A place for every world","Um lugar para cada mundo"));m_details->setText(text("Creá tu primera instancia. Podés tener varias de la misma versión con mods diferentes.","Create your first instance. You can have multiple instances of the same version with different mods.","Crie sua primeira instância. Você pode ter várias da mesma versão com mods diferentes."));return;}m_title->setText(i.name);int count=QDir(i.dir+"/mods").entryList({"*.jar"},QDir::Files).size();m_details->setText("Minecraft "+i.mcVersion+"\n"+i.loader.toUpper()+" · "+QString::number(i.xmx)+" MB\n"+QString::number(count)+text(" mods activos"," active mods"," mods ativos"));}
+void MainWindow::selection(){
+    auto i=selected();m_playInstance->setCurrentIndex(m_playInstance->findData(i.dir));const bool running=m_mc->isRunning(i.dir);
+    m_playButton->setText(i.dir.isEmpty()?"＋  "+text("Crear instancia","Create instance","Criar instância"):running?"■  "+Language::key("Stop"):i.ready?text("▶ Jugar","▶ Play","▶ Jogar"):"⬇  "+text("Instalar","Install","Instalar"));
+    m_playButton->setEnabled(!m_installing.contains(i.dir)&&!m_mc->isInstalling(i.dir));m_playButton->setProperty("danger",running);m_playButton->setProperty("play",!running);m_playButton->style()->unpolish(m_playButton);m_playButton->style()->polish(m_playButton);
+}
 void MainWindow::refreshPacks(){m_packs->clear();try{m_packData=ModRepository(m_root).packs();for(const auto &v:m_packData){auto p=v.toObject();m_packs->addItem(p["name"].toString()+"\n"+QString::number(p["projects"].toArray().size())+" mods");}if(m_packs->count())m_packs->setCurrentRow(0);else m_packDetails->setText(text("Todavía no hay packs. Guardá los mods de una instancia para empezar.","No packs yet. Save an instance's mods to get started.","Ainda não há packs. Salve os mods de uma instância para começar."));}catch(...){m_packDetails->setText(exception());}}
 void MainWindow::refreshLost(){m_lost->clear();for(const auto &v:m_versions->getVersions()){if(!(v.name+v.category).contains(m_lostFilter->text(),Qt::CaseInsensitive))continue;auto item=new QListWidgetItem(v.name+"\n"+v.category+(m_versions->isVersionInstalled(v)?text(" · Instalada"," · Installed"," · Instalada"):""),m_lost);item->setData(Qt::UserRole,v.id);}if(m_lost->count())m_lost->setCurrentRow(0);}
 void MainWindow::work(const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){
@@ -218,19 +246,59 @@ void MainWindow::work(const QString &title,std::function<QJsonObject()> job,std:
     auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,dialog,watcher,done]{auto result=watcher->result();watcher->deleteLater();dialog->close();dialog->deleteLater();--m_jobs;if(result.contains("_error"))error(result["_error"].toString());else done(result);});
     watcher->setFuture(QtConcurrent::run([job]{try{return job();}catch(...){return QJsonObject{{"_error",exception()}};}}));
 }
-void MainWindow::createInstance(bool copy){
+void MainWindow::createInstance(bool copy,int page){
     auto source=selected();if(copy&&source.dir.isEmpty())return;
     if(copy&&(m_mc->isRunning(source.dir)||m_installing.contains(source.dir))){error(text("Cerrá el juego antes de copiar sus mods.","Close the game before copying its mods.","Feche o jogo antes de copiar seus mods."));return;}
-    if(m_manifest.isEmpty()){m_mc->fetchManifest();error(text("El catálogo todavía no está disponible. Revisá tu conexión y volvé a intentar.","The catalog is not available yet. Check your connection and try again.","O catálogo ainda não está disponível. Verifique a conexão e tente novamente."));return;}
-    CreateInstanceDialog dialog(m_mc,m_manifest,m_packData,source,copy,this);
+    if(m_manifest.isEmpty())m_mc->fetchManifest(); // the dialog fills the version list when the catalog arrives; imports do not need it
+    CreateInstanceDialog dialog(m_mc,m_manifest,m_packData,source,copy,this);if(page)dialog.showPage(page);
     if(dialog.exec()!=QDialog::Accepted)return;auto c=dialog.configuration();
-    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));return QJsonObject{{"dir",dir}};},[this](QJsonObject result){m_instanceFilter->clear();refreshInstances();showPage(0);for(int n=0;n<m_instances->count();++n)if(m_instances->item(n)->data(Qt::UserRole).toString()==result["dir"].toString())m_instances->setCurrentRow(n);m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
-    try{auto dir=m_mc->createInstance(c["name"].toString(),c["mcVersion"].toString(),c["loader"].toString(),c["loaderVersion"].toString());auto info=ModRepository::read(dir+"/instance.json");for(auto key:{"xmx","group","icon"})info[key]=c[key];ModRepository::write(dir+"/instance.json",info);m_instanceFilter->clear();refreshInstances();showPage(0);for(int i=0;i<m_instances->count();++i)if(m_instances->item(i)->data(Qt::UserRole).toString()==dir)m_instances->setCurrentRow(i);
+    auto reveal=[this](const QString &dir){m_selectedDir=dir;showPage(0);m_clientTabs->setCurrentIndex(1);m_library->setCurrentWidget(m_detail);refreshInstances();};
+    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));auto info=ModRepository::read(dir+"/instance.json");if(info["icon"].toString()!="custom"){info["icon"]=c["icon"];ModRepository::write(dir+"/instance.json",info);}return QJsonObject{{"dir",dir}};},[this,reveal](QJsonObject result){reveal(result["dir"].toString());m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
+    try{auto dir=m_mc->createInstance(c["name"].toString(),c["mcVersion"].toString(),c["loader"].toString(),c["loaderVersion"].toString());auto info=ModRepository::read(dir+"/instance.json");for(auto key:{"xmx","group","icon"})info[key]=c[key];ModRepository::write(dir+"/instance.json",info);reveal(dir);
         if(copy){auto root=m_root;work(text("Identificando los mods…","Identifying mods…","Identificando mods…"),[root,source]{return ModRepository(root).capture(source.dir,source.name);},[this,dir](QJsonObject p){preview(p["projects"].toArray(),dir);});}
         else if(!c["pack"].toObject().isEmpty())preview(c["pack"].toObject()["projects"].toArray(),dir);
     }catch(...){error(exception());}
 }
-
+void MainWindow::instanceMenu(){
+    auto i=selected();if(i.dir.isEmpty())return;QMenu menu(this);
+    auto playAction=menu.addAction(m_mc->isRunning(i.dir)?Language::key("Stop"):i.ready?Language::key("Play"):Language::key("Install"));auto open=menu.addAction(Language::key("Open"));menu.addSeparator();
+    auto settings=menu.addAction(Language::key("Instance settings"));auto group=menu.addAction(Language::key("Change group"));auto folder=menu.addAction(Language::key("Open instance folder"));
+    auto copy=menu.addAction(Language::key("Copy instance"));auto exportZip=menu.addAction(Language::key("Export instance"));menu.addSeparator();auto trash=menu.addAction(Language::key("Delete instance"));
+    auto chosen=menu.exec(QCursor::pos());
+    if(chosen==playAction)play();else if(chosen==open){m_library->setCurrentWidget(m_detail);refreshInstances();}else if(chosen==settings)editInstance();else if(chosen==group)changeGroup();
+    else if(chosen==folder)QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir));else if(chosen==copy)copyInstance();else if(chosen==exportZip)exportInstance();else if(chosen==trash)removeInstance();
+}
+void MainWindow::groupMenu(const QString &group){
+    QMenu menu(this);auto rename=menu.addAction(Language::key("Rename group"));auto ungroup=menu.addAction(Language::key("Remove group (keep instances)"));auto chosen=menu.exec(QCursor::pos());if(!chosen)return;
+    QString name;if(chosen==rename){bool ok;name=QInputDialog::getText(this,Language::key("Rename group"),Language::key("Group name"),QLineEdit::Normal,group,&ok).trimmed();if(!ok||name.isEmpty()||name==group)return;}
+    for(const auto &i:m_mc->instances()){try{auto info=ModRepository::read(i.dir+"/instance.json");if(info["group"].toString().trimmed()!=group)continue;info["group"]=name;ModRepository::write(i.dir+"/instance.json",info);}catch(...){error(exception());}}
+    auto groups=QSettings().value("ui/groups").toStringList();groups.removeAll(group);if(!name.isEmpty()&&!groups.contains(name))groups<<name;QSettings().setValue("ui/groups",groups);refreshInstances();
+}
+void MainWindow::changeGroup(){
+    auto i=selected();if(i.dir.isEmpty())return;QJsonObject info;try{info=ModRepository::read(i.dir+"/instance.json");}catch(...){error(exception());return;}
+    QStringList groups=QSettings().value("ui/groups").toStringList();for(const auto &other:m_mc->instances()){try{auto g=ModRepository::read(other.dir+"/instance.json")["group"].toString().trimmed();if(!g.isEmpty()&&!groups.contains(g))groups<<g;}catch(...){}}
+    groups.sort(Qt::CaseInsensitive);groups.prepend(Language::key("No group"));bool ok;auto current=info["group"].toString();
+    auto chosen=QInputDialog::getItem(this,Language::key("Change group"),Language::key("Group name"),groups,qMax(0,groups.indexOf(current)),true,&ok).trimmed();if(!ok)return;
+    if(chosen==Language::key("No group"))chosen.clear();info["group"]=chosen;try{ModRepository::write(i.dir+"/instance.json",info);}catch(...){error(exception());return;}
+    if(!chosen.isEmpty()&&!QSettings().value("ui/groups").toStringList().contains(chosen)){auto all=QSettings().value("ui/groups").toStringList();all<<chosen;QSettings().setValue("ui/groups",all);}
+    refreshInstances();
+}
+void MainWindow::copyInstance(){
+    auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
+    bool ok;auto name=QInputDialog::getText(this,Language::key("Copy instance"),Language::key("Name of the copy"),QLineEdit::Normal,i.name+" (2)",&ok).trimmed();if(!ok||name.isEmpty())return;
+    auto mc=m_mc;auto dir=i.dir;work(Language::key("Copying worlds, mods and settings…"),[mc,dir,name]{return QJsonObject{{"dir",mc->copyInstance(dir,name)}};},[this](QJsonObject r){m_selectedDir=r["dir"].toString();m_library->setCurrentWidget(m_detail);refreshInstances();m_status->setText(Language::key("Instance copied."));});
+}
+void MainWindow::exportInstance(){
+    auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
+    auto safe=i.name;safe.replace(QRegularExpression("[^A-Za-z0-9 ._-]"),"_");auto file=QFileDialog::getSaveFileName(this,Language::key("Export instance"),QDir::homePath()+"/"+safe+".zip","ZIP (*.zip)");if(file.isEmpty())return;
+    auto mc=m_mc;auto dir=i.dir;work(Language::key("Exporting instance…"),[mc,dir,file]{mc->exportInstance(dir,file);return QJsonObject{};},[this](QJsonObject){m_status->setText(Language::key("Instance exported. Import the ZIP in EBALIA to restore it."));});
+}
+void MainWindow::showLog(const QString &dir,QWidget *parent){
+    if(dir.isEmpty())return;QDialog log(parent);log.setWindowTitle(text("Registro","Log","Registro"));log.resize(860,560);QVBoxLayout ll(&log);QPlainTextEdit view;view.setReadOnly(true);view.setObjectName("logView");
+    QFile f(dir+"/launcher.log");if(!f.exists())f.setFileName(dir+"/logs/latest.log");
+    if(f.open(QIODevice::ReadOnly)){f.seek(qMax<qint64>(0,f.size()-120000));view.setPlainText(QString::fromUtf8(f.readAll()));view.moveCursor(QTextCursor::End);}else view.setPlainText(text("Todavía no hay registro.","No log yet.","Ainda não há registro."));
+    ll.addWidget(&view);QDialogButtonBox close(QDialogButtonBox::Close);ll.addWidget(&close);connect(&close,&QDialogButtonBox::rejected,&log,&QDialog::reject);log.exec();
+}
 void MainWindow::play(){
     auto i=selected();if(i.dir.isEmpty()){createInstance();return;}if(m_installing.contains(i.dir))return;
     if(m_mc->isRunning(i.dir)){if(QMessageBox::question(this,"EBALIA",text("¿Cerrar esta instancia de Minecraft?","Close this Minecraft instance?","Fechar esta instância do Minecraft?"))==QMessageBox::Yes)m_mc->killInstance(i.dir);return;}
@@ -245,7 +313,7 @@ void MainWindow::removeInstance(){
     auto i=selected();if(i.dir.isEmpty())return;
     if(m_mc->isRunning(i.dir)||m_mc->isInstalling(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QMessageBox confirm(QMessageBox::Question,Language::key("Delete instance"),Language::key("Move this instance and its worlds to local trash?")+"\n\n"+i.name,QMessageBox::Yes|QMessageBox::No,this);confirm.setObjectName("confirmDeleteInstance");confirm.setDefaultButton(QMessageBox::No);if(confirm.exec()!=QMessageBox::Yes)return;
-    try{m_mc->deleteInstance(i.dir);refreshInstances();m_status->setText(Language::key("Instance moved to trash. Your worlds are preserved."));}catch(...){error(exception());}
+    try{m_mc->deleteInstance(i.dir);m_selectedDir.clear();m_library->setCurrentWidget(m_grid);refreshInstances();m_status->setText(Language::key("Instance moved to trash. Your worlds are preserved."));}catch(...){error(exception());}
 }
 void MainWindow::editInstance(){
     auto i=selected();if(i.dir.isEmpty())return;if(m_installing.contains(i.dir)||m_mc->isRunning(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
@@ -267,7 +335,7 @@ void MainWindow::editInstance(){
     button(Language::key("Scan for Java again"),&lay,scan,&d);scan();
     button(text("Elegir ejecutable de Java","Choose Java executable","Escolher executável Java"),&lay,[&]{auto f=QFileDialog::getOpenFileName(&d);if(!f.isEmpty())java.setText(f);},&d);
     button(text("📂 Abrir carpeta de instancia","📂 Open instance folder","📂 Abrir pasta da instância"),&lay,[i]{QDesktopServices::openUrl(QUrl::fromLocalFile(i.dir));},&d);
-    button(text("Registro","Log","Registro"),&lay,[&,i]{QDialog log(&d);log.resize(800,520);QVBoxLayout ll(&log);QPlainTextEdit view;view.setReadOnly(true);QFile f(i.dir+"/launcher.log");if(!f.exists())f.setFileName(i.dir+"/logs/latest.log");if(f.open(QIODevice::ReadOnly)){f.seek(qMax<qint64>(0,f.size()-120000));view.setPlainText(QString::fromUtf8(f.readAll()));}else view.setPlainText(text("Todavía no hay registro.","No log yet.","Ainda não há registro."));ll.addWidget(&view);log.exec();},&d);
+    button(text("Registro","Log","Registro"),&lay,[&,i]{showLog(i.dir,&d);},&d);
     button(text("Reparar instalación","Repair installation","Reparar instalação"),&lay,[&,i]{d.reject();m_installing.insert(i.dir);m_mc->installInstance(i.dir);refreshInstances();},&d);
     button(text("Mover instancia a la papelera","Move instance to trash","Mover instância para a lixeira"),&lay,[&]{d.reject();removeInstance();},&d);
     QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);lay.addWidget(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&d,[&]{if(name.text().trimmed().isEmpty())return;info["name"]=name.text().trimmed();info["javaPath"]=java.text().trimmed();info["xmx"]=memory.value();try{ModRepository::write(i.dir+"/instance.json",info);d.accept();refreshInstances();}catch(...){error(exception());}});connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);d.exec();

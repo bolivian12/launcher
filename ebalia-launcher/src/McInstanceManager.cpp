@@ -22,6 +22,7 @@
 #include <QRegularExpression>
 #include <QLockFile>
 #include <QStandardPaths>
+#include <QDirIterator>
 #include <stdexcept>
 
 namespace {
@@ -116,7 +117,32 @@ void McInstanceManager::deleteInstance(const QString &dir) {
     if (QFileInfo(dir).absolutePath() != QDir(instancesRoot()).absolutePath() || QFileInfo(dir).isSymLink()) fail("Ruta de instancia inválida.");
     // Reversible removal: retain worlds, configs and mods in the trash directory.
     QDir().mkpath(m_root+"/trash");
-    if (!QDir().rename(dir,m_root+"/trash/"+QFileInfo(dir).fileName()+"-"+QString::number(QDateTime::currentMSecsSinceEpoch()))) fail("No se pudo mover la instancia a la papelera.");
+    if (QDir().rename(dir,m_root+"/trash/"+QFileInfo(dir).fileName()+"-"+QString::number(QDateTime::currentMSecsSinceEpoch()))) return;
+    // Windows refuses to rename a folder while a program keeps one of its files open; the system recycle bin may still accept it.
+    if (QFile::moveToTrash(dir)) return;
+    fail(Language::key("The instance could not be moved because a program is using its files. Close Minecraft, file explorer windows or other programs that use that folder, then try again."));
+}
+QString McInstanceManager::copyInstance(const QString &dir, const QString &name) {
+    if (isRunning(dir) || isInstalling(dir)) fail("La instancia está en uso.");
+    if (QFileInfo(dir).absolutePath() != QDir(instancesRoot()).absolutePath() || QFileInfo(dir).isSymLink() || name.trimmed().isEmpty()) fail("Ruta de instancia inválida.");
+    QTemporaryDir stage(m_root+"/.copy-XXXXXX"); if (!stage.isValid()) fail("No se pudo preparar la copia.");
+    const auto target=stage.path()+"/instance"; const QStringList skip{"natives","logs","crash-reports","launcher.log","loader-install.log"};
+    QDirIterator it(dir,QDir::Files|QDir::Dirs|QDir::Hidden|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);
+    QDir().mkpath(target);
+    while (it.hasNext()) {
+        const auto path=it.next(); const auto rel=QDir(dir).relativeFilePath(path); if (skip.contains(rel.section('/',0,0)) || it.fileInfo().isSymLink()) continue;
+        if (it.fileInfo().isDir()) { QDir().mkpath(target+"/"+rel); continue; }
+        QDir().mkpath(QFileInfo(target+"/"+rel).absolutePath()); if (!QFile::copy(path,target+"/"+rel)) fail("No se pudo copiar " + rel);
+    }
+    auto info=ModRepository::read(target+"/instance.json"); info["name"]=name.trimmed(); info["lastPlayed"]=0; info["totalSecs"]=0;
+    ModRepository::write(target+"/instance.json",info);
+    const auto destination=instancesRoot()+"/"+QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (!QDir().rename(target,destination)) fail("No se pudo guardar la copia.");
+    return destination;
+}
+void McInstanceManager::exportInstance(const QString &dir, const QString &zip) {
+    if (isRunning(dir) || isInstalling(dir)) fail("La instancia está en uso.");
+    Archive::compress(dir,zip,{"natives","logs","crash-reports","launcher.log","loader-install.log","launch-profile.json"});
 }
 bool McInstanceManager::allowedByRules(const QJsonObject &object) {
     auto rules = object["rules"].toArray(); if (rules.isEmpty()) return true;

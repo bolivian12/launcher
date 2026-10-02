@@ -1,13 +1,91 @@
 #include "PackBrowser.hpp"
 #include "PackService.hpp"
 #include "Language.hpp"
+#include "InstanceIcons.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
-PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *parent):QDialog(parent){
-    auto tr=[](const char *s){return Language::key(s);};setWindowTitle(provider);resize(820,600);auto layout=new QVBoxLayout(this);auto search=new QLineEdit;search->setPlaceholderText(tr("Search modpacks…"));layout->addWidget(search);auto status=new QLabel;status->setWordWrap(true);layout->addWidget(status);auto results=new QListWidget;results->setWordWrap(true);layout->addWidget(results,1);auto versions=new QComboBox;layout->addWidget(versions);auto controls=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);controls->button(QDialogButtonBox::Ok)->setText(tr("Use this modpack"));controls->button(QDialogButtonBox::Ok)->setEnabled(false);auto find=controls->addButton(tr("Search"),QDialogButtonBox::ActionRole);auto more=controls->addButton(tr("Load more"),QDialogButtonBox::ActionRole);more->setVisible(provider=="modrinth"||provider=="curseforge");layout->addWidget(controls);connect(controls,&QDialogButtonBox::rejected,this,&QDialog::reject);connect(controls,&QDialogButtonBox::accepted,this,[this,versions]{selectedVersion=versions->currentData().toJsonObject();if(!selectedPack.isEmpty()&&!selectedVersion.isEmpty())accept();});
-    auto epoch=std::make_shared<int>(0);auto page=std::make_shared<int>(0);auto activeQuery=std::make_shared<QString>();
-    auto lookup=[=,this](bool append){++*epoch;auto ticket=*epoch;controls->button(QDialogButtonBox::Ok)->setEnabled(false);find->setEnabled(false);more->setEnabled(false);if(!append){*page=0;*activeQuery=search->text();results->clear();versions->clear();selectedPack={};}else ++*page;status->setText(tr("Loading modpacks…"));auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[=,this]{auto d=watcher->result();watcher->deleteLater();if(ticket!=*epoch)return;find->setEnabled(true);more->setEnabled(true);if(d.contains("error")){status->setText(d["error"].toString());return;}for(auto v:d["packs"].toArray()){auto p=v.toObject();QTextDocument text;text.setHtml(p["description"].toString());auto item=new QListWidgetItem(p["name"].toString()+"\n"+text.toPlainText().left(250),results);item->setData(Qt::UserRole,p);}status->setText(QString::number(results->count())+" · "+tr("Choose a modpack and its version."));});auto query=*activeQuery;auto offset=*page;watcher->setFuture(QtConcurrent::run([root,provider,query,offset]{try{return QJsonObject{{"packs",PackService(root).search(provider,query,offset)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));};
-    connect(find,&QPushButton::clicked,this,[lookup]{lookup(false);});connect(more,&QPushButton::clicked,this,[lookup]{lookup(true);});connect(search,&QLineEdit::returnPressed,this,[lookup]{lookup(false);});
-    connect(results,&QListWidget::currentItemChanged,this,[=,this](QListWidgetItem *item){++*epoch;auto ticket=*epoch;versions->clear();controls->button(QDialogButtonBox::Ok)->setEnabled(false);if(!item)return;selectedPack=item->data(Qt::UserRole).toJsonObject();status->setText(tr("Loading versions…"));auto watcher=new QFutureWatcher<QJsonObject>(this);auto pack=selectedPack;connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[=]{auto d=watcher->result();watcher->deleteLater();if(ticket!=*epoch)return;if(d.contains("error")){status->setText(d["error"].toString());return;}for(auto v:d["versions"].toArray())versions->addItem(v.toObject()["name"].toString(),v.toObject());controls->button(QDialogButtonBox::Ok)->setEnabled(versions->count()>0);status->setText(tr("Choose a modpack and its version."));});watcher->setFuture(QtConcurrent::run([root,pack]{try{return QJsonObject{{"versions",PackService(root).versions(pack)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));});
-    if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))QTimer::singleShot(0,this,[lookup]{lookup(false);});
+#include <QtNetwork>
+namespace {
+QString t(const char *s){return Language::key(QString::fromUtf8(s));}
+QHash<QString,QPixmap> &iconCache(){static QHash<QString,QPixmap> cache;return cache;}
+}
+PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *parent):QWidget(parent),m_root(root),m_provider(provider){
+    setObjectName(provider+"Page");auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);
+    auto bar=new QHBoxLayout;layout->addLayout(bar);m_search=new QLineEdit;m_search->setObjectName("packSearch");m_search->setPlaceholderText(t("Search modpacks…"));m_search->setClearButtonEnabled(true);bar->addWidget(m_search,1);
+    m_find=new QPushButton(t("Search"));bar->addWidget(m_find);
+    auto key=new QPushButton(t("Set CurseForge API key"));key->setVisible(false);bar->addWidget(key);
+    auto split=new QSplitter;layout->addWidget(split,1);
+    m_results=new QListWidget;m_results->setObjectName("packResults");m_results->setIconSize(QSize(40,40));m_results->setWordWrap(true);m_results->setTextElideMode(Qt::ElideRight);split->addWidget(m_results);
+    m_description=new QTextBrowser;m_description->setOpenLinks(false);split->addWidget(m_description);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
+    // Pack pages are third-party content: only https links are opened, in the system browser.
+    connect(m_description,&QTextBrowser::anchorClicked,this,[](const QUrl &url){if(url.scheme()=="https")QDesktopServices::openUrl(url);});
+    m_status=new QLabel;m_status->setWordWrap(true);m_status->setObjectName("muted");layout->addWidget(m_status);
+    auto bottom=new QHBoxLayout;layout->addLayout(bottom);bottom->addWidget(new QLabel(t("Version")));m_versions=new QComboBox;m_versions->setObjectName("packVersions");bottom->addWidget(m_versions,1);
+    m_more=new QPushButton(t("Load more"));m_more->setVisible(provider=="modrinth"||provider=="curseforge");bottom->addWidget(m_more);
+    connect(m_find,&QPushButton::clicked,this,[this]{lookup(false);});connect(m_search,&QLineEdit::returnPressed,this,[this]{lookup(false);});connect(m_more,&QPushButton::clicked,this,[this]{lookup(true);});
+    connect(m_versions,qOverload<int>(&QComboBox::currentIndexChanged),this,[this]{selectedVersion=m_versions->currentData().toJsonObject();if(changed)changed();});
+    connect(m_results,&QListWidget::currentItemChanged,this,[this](QListWidgetItem *item){
+        auto ticket=++m_versionEpoch;{QSignalBlocker block(m_versions);m_versions->clear();}selectedVersion={};selectedPack=item?item->data(Qt::UserRole).toJsonObject():QJsonObject();if(changed)changed();if(!item)return;
+        describe(selectedPack);m_status->setText(t("Loading versions…"));auto pack=selectedPack;auto root=m_root;auto watcher=new QFutureWatcher<QJsonObject>(this);
+        connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,ticket]{
+            auto d=watcher->result();watcher->deleteLater();if(ticket!=m_versionEpoch)return;if(d.contains("error")){m_status->setText(Language::message(d["error"].toString()));return;}
+            {QSignalBlocker block(m_versions);for(auto v:d["versions"].toArray())m_versions->addItem(v.toObject()["name"].toString(),v.toObject());}
+            selectedVersion=m_versions->currentData().toJsonObject();m_status->setText(m_versions->count()?t("Choose a modpack and its version."):t("This modpack has no versions to install."));if(changed)changed();
+        });
+        watcher->setFuture(QtConcurrent::run([root,pack]{try{return QJsonObject{{"versions",PackService(root).versions(pack)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));
+    });
+    if(provider=="curseforge"){
+        auto refreshKey=[this,key]{bool missing=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY",QSettings().value("integrations/curseforgeKey").toString()).isEmpty();key->setVisible(missing);if(missing)m_status->setText(t("CurseForge requires an API key for third-party launchers. Add your EBALIA key to search here, or download the pack from CurseForge and use Import."));return missing;};
+        connect(key,&QPushButton::clicked,this,[this,refreshKey]{bool ok;auto value=QInputDialog::getText(this,"CurseForge",t("CurseForge API key"),QLineEdit::Password,{},&ok).trimmed();if(!ok||value.isEmpty())return;QSettings().setValue("integrations/curseforgeKey",value);if(!refreshKey())lookup(false);});
+        refreshKey();
+    }
+}
+void PackBrowser::activate(){
+    if(m_started)return;m_started=true;
+    if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){m_status->setText(t("Search to see modpacks."));return;}
+    if(m_provider=="curseforge"&&qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY",QSettings().value("integrations/curseforgeKey").toString()).isEmpty())return;
+    lookup(false);
+}
+void PackBrowser::lookup(bool append){
+    auto ticket=++m_searchEpoch;m_find->setEnabled(false);m_more->setEnabled(false);
+    if(!append){m_page=0;m_query=m_search->text().trimmed();++m_versionEpoch;{QSignalBlocker a(m_results),b(m_versions);m_results->clear();m_versions->clear();}selectedPack={};selectedVersion={};m_description->clear();if(changed)changed();}
+    else ++m_page;
+    m_status->setText(t("Loading modpacks…"));auto root=m_root,provider=m_provider,query=m_query;int page=m_page;auto watcher=new QFutureWatcher<QJsonObject>(this);
+    connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,ticket]{
+        auto d=watcher->result();watcher->deleteLater();if(ticket!=m_searchEpoch)return;m_find->setEnabled(true);m_more->setEnabled(true);
+        if(d.contains("error")){m_status->setText(Language::message(d["error"].toString()));return;}
+        auto packs=d["packs"].toArray();
+        for(auto v:packs){
+            auto p=v.toObject();QTextDocument plain;plain.setHtml(p["description"].toString());auto summary=plain.toPlainText().simplified();if(summary.size()>140)summary=summary.left(137)+"…";
+            auto item=new QListWidgetItem(InstanceIcons::provider(m_provider),p["name"].toString()+(summary.isEmpty()?QString():"\n"+summary),m_results);item->setData(Qt::UserRole,p);item->setToolTip(plain.toPlainText().left(500));
+            auto icon=p["icon"].toString();if(icon.startsWith("https://"))loadIcon(icon,p["id"].toString());
+        }
+        m_status->setText(m_results->count()?QString::number(m_results->count())+" · "+t("Choose a modpack and its version."):t("No modpacks found."));
+        if(packs.isEmpty())m_more->setEnabled(false);
+    });
+    watcher->setFuture(QtConcurrent::run([root,provider,query,page]{try{return QJsonObject{{"packs",PackService(root).search(provider,query,page)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));
+}
+void PackBrowser::loadIcon(const QString &url,const QString &id){
+    auto apply=[this,id](const QPixmap &pixmap){for(int i=0;i<m_results->count();++i)if(m_results->item(i)->data(Qt::UserRole).toJsonObject()["id"].toString()==id)m_results->item(i)->setIcon(pixmap);};
+    if(iconCache().contains(url)){apply(iconCache()[url]);return;}
+    if(!m_icons)m_icons=new QNetworkAccessManager(this);
+    QNetworkRequest request{QUrl(url)};request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/4.0");request.setTransferTimeout(20000);
+    auto reply=m_icons->get(request);
+    connect(reply,&QNetworkReply::finished,this,[reply,url,apply]{reply->deleteLater();if(reply->error()!=QNetworkReply::NoError)return;auto data=reply->read(4*1024*1024);QPixmap pixmap;if(!pixmap.loadFromData(data))return;
+        pixmap=pixmap.scaled(40,40,Qt::KeepAspectRatio,Qt::SmoothTransformation);iconCache().insert(url,pixmap);apply(pixmap);});
+}
+void PackBrowser::describe(const QJsonObject &p){
+    QStringList meta;if(!p["author"].toString().isEmpty())meta<<t("By")+" "+p["author"].toString();
+    if(p["downloads"].toDouble()>0)meta<<QLocale().toString(qint64(p["downloads"].toDouble()))+" "+t("downloads");
+    auto url=p["url"].toString();auto body=p["body"].toString().isEmpty()?p["description"].toString():p["body"].toString();
+    if(p["bodyFormat"]=="markdown"){
+        // Remote images are not loaded; drop them instead of showing broken placeholders.
+        body.remove(QRegularExpression("!\\[[^\\]]*\\]\\([^)]*\\)"));body.remove(QRegularExpression("<img[^>]*>",QRegularExpression::CaseInsensitiveOption));
+        QString text="## "+p["name"].toString()+"\n\n";if(!meta.isEmpty())text+="*"+meta.join(" · ")+"*\n\n";if(url.startsWith("https://"))text+="["+t("Open the modpack page")+"]("+url+")\n\n";
+        m_description->setMarkdown(text+body);return;
+    }
+    QString html="<h2>"+p["name"].toString().toHtmlEscaped()+"</h2>";if(!meta.isEmpty())html+="<p><i>"+meta.join(" · ").toHtmlEscaped()+"</i></p>";
+    if(url.startsWith("https://"))html+="<p><a href=\""+url.toHtmlEscaped()+"\">"+t("Open the modpack page")+"</a></p>";
+    body.remove(QRegularExpression("<img[^>]*>",QRegularExpression::CaseInsensitiveOption));
+    html+=p["bodyFormat"]=="html"?"<p>"+body+"</p>":"<p>"+body.toHtmlEscaped()+"</p>";m_description->setHtml(html);
 }

@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSaveFile>
+#include <QDirIterator>
+#include <QDateTime>
 #include <memory>
 #include <stdexcept>
 void Archive::extract(const QString &file, const QString &destination, const QString &prefix) {
@@ -33,4 +35,24 @@ void Archive::extract(const QString &file, const QString &destination, const QSt
         if (size < 0 || !out.commit()) fail("Archivo ZIP incompleto: " + name);
     }
     if (status != ARCHIVE_EOF) fail("ZIP dañado.");
+}
+void Archive::compress(const QString &folder, const QString &file, const QStringList &skip) {
+    auto fail = [](const QString &s) { throw std::runtime_error(s.toStdString()); };
+    const auto partial = file + ".part"; QFile::remove(partial);
+    std::unique_ptr<archive, decltype(&archive_write_free)> a(archive_write_new(), archive_write_free);
+    archive_write_set_format_zip(a.get());
+    if (archive_write_open_filename(a.get(), QFile::encodeName(partial).constData()) != ARCHIVE_OK) fail("No se pudo crear el ZIP.");
+    QDirIterator it(folder, QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const auto path = it.next(); const auto info = it.fileInfo(); if (info.isSymLink()) continue;
+        const auto name = QDir(folder).relativeFilePath(path); if (skip.contains(name.section('/', 0, 0))) continue;
+        QFile in(path); if (!in.open(QIODevice::ReadOnly)) fail("No se pudo leer " + name);
+        std::unique_ptr<archive_entry, decltype(&archive_entry_free)> entry(archive_entry_new(), archive_entry_free);
+        archive_entry_set_pathname(entry.get(), name.toUtf8().constData()); archive_entry_set_filetype(entry.get(), AE_IFREG);
+        archive_entry_set_perm(entry.get(), 0644); archive_entry_set_size(entry.get(), in.size()); archive_entry_set_mtime(entry.get(), info.lastModified().toSecsSinceEpoch(), 0);
+        if (archive_write_header(a.get(), entry.get()) != ARCHIVE_OK) fail("No se pudo escribir " + name);
+        while (!in.atEnd()) { auto data = in.read(1 << 20); if (archive_write_data(a.get(), data.constData(), size_t(data.size())) != data.size()) fail("Sin espacio al comprimir " + name); }
+    }
+    if (archive_write_close(a.get()) != ARCHIVE_OK) fail("No se pudo completar el ZIP.");
+    QFile::remove(file); if (!QFile::rename(partial, file)) fail("No se pudo guardar el ZIP.");
 }

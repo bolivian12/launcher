@@ -107,8 +107,8 @@ private slots:
         auto packedJava=lzma(java);
         QJsonObject files{{"bin",QJsonObject{{"type","directory"}}},{"bin/java",file("java",java,true,packedJava)},{"lib/data",file("data",data,false,"broken","0000000000000000000000000000000000000000")},
             {"legal/LICENSE",file("license",license,false)},{"legal/base/LICENSE",QJsonObject{{"type","link"},{"target","../LICENSE"}}}};
-        auto manifest=encode(QJsonObject{{"files",files}});QStringList requested;
-        auto transport=[&](const QUrl &url)->QByteArray{requested<<url.toString();auto path=url.path();
+        auto manifest=encode(QJsonObject{{"files",files}});QStringList requested;QMutex mutex; // files are fetched from several threads
+        auto transport=[&](const QUrl &url)->QByteArray{{QMutexLocker lock(&mutex);requested<<url.toString();}auto path=url.path();
             if(path.endsWith("all.json"))return encode(QJsonObject{{"linux",QJsonObject{{"jre-legacy",QJsonArray{QJsonObject{{"manifest",QJsonObject{{"sha1",sha(manifest)},{"url","https://example.test/manifest.json"}}},{"version",QJsonObject{{"name","8u51"}}}}}}}}});
             if(path=="/manifest.json")return manifest;if(path=="/lzma/java")return packedJava;if(path=="/raw/data")return data;if(path=="/raw/license")return license;if(path=="/lzma/data")return "broken";
             throw std::runtime_error(("Unexpected request "+url.toString()).toStdString());};

@@ -17,6 +17,8 @@ class QPushButton;
 class QTabWidget;
 class QHBoxLayout;
 class PatreonAuth;
+class InstanceGrid;
+class InstanceDetail;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -33,7 +35,13 @@ private:
     void refreshNews(bool network=true);
     void selection();
     McInstance selected() const;
-    void createInstance(bool copy=false);
+    void createInstance(bool copy=false,int page=0);
+    void instanceMenu();
+    void groupMenu(const QString &group);
+    void changeGroup();
+    void copyInstance();
+    void exportInstance();
+    void showLog(const QString &dir,QWidget *parent);
     void play();
     void editInstance();
     void removeInstance();
@@ -53,12 +61,13 @@ private:
     AccountManager *m_accounts;
     JavaRunner *m_java;
     QList<McVersion> m_manifest;
-    QListWidget *m_instances=nullptr,*m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr;
+    QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr;
     QStackedWidget *m_pages=nullptr;
-    QLabel *m_title=nullptr,*m_details=nullptr,*m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
+    QLabel *m_playerName=nullptr,*m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
     QProgressBar *m_progress=nullptr;
     QComboBox *m_target=nullptr,*m_account=nullptr;
-    QLineEdit *m_query=nullptr,*m_instanceFilter=nullptr,*m_lostFilter=nullptr;
+    QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
+    QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
     QComboBox *m_playInstance=nullptr,*m_modProvider=nullptr;
     QPushButton *m_playButton=nullptr;
     QTabWidget *m_clientTabs=nullptr;
