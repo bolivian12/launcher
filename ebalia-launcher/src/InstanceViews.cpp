@@ -122,7 +122,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     m_icon=new QLabel;m_icon->setFixedSize(76,76);m_icon->setObjectName("detailIcon");m_icon->setAlignment(Qt::AlignCenter);header->addWidget(m_icon,0,Qt::AlignTop);
     auto info=new QVBoxLayout;info->setSpacing(8);header->addLayout(info,1);
     m_name=new QLabel;m_name->setObjectName("detailTitle");info->addWidget(m_name);
-    m_state=new QLabel;m_state->setObjectName("muted");info->addWidget(m_state);info->addStretch();
+    m_state=new QLabel;m_state->setObjectName("muted");info->addWidget(m_state); // no stretch here: spare height belongs below the cards
     auto chipRow=new QHBoxLayout;chipRow->setSpacing(8);l->addLayout(chipRow);
     m_chips=new QWidget;auto chips=new QHBoxLayout(m_chips);chips->setContentsMargins(0,0,0,0);chips->setSpacing(8);chipRow->addWidget(m_chips,1);
     auto tools=new QHBoxLayout;tools->setSpacing(6);chipRow->addLayout(tools);
@@ -136,7 +136,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     struct Stat{QPixmap icon;QString title,action,folder;};
     const QList<Stat> stats{{icons::mods(20),t("Mods"),t("MANAGE MODS"),"mods"},{icons::fanart(20),t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{icons::release(20),t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{icons::wiki(20),t("Worlds"),t("MANAGE WORLDS"),"saves"}};
     for(int n=0;n<stats.size();++n){
-        auto card=new QFrame;card->setObjectName("statCard");card->setMinimumHeight(118);auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
+        auto card=new QFrame;card->setObjectName("statCard");card->setFixedHeight(128);auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
         auto titleRow=new QHBoxLayout;cl->addLayout(titleRow);auto icon=new QLabel;icon->setPixmap(stats[n].icon);titleRow->addWidget(icon);auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");titleRow->addWidget(title,1);
         auto value=muted({});m_counts<<value;cl->addWidget(value);cl->addStretch();
         auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);cl->addWidget(action);
