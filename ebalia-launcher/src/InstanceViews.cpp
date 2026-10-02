@@ -30,7 +30,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton&&rect().contains(event->position().toPoint())&&clicked)clicked();}
     void contextMenuEvent(QContextMenuEvent *event) override {if(context)context();event->accept();}
 };
-QString playText(const InstanceInfo &i){return i.running?"■  "+t("Stop"):i.busy?t("Working…"):i.base.ready?"▶  "+t("Play"):"⬇  "+t("Install");}
+QString playText(const InstanceInfo &i){return i.running?"■  "+t("Stop"):i.busy?t("Working…"):"▶  "+t("Play");} // Play also installs what is missing
 QLabel *muted(const QString &text){auto l=new QLabel(text);l->setObjectName("muted");l->setWordWrap(true);return l;}
 int count(const QString &dir,const QStringList &names,QDir::Filters filters){return QDir(dir).entryList(names,filters|QDir::NoDotAndDotDot).size();}
 }

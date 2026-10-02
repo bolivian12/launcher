@@ -378,5 +378,8 @@
   "Install Java for this version before launching.": "启动前请为此版本安装 Java。",
   "The original launch file is missing or ambiguous. Reinstall this version.": "原始启动文件缺失或不唯一。请重新安装此版本。",
   "A lost version is already running.": "已有一个失落版本在运行。",
-  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "这是原版实例。要使用模组，请创建带 Fabric、Quilt、Forge 或 NeoForge 的实例。"
+  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "这是原版实例。要使用模组，请创建带 Fabric、Quilt、Forge 或 NeoForge 的实例。",
+  "Get a key": "获取密钥",
+  "CurseForge rejected this API key.": "CurseForge 拒绝了此 API 密钥。",
+  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge 需要 API 密钥：请粘贴到“账户与设置 → 提供方设置”。"
 }

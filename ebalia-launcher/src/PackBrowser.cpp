@@ -1,5 +1,6 @@
 #include "PackBrowser.hpp"
 #include "PackService.hpp"
+#include "ModRepository.hpp"
 #include "Language.hpp"
 #include "InstanceIcons.hpp"
 #include <QtWidgets>
@@ -13,7 +14,17 @@ PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *pa
     setObjectName(provider+"Page");auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,0,0,0);
     auto bar=new QHBoxLayout;layout->addLayout(bar);m_search=new QLineEdit;m_search->setObjectName("packSearch");m_search->setPlaceholderText(t("Search modpacks…"));m_search->setClearButtonEnabled(true);bar->addWidget(m_search,1);
     m_find=new QPushButton(t("Search"));bar->addWidget(m_find);
-    auto key=new QPushButton(t("Set CurseForge API key"));key->setVisible(false);bar->addWidget(key);
+    if(provider=="curseforge"){
+        // CurseForge only answers launchers that send an API key; paste it once and the page searches right away.
+        m_keyRow=new QWidget;auto row=new QHBoxLayout(m_keyRow);row->setContentsMargins(0,0,0,0);
+        auto field=new QLineEdit;field->setObjectName("curseForgeKey");field->setEchoMode(QLineEdit::Password);field->setPlaceholderText(t("CurseForge API key"));row->addWidget(field,1);
+        auto save=new QPushButton(t("Save"));save->setProperty("play",true);row->addWidget(save);
+        auto get=new QPushButton(t("Get a key"));row->addWidget(get);layout->addWidget(m_keyRow);
+        connect(get,&QPushButton::clicked,this,[]{QDesktopServices::openUrl(QUrl("https://console.curseforge.com/"));});
+        auto store=[this,field]{auto key=field->text().trimmed();if(key.isEmpty())return;QSettings().setValue("integrations/curseforgeKey",key);field->clear();m_keyRow->setVisible(false);m_started=true;lookup(false);};
+        connect(save,&QPushButton::clicked,this,store);connect(field,&QLineEdit::returnPressed,this,store);
+        m_keyRow->setVisible(ModRepository::curseForgeKey().isEmpty());
+    }
     auto split=new QSplitter;layout->addWidget(split,1);
     m_results=new QListWidget;m_results->setObjectName("packResults");m_results->setIconSize(QSize(40,40));m_results->setWordWrap(true);m_results->setTextElideMode(Qt::ElideRight);m_results->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);split->addWidget(m_results);
     m_description=new QTextBrowser;m_description->setOpenLinks(false);m_description->document()->setDefaultStyleSheet("a{color:#5fd38d;font-weight:bold;}");split->addWidget(m_description);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
@@ -36,26 +47,22 @@ PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *pa
         });
         watcher->setFuture(QtConcurrent::run([root,pack]{try{return QJsonObject{{"versions",PackService(root).versions(pack)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));
     });
-    if(provider=="curseforge"){
-        auto refreshKey=[this,key]{bool missing=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY",QSettings().value("integrations/curseforgeKey").toString()).isEmpty();key->setVisible(missing);if(missing)m_status->setText(t("CurseForge requires an API key for third-party launchers. Add your EBALIA key to search here, or download the pack from CurseForge and use Import."));return missing;};
-        connect(key,&QPushButton::clicked,this,[this,refreshKey]{bool ok;auto value=QInputDialog::getText(this,"CurseForge",t("CurseForge API key"),QLineEdit::Password,{},&ok).trimmed();if(!ok||value.isEmpty())return;QSettings().setValue("integrations/curseforgeKey",value);if(!refreshKey())lookup(false);});
-        refreshKey();
-    }
 }
 void PackBrowser::activate(){
     if(m_started)return;m_started=true;
     if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){m_status->setText(t("Search to see modpacks."));return;}
-    if(m_provider=="curseforge"&&qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY",QSettings().value("integrations/curseforgeKey").toString()).isEmpty())return;
+    if(m_keyRow&&ModRepository::curseForgeKey().isEmpty())return; // nothing to ask CurseForge until a key is pasted
     lookup(false);
 }
 void PackBrowser::lookup(bool append){
+    if(m_keyRow&&ModRepository::curseForgeKey().isEmpty()){m_keyRow->setVisible(true);if(auto field=m_keyRow->findChild<QLineEdit*>())field->setFocus();return;}
     auto ticket=++m_searchEpoch;m_find->setEnabled(false);m_more->setEnabled(false);
     if(!append){m_page=0;m_query=m_search->text().trimmed();++m_versionEpoch;{QSignalBlocker a(m_results),b(m_versions);m_results->clear();m_versions->clear();}selectedPack={};selectedVersion={};m_description->clear();if(changed)changed();}
     else ++m_page;
     m_status->setText(t("Loading modpacks…"));auto root=m_root,provider=m_provider,query=m_query;int page=m_page;auto watcher=new QFutureWatcher<QJsonObject>(this);
     connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,ticket]{
         auto d=watcher->result();watcher->deleteLater();if(ticket!=m_searchEpoch)return;m_find->setEnabled(true);m_more->setEnabled(true);
-        if(d.contains("error")){m_status->setText(Language::message(d["error"].toString()));return;}
+        if(d.contains("error")){auto error=d["error"].toString();if(m_keyRow&&(error.contains("403")||error.contains("401")||error.contains("Forbidden",Qt::CaseInsensitive))){QSettings().remove("integrations/curseforgeKey");m_keyRow->setVisible(ModRepository::curseForgeKey().isEmpty());error=t("CurseForge rejected this API key.");}m_status->setText(Language::message(error));return;}
         auto packs=d["packs"].toArray();
         for(auto v:packs){
             auto p=v.toObject();QTextDocument plain;plain.setHtml(p["description"].toString());auto summary=plain.toPlainText().simplified();if(summary.size()>140)summary=summary.left(137)+"…";

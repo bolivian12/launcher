@@ -56,6 +56,10 @@ Los paquetes del archivo son `.bat`/`.exe` originales que llaman a `java` con la
 
 **Preparación y diagnóstico** lista las Java detectadas, comprueba Java 8 (o Wine y la Java 8 de Windows), OpenGL y OpenAL, permite instalar la Java 8 oficial con un clic y volver a comprobar todo. Estos paquetes necesitan OpenAL para el sonido: en Windows se verifica `OpenAL32.dll` en el sistema; abrir el instalador no cuenta como instalado hasta que la comprobación lo encuentra.
 
+## Jugar
+
+Jugar instala lo que falte (cliente, cargador, Java) y abre el juego en el mismo paso. Si todavía no hay cuenta, solo se pide un nombre de jugador para un perfil local.
+
 ## Cuentas Microsoft
 
 Los perfiles locales están disponibles. El acceso Microsoft requiere registrar una aplicación propia de EBALIA como cliente público y habilitar el acceso correspondiente a Minecraft/Xbox. Configurá `EBALIA_MS_CLIENT_ID` o `auth/microsoftClientId` en QSettings. No se reutiliza el identificador de aplicación de Prism. No se guarda una contraseña Microsoft; se usan device code y refresh tokens. En sistemas POSIX el archivo de cuentas solo tiene permisos de lectura/escritura para su propietario. No es un almacén cifrado de credenciales.
@@ -118,6 +122,6 @@ En el modo cliente, la pestaña **Skins** permite importar PNG de 64×64 o 64×3
 
 En **Explorar mods**, elegí Modrinth o CurseForge y seleccioná uno o varios resultados. Ambos proveedores usan el mismo flujo de revisión, dependencias y archivos verificados. Los packs pueden conservar referencias de los dos orígenes y recordar los mods que este launcher instaló.
 
-CurseForge exige una clave de API para aplicaciones externas. Configurala en **Cuentas y ajustes → Configuración de proveedores**, o con `EBALIA_CURSEFORGE_API_KEY`. El registro debe corresponder a EBALIA. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
+CurseForge exige una clave de API para aplicaciones externas: cada launcher tiene la suya (Prism, ATLauncher y la app de CurseForge incluyen la propia) y no se reutiliza la de otro. Para que funcione sin configurar nada en todas las copias, guardá la clave de EBALIA en `curseforge-api-key.txt` junto a `CMakeLists.txt` (o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake); queda incorporada al compilar, también en el paquete Nix. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Cuentas y ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. El registro debe corresponder a EBALIA. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
 
 El adaptador de CurseForge se prueba con respuestas controladas, dependencias y archivos SHA-1 (el registro local conserva además SHA-512). La prueba de red real requiere la clave propia. [Documentación oficial de CurseForge](https://docs.curseforge.com/rest-api/).

@@ -378,5 +378,8 @@
   "Install Java for this version before launching.": "起動する前にこのバージョン用の Java をインストールしてください。",
   "The original launch file is missing or ambiguous. Reinstall this version.": "元の起動ファイルがないか、特定できません。このバージョンを再インストールしてください。",
   "A lost version is already running.": "ロストバージョンはすでに実行中です。",
-  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "これは Vanilla のインスタンスです。MOD を使うには Fabric、Quilt、Forge、NeoForge のインスタンスを作成してください。"
+  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "これは Vanilla のインスタンスです。MOD を使うには Fabric、Quilt、Forge、NeoForge のインスタンスを作成してください。",
+  "Get a key": "キーを取得",
+  "CurseForge rejected this API key.": "CurseForge がこの API キーを拒否しました。",
+  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge には API キーが必要です。アカウントと設定 → プロバイダー設定に貼り付けてください。"
 }

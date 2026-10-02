@@ -43,6 +43,7 @@ private:
     void exportInstance();
     void showLog(const QString &dir,QWidget *parent);
     void play();
+    void launchInstance(const McInstance &instance);
     void editInstance();
     void removeInstance();
     void manageMods();
@@ -76,6 +77,6 @@ private:
     QTabWidget *m_clientTabs=nullptr;
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;
-    QSet<QString> m_installing;
+    QSet<QString> m_installing,m_launchAfterInstall;
     int m_jobs=0,m_offset=0;
 };

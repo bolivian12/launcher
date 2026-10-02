@@ -2974,5 +2974,41 @@
     "これは Vanilla のインスタンスです。MOD を使うには Fabric、Quilt、Forge、NeoForge のインスタンスを作成してください。",
     "Vanilla 인스턴스입니다. 모드를 쓰려면 Fabric, Quilt, Forge, NeoForge 인스턴스를 만드세요.",
     "这是原版实例。要使用模组，请创建带 Fabric、Quilt、Forge 或 NeoForge 的实例。"
+  ],
+  "Get a key": [
+    "Conseguir clave",
+    "Get a key",
+    "Obter chave",
+    "Schlüssel holen",
+    "Obtenir une clé",
+    "Ottieni una chiave",
+    "Получить ключ",
+    "キーを取得",
+    "키 받기",
+    "获取密钥"
+  ],
+  "CurseForge rejected this API key.": [
+    "CurseForge rechazó esta clave de API.",
+    "CurseForge rejected this API key.",
+    "O CurseForge recusou esta chave de API.",
+    "CurseForge hat diesen API-Schlüssel abgelehnt.",
+    "CurseForge a refusé cette clé API.",
+    "CurseForge ha rifiutato questa chiave API.",
+    "CurseForge отклонил этот ключ API.",
+    "CurseForge がこの API キーを拒否しました。",
+    "CurseForge가 이 API 키를 거부했습니다.",
+    "CurseForge 拒绝了此 API 密钥。"
+  ],
+  "CurseForge requires your EBALIA API key in Provider settings.": [
+    "CurseForge necesita una clave de API: pegala en Cuentas y ajustes → Configuración de proveedores.",
+    "CurseForge requires your EBALIA API key in Provider settings.",
+    "O CurseForge precisa de uma chave de API: cole-a em Contas e ajustes → Configuração de provedores.",
+    "CurseForge braucht einen API-Schlüssel: füge ihn unter Konten & Einstellungen → Anbietereinstellungen ein.",
+    "CurseForge nécessite une clé API : collez-la dans Comptes et réglages → Réglages des fournisseurs.",
+    "CurseForge richiede una chiave API: incollala in Account e impostazioni → Impostazioni dei provider.",
+    "CurseForge требует ключ API: вставьте его в «Аккаунты и настройки» → «Настройки провайдеров».",
+    "CurseForge には API キーが必要です。アカウントと設定 → プロバイダー設定に貼り付けてください。",
+    "CurseForge에는 API 키가 필요합니다. 계정 및 설정 → 제공자 설정에 붙여 넣으세요.",
+    "CurseForge 需要 API 密钥：请粘贴到“账户与设置 → 提供方设置”。"
   ]
 }

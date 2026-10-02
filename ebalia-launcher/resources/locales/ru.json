@@ -378,5 +378,8 @@
   "Install Java for this version before launching.": "Установите Java для этой версии перед запуском.",
   "The original launch file is missing or ambiguous. Reinstall this version.": "Исходный файл запуска отсутствует или неоднозначен. Переустановите версию.",
   "A lost version is already running.": "Потерянная версия уже запущена.",
-  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "Это сборка Vanilla. Создайте сборку с Fabric, Quilt, Forge или NeoForge, чтобы использовать моды."
+  "This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.": "Это сборка Vanilla. Создайте сборку с Fabric, Quilt, Forge или NeoForge, чтобы использовать моды.",
+  "Get a key": "Получить ключ",
+  "CurseForge rejected this API key.": "CurseForge отклонил этот ключ API.",
+  "CurseForge requires your EBALIA API key in Provider settings.": "CurseForge требует ключ API: вставьте его в «Аккаунты и настройки» → «Настройки провайдеров»."
 }

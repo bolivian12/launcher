@@ -20,6 +20,8 @@ public:
     static void write(const QString &path, const QJsonObject &object);
     static bool safeName(const QString &name);
     static QByteArray fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers = {});
+    // EBALIA_CURSEFORGE_API_KEY, then Provider settings, then the key built into this copy (empty when none).
+    static QString curseForgeKey();
 private:
     QByteArray get(const QUrl &url);
     QJsonDocument api(const QString &path, const QList<QPair<QString, QString>> &query = {});

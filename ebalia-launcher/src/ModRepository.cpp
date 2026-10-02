@@ -1,4 +1,5 @@
 #include "ModRepository.hpp"
+#include "BuildConfig.hpp"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -92,7 +93,7 @@ QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString
     QByteArray data;
     if(m_transport)data=m_transport(url);
     else {
-        auto key=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY");if(key.isEmpty())key=QSettings().value("integrations/curseforgeKey").toString();
+        auto key=curseForgeKey();
         if(key.isEmpty())fail("CurseForge requires an API key. Configure it in Accounts & settings.");
         data=fetch(url,{{"x-api-key",key.toUtf8()}});
     }
@@ -299,4 +300,8 @@ QJsonArray ModRepository::packs() const {
         auto p = read(dir.filePath(file)); p["path"] = dir.filePath(file); out.append(p);
     }
     return out;
+}
+QString ModRepository::curseForgeKey(){
+    auto key=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY").trimmed();if(key.isEmpty())key=QSettings().value("integrations/curseforgeKey").toString().trimmed();
+    return key.isEmpty()?QString::fromLatin1(EBALIA_BUILTIN_CURSEFORGE_KEY).trimmed():key;
 }
