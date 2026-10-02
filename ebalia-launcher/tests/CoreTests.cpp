@@ -12,6 +12,7 @@
 #include "Loaders.hpp"
 #include "SkinManager.hpp"
 #include "JavaRuntime.hpp"
+#include "JavaDownloader.hpp"
 #include "PackService.hpp"
 #include <stdexcept>
 
@@ -26,6 +27,10 @@ QByteArray encode(QJsonObject o){return QJsonDocument(o).toJson();}
 QByteArray encode(QJsonArray a){return QJsonDocument(a).toJson();}
 QByteArray readFile(const QString &path){QFile f(path);if(!f.open(QIODevice::ReadOnly))return {};return f.readAll();}
 void writeFile(const QString &path,const QByteArray &data){QFile f(path);QVERIFY(f.open(QIODevice::WriteOnly));QCOMPARE(f.write(data),data.size());}
+QByteArray lzma(const QByteArray &data){
+    QByteArray out(data.size()+65536,0);size_t used=0;auto a=archive_write_new();archive_write_add_filter_lzma(a);archive_write_set_format_raw(a);archive_write_open_memory(a,out.data(),size_t(out.size()),&used);
+    auto e=archive_entry_new();archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_size(e,data.size());archive_write_header(a,e);archive_write_data(a,data.constData(),data.size());archive_entry_free(e);archive_write_close(a);archive_write_free(a);out.resize(int(used));return out;
+}
 void zip(const QString &path,const QString &name,const QByteArray &data="jar"){
     auto a=archive_write_new();archive_write_set_format_zip(a);QCOMPARE(archive_write_open_filename(a,QFile::encodeName(path).constData()),ARCHIVE_OK);
     auto e=archive_entry_new();archive_entry_set_pathname(e,name.toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_perm(e,0644);archive_entry_set_size(e,data.size());archive_write_header(a,e);archive_write_data(a,data.constData(),data.size());archive_entry_free(e);archive_write_close(a);archive_write_free(a);
@@ -80,6 +85,42 @@ private slots:
 #endif
     }
 
+    void javaCompatibility(){
+        QVERIFY(JavaRuntime::compatible(8,8));QVERIFY(!JavaRuntime::compatible(8,17));QVERIFY(!JavaRuntime::compatible(17,8));
+        QVERIFY(JavaRuntime::compatible(16,17));QVERIFY(JavaRuntime::compatible(17,21));QVERIFY(!JavaRuntime::compatible(21,17));QVERIFY(!JavaRuntime::compatible(17,0));
+        QCOMPARE(JavaDownloader::component(8),QString("jre-legacy"));QCOMPARE(JavaDownloader::component(21),QString("java-runtime-delta"));QVERIFY(JavaDownloader::component(11).isEmpty());
+#ifndef Q_OS_WIN
+        QTemporaryDir tmp;auto java=tmp.path()+"/jdk-21/bin/java";QDir().mkpath(QFileInfo(java).absolutePath());
+        writeFile(java,"#!/bin/sh\nprintf '    java.version = 21.0.2\\n    os.arch = aarch64\\n' >&2\n");QFile::setPermissions(java,QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner);
+        QCOMPARE(JavaRuntime::select(17,java),java);QCOMPARE(JavaRuntime::select(21,tmp.path()+"/jdk-21"),java);QVERIFY(JavaRuntime::select(8,java).isEmpty());
+        // Java 6 style runtimes reject -XshowSettings; the plain -version output is used instead.
+        auto old=tmp.path()+"/jre6/bin/java";QDir().mkpath(QFileInfo(old).absolutePath());
+        writeFile(old,"#!/bin/sh\n[ \"$1\" = -version ] || exit 1\necho 'java version \"1.6.0_45\"' >&2\n");QFile::setPermissions(old,QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner);
+        QCOMPARE(JavaRuntime::inspect(old).major,6);
+#endif
+    }
+    void javaRuntimeDownload(){
+#ifndef Q_OS_WIN
+        QTemporaryDir tmp;const QByteArray java="#!/bin/sh\nprintf '    java.version = 1.8.0_51\\n    os.arch = amd64\\n' >&2\n",data="runtime data",license="license";
+        auto sha=[](const QByteArray &d){return QString::fromLatin1(QCryptographicHash::hash(d,QCryptographicHash::Sha1).toHex());};
+        auto file=[&](const QString &name,const QByteArray &d,bool executable,const QByteArray &packed={},const QString &packedSha={}){QJsonObject downloads{{"raw",QJsonObject{{"sha1",sha(d)},{"size",d.size()},{"url","https://example.test/raw/"+name}}}};if(!packed.isEmpty())downloads["lzma"]=QJsonObject{{"sha1",packedSha.isEmpty()?sha(packed):packedSha},{"size",packed.size()},{"url","https://example.test/lzma/"+name}};return QJsonObject{{"type","file"},{"executable",executable},{"downloads",downloads}};};
+        auto packedJava=lzma(java);
+        QJsonObject files{{"bin",QJsonObject{{"type","directory"}}},{"bin/java",file("java",java,true,packedJava)},{"lib/data",file("data",data,false,"broken","0000000000000000000000000000000000000000")},
+            {"legal/LICENSE",file("license",license,false)},{"legal/base/LICENSE",QJsonObject{{"type","link"},{"target","../LICENSE"}}}};
+        auto manifest=encode(QJsonObject{{"files",files}});QStringList requested;
+        auto transport=[&](const QUrl &url)->QByteArray{requested<<url.toString();auto path=url.path();
+            if(path.endsWith("all.json"))return encode(QJsonObject{{"linux",QJsonObject{{"jre-legacy",QJsonArray{QJsonObject{{"manifest",QJsonObject{{"sha1",sha(manifest)},{"url","https://example.test/manifest.json"}}},{"version",QJsonObject{{"name","8u51"}}}}}}}}});
+            if(path=="/manifest.json")return manifest;if(path=="/lzma/java")return packedJava;if(path=="/raw/data")return data;if(path=="/raw/license")return license;if(path=="/lzma/data")return "broken";
+            throw std::runtime_error(("Unexpected request "+url.toString()).toStdString());};
+        auto path=JavaDownloader::install(tmp.path()+"/java","jre-legacy","linux",{},transport);
+        QCOMPARE(path,tmp.path()+"/java/jre-legacy-linux/bin/java");QVERIFY(QFileInfo(path).isExecutable());QVERIFY(!requested.contains("https://example.test/raw/java"));
+        QCOMPARE(readFile(tmp.path()+"/java/jre-legacy-linux/lib/data"),data);QCOMPARE(readFile(tmp.path()+"/java/jre-legacy-linux/legal/base/LICENSE"),license);
+        QCOMPARE(JavaRuntime::inspect(path).major,8);QCOMPARE(JavaDownloader::installed(tmp.path()+"/java","jre-legacy","linux"),path);
+        requested.clear();QCOMPARE(JavaDownloader::install(tmp.path()+"/java","jre-legacy","linux",{},transport),path);QCOMPARE(requested.size(),1); // only the catalog: the runtime is reused
+        files["bin/evil"]=QJsonObject{{"type","link"},{"target","../../../outside"}};manifest=encode(QJsonObject{{"files",files}});QDir(tmp.path()+"/java/jre-legacy-linux").removeRecursively();
+        QVERIFY_EXCEPTION_THROWN(JavaDownloader::install(tmp.path()+"/java","jre-legacy","linux",{},transport),std::runtime_error);QVERIFY(!QFileInfo::exists(tmp.path()+"/java/jre-legacy-linux"));
+#endif
+    }
     void uniqueInstances(){
         QTemporaryDir t;McInstanceManager m(t.path());auto a=m.createInstance("Same","1.20.1","fabric");auto b=m.createInstance("Same","1.20.1","fabric");
         QVERIFY(a!=b);QCOMPARE(m.instances().size(),2);writeFile(a+"/world.txt","keep");m.deleteInstance(a);QCOMPARE(m.instances().size(),1);

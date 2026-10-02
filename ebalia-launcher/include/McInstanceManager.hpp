@@ -40,6 +40,7 @@ signals:
     void launchFailed(const QString &dir, const QString &error);
 private:
     void install(const QString &dir);
+    QString javaFor(const QString &dir,const QJsonObject &info,const QJsonObject &profile);
     QString m_root;
     QHash<QString,QProcess*> m_running;
     QSet<QString> m_installing;

@@ -5,6 +5,8 @@
 #include <QTemporaryDir>
 #include "JavaRunner.hpp"
 #include "JavaRuntime.hpp"
+#include "JavaDownloader.hpp"
+#include "Language.hpp"
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QFile>
@@ -203,10 +205,7 @@ void McInstanceManager::install(const QString &dir) {
     download(profile["downloads"].toObject()["client"].toObject(),m_root+"/versions/"+game+"/"+game+".jar");
     if (loader == "forge" || loader == "neoforge") {
         emit installProgress(dir,7,"Preparando instalador oficial de " + loader + "…");
-        const int required=profile["javaVersion"].toObject()["majorVersion"].toInt(8);
-        auto custom=s(info,"javaPath");if(custom.isEmpty())custom=QSettings().value("mc/defaultJava").toString();
-        QString java=JavaRuntime::select(required,custom);
-        if(java.isEmpty())fail(QString("Esta versión requiere Java %1. Instalalo y elegí su ejecutable en Ajustes de instancia.").arg(required));
+        QString java=javaFor(dir,info,profile);
         auto lv=s(info,"loaderVersion");auto available=Loaders::versions(loader,game);
         if(loader=="forge"&&!lv.isEmpty()&&!lv.startsWith(game+"-"))lv=game+"-"+lv;
         if(lv.isEmpty()&&!available.isEmpty())lv=available.first();
@@ -294,19 +293,57 @@ void McInstanceManager::install(const QString &dir) {
     }
     auto logging=profile["logging"].toObject()["client"].toObject();
     if (!logging.isEmpty()) { auto f=logging["file"].toObject(); download(f,m_root+"/assets/log_configs/"+safeRelative(s(f,"id"))); }
+    javaFor(dir,info,profile); // Download the official runtime now rather than when the player presses Play.
     ModRepository::write(dir+"/launch-profile.json",profile);
     info["ready"]=true; ModRepository::write(dir+"/instance.json",info); emit installProgress(dir,100,"Instalación completa");
 }
+QString McInstanceManager::javaFor(const QString &dir,const QJsonObject &info,const QJsonObject &profile) {
+    const int required=profile["javaVersion"].toObject()["majorVersion"].toInt(8);
+    const auto custom=s(info,"javaPath");
+    if(!custom.isEmpty()) {
+        auto java=JavaRuntime::inspect(custom);if(JavaRuntime::compatible(required,java.major))return java.path;
+        if(!java.major)fail(Language::key("The Java selected in instance settings does not work: %1. Choose “Automatic (recommended)” or another executable.").arg(custom));
+        fail(Language::key("The Java selected in instance settings is Java %1, but this Minecraft version requires Java %2. Choose “Automatic (recommended)” to use or download the right one.").arg(java.major).arg(required));
+    }
+    const auto global=QSettings().value("mc/defaultJava").toString();
+    if(!global.isEmpty()){auto java=JavaRuntime::inspect(global);if(JavaRuntime::compatible(required,java.major))return java.path;}
+    auto java=JavaRuntime::select(required);if(!java.isEmpty())return java;
+    // NixOS cannot run Mojang's generic Linux runtime; its package provides Java through EBALIA_JAVA_PATHS.
+    if(QFile::exists("/etc/NIXOS"))fail(Language::key("This version requires Java %1. On NixOS, start EBALIA from its Nix package, which includes Java 8, 17, 21 and 25.").arg(required));
+    auto component=s(profile["javaVersion"].toObject(),"component");if(component.isEmpty())component=JavaDownloader::component(required);
+    if(component.isEmpty()||JavaDownloader::platform().isEmpty())fail(Language::key("This version requires Java %1. Install it and choose its executable in instance settings.").arg(required));
+    emit installProgress(dir,0,Language::key("Downloading official Java %1 from Mojang…").arg(required));
+    auto path=JavaDownloader::install(m_root+"/java",component,{},[this,dir,required](int done,int total){emit installProgress(dir,int(100.0*done/qMax(1,total)),QString("Java %1 · %2/%3").arg(required).arg(done).arg(total));});
+    auto check=JavaRuntime::inspect(path);
+    if(!JavaRuntime::compatible(required,check.major))fail(Language::key("Java %1 was downloaded but could not run on this system. Install it manually and choose it in instance settings.").arg(required));
+    return check.path;
+}
 void McInstanceManager::launch(const QString &dir,const QString &name,const QString &uuid,const QString &token,const QString &type) {
     if (isRunning(dir)||isInstalling(dir)) return;
-    try {
+    // Java discovery (and a possible runtime download) runs off the UI thread; the instance stays busy meanwhile.
+    m_installing.insert(dir);auto *watcher=new QFutureWatcher<QJsonObject>(this);
+    connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,dir] {
+        auto plan=watcher->result();watcher->deleteLater();m_installing.remove(dir);
+        if(plan.contains("error")){emit launchFailed(dir,s(plan,"error"));return;}
+        QStringList args;for(const auto &a:plan["args"].toArray())args<<a.toString();
+        auto info=plan["info"].toObject();
+        auto *proc=new QProcess(this); m_running[dir]=proc; proc->setWorkingDirectory(dir);
+        proc->setProcessChannelMode(QProcess::MergedChannels); proc->setStandardOutputFile(dir+"/launcher.log",QIODevice::Truncate);
+        connect(proc,&QProcess::started,this,[this,dir,info]() mutable {
+            info["lastPlayed"]=QDateTime::currentSecsSinceEpoch(); try {ModRepository::write(dir+"/instance.json",info);}catch(...){} emit gameStarted(dir);
+        });
+        connect(proc,&QProcess::errorOccurred,this,[this,dir,proc](QProcess::ProcessError e) {
+            if(e==QProcess::FailedToStart) {m_running.remove(dir);emit launchFailed(dir,proc->errorString());proc->deleteLater();}
+        });
+        connect(proc,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this,dir,proc](int code,QProcess::ExitStatus){m_running.remove(dir);proc->deleteLater();emit gameEnded(dir,code);});
+        proc->start(s(plan,"java"),args);
+    });
+    watcher->setFuture(QtConcurrent::run([this,dir,name,uuid,token,type]() -> QJsonObject {
+      try {
         auto info=ModRepository::read(dir+"/instance.json"); if (!info["ready"].toBool()) fail("Primero instalá la instancia.");
         if (!QFile::exists(dir+"/launch-profile.json")) fail("Instancia del launcher anterior: usá Reparar para preparar el nuevo arranque.");
         auto p=ModRepository::read(dir+"/launch-profile.json"); auto game=s(info,"mcVersion");
-        int required=p["javaVersion"].toObject()["majorVersion"].toInt(8);
-        auto custom=s(info,"javaPath");if(custom.isEmpty())custom=QSettings().value("mc/defaultJava").toString();
-        QString java=JavaRuntime::select(required,custom);
-        if (java.isEmpty()) fail(QString("Esta versión requiere Java %1. Instalalo y elegí su ejecutable en Ajustes de instancia.").arg(required));
+        const auto java=javaFor(dir,info,p);
 #ifdef Q_OS_WIN
         QString sep=";";
 #else
@@ -333,16 +370,8 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
         args << s(p,"mainClass");
         if (p.contains("arguments")) args << arguments(p["arguments"].toObject()["game"].toArray(),values);
         else { QJsonArray legacy; for (const auto &a : QProcess::splitCommand(s(p,"minecraftArguments"))) legacy.append(a); args << arguments(legacy,values); }
-        auto *proc=new QProcess(this); m_running[dir]=proc; proc->setWorkingDirectory(dir);
-        proc->setProcessChannelMode(QProcess::MergedChannels); proc->setStandardOutputFile(dir+"/launcher.log",QIODevice::Truncate);
-        connect(proc,&QProcess::started,this,[this,dir,info]() mutable {
-            info["lastPlayed"]=QDateTime::currentSecsSinceEpoch(); try {ModRepository::write(dir+"/instance.json",info);}catch(...){} emit gameStarted(dir);
-        });
-        connect(proc,&QProcess::errorOccurred,this,[this,dir,proc](QProcess::ProcessError e) {
-            if(e==QProcess::FailedToStart) {m_running.remove(dir);emit launchFailed(dir,proc->errorString());proc->deleteLater();}
-        });
-        connect(proc,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this,dir,proc](int code,QProcess::ExitStatus){m_running.remove(dir);proc->deleteLater();emit gameEnded(dir,code);});
-        proc->start(java,args);
-    } catch(const std::exception &e) { emit launchFailed(dir,QString::fromUtf8(e.what())); }
+        return QJsonObject{{"java",java},{"args",QJsonArray::fromStringList(args)},{"info",info}};
+      } catch(const std::exception &e) { return QJsonObject{{"error",QString::fromUtf8(e.what())}}; }
+    }));
 }
 void McInstanceManager::killInstance(const QString &dir) { if (auto p=m_running.value(dir)) p->terminate(); }
