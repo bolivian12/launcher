@@ -15,8 +15,8 @@ PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *pa
     m_find=new QPushButton(t("Search"));bar->addWidget(m_find);
     auto key=new QPushButton(t("Set CurseForge API key"));key->setVisible(false);bar->addWidget(key);
     auto split=new QSplitter;layout->addWidget(split,1);
-    m_results=new QListWidget;m_results->setObjectName("packResults");m_results->setIconSize(QSize(40,40));m_results->setWordWrap(true);m_results->setTextElideMode(Qt::ElideRight);split->addWidget(m_results);
-    m_description=new QTextBrowser;m_description->setOpenLinks(false);split->addWidget(m_description);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
+    m_results=new QListWidget;m_results->setObjectName("packResults");m_results->setIconSize(QSize(40,40));m_results->setWordWrap(true);m_results->setTextElideMode(Qt::ElideRight);m_results->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);split->addWidget(m_results);
+    m_description=new QTextBrowser;m_description->setOpenLinks(false);m_description->document()->setDefaultStyleSheet("a{color:#5fd38d;font-weight:bold;}");split->addWidget(m_description);split->setStretchFactor(0,3);split->setStretchFactor(1,2);
     // Pack pages are third-party content: only https links are opened, in the system browser.
     connect(m_description,&QTextBrowser::anchorClicked,this,[](const QUrl &url){if(url.scheme()=="https")QDesktopServices::openUrl(url);});
     m_status=new QLabel;m_status->setWordWrap(true);m_status->setObjectName("muted");layout->addWidget(m_status);
@@ -29,7 +29,9 @@ PackBrowser::PackBrowser(const QString &root,const QString &provider,QWidget *pa
         describe(selectedPack);m_status->setText(t("Loading versions…"));auto pack=selectedPack;auto root=m_root;auto watcher=new QFutureWatcher<QJsonObject>(this);
         connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,watcher,ticket]{
             auto d=watcher->result();watcher->deleteLater();if(ticket!=m_versionEpoch)return;if(d.contains("error")){m_status->setText(Language::message(d["error"].toString()));return;}
-            {QSignalBlocker block(m_versions);for(auto v:d["versions"].toArray())m_versions->addItem(v.toObject()["name"].toString(),v.toObject());}
+            {QSignalBlocker block(m_versions);for(auto v:d["versions"].toArray())m_versions->addItem(v.toObject()["name"].toString(),v.toObject());
+             // Preselect the newest stable build rather than an alpha or beta.
+             for(int n=0;n<m_versions->count();++n){auto data=m_versions->itemData(n).toJsonObject()["data"].toObject();if(data["version_type"]=="release"||data["releaseType"].toInt()==1){m_versions->setCurrentIndex(n);break;}}}
             selectedVersion=m_versions->currentData().toJsonObject();m_status->setText(m_versions->count()?t("Choose a modpack and its version."):t("This modpack has no versions to install."));if(changed)changed();
         });
         watcher->setFuture(QtConcurrent::run([root,pack]{try{return QJsonObject{{"versions",PackService(root).versions(pack)}};}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}}));

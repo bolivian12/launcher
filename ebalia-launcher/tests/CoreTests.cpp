@@ -3,6 +3,7 @@
 #include <QCryptographicHash>
 #include <QSaveFile>
 #include <QUrlQuery>
+#include <QImageReader>
 #include <archive.h>
 #include <archive_entry.h>
 #include "ModRepository.hpp"
@@ -48,6 +49,23 @@ private slots:
         corrupt=true;QVERIFY_EXCEPTION_THROWN(packs.install({{"provider","import"},{"path",archive}},{},"Broken"),std::runtime_error);QCOMPARE(QDir(root.path()+"/mc/instances").entryList(QDir::Dirs|QDir::NoDotAndDotDot).size(),1);
         QVERIFY_EXCEPTION_THROWN(PackService::safePath("../outside"),std::runtime_error);QVERIFY_EXCEPTION_THROWN(PackService::safePath("C:\\escape"),std::runtime_error);
     }
+    void prismAndExportImport(){
+        QTemporaryDir root;auto prism=root.path()+"/PrismLauncher/instances/My Pack";QDir().mkpath(prism+"/.minecraft/mods");QDir().mkpath(prism+"/.minecraft/saves/World");
+        writeFile(prism+"/instance.cfg","[General]\nname=My Pack\n");writeFile(prism+"/.minecraft/mods/a.jar","mod");writeFile(prism+"/.minecraft/saves/World/level.dat","level");
+        writeFile(prism+"/mmc-pack.json",encode(QJsonObject{{"components",QJsonArray{QJsonObject{{"uid","net.minecraft"},{"version","1.20.1"}},QJsonObject{{"uid","net.fabricmc.fabric-loader"},{"version","0.15.11"}}}}}));
+        PackService service(root.path());
+        auto fromFolder=service.install({{"provider","import"},{"path",prism}},{},"From folder");auto info=ModRepository::read(fromFolder+"/instance.json");
+        QCOMPARE(info["mcVersion"].toString(),QString("1.20.1"));QCOMPARE(info["loader"].toString(),QString("fabric"));QCOMPARE(info["loaderVersion"].toString(),QString("0.15.11"));
+        QCOMPARE(readFile(fromFolder+"/mods/a.jar"),QByteArray("mod"));QCOMPARE(readFile(fromFolder+"/saves/World/level.dat"),QByteArray("level"));QVERIFY(QFile::exists(prism+"/.minecraft/mods/a.jar"));
+        // A MultiMC-style ZIP wraps the instance in one folder.
+        Archive::compress(root.path()+"/PrismLauncher/instances",root.path()+"/export.zip");auto fromZip=service.install({{"provider","import"},{"path",root.path()+"/export.zip"}},{},"From zip");
+        QCOMPARE(ModRepository::read(fromZip+"/instance.json")["loader"].toString(),QString("fabric"));QCOMPARE(readFile(fromZip+"/saves/World/level.dat"),QByteArray("level"));
+        // EBALIA exports carry their own instance.json.
+        McInstanceManager manager(root.path());auto zip=root.path()+"/ebalia.zip";manager.exportInstance(fromZip,zip);auto restored=service.install({{"provider","import"},{"path",zip}},{},"Restored");
+        auto again=ModRepository::read(restored+"/instance.json");QCOMPARE(again["mcVersion"].toString(),QString("1.20.1"));QCOMPARE(again["loader"].toString(),QString("fabric"));QCOMPARE(again["name"].toString(),QString("Restored"));QVERIFY(QFile::exists(restored+"/mods/a.jar"));
+        writeFile(prism+"/mmc-pack.json",encode(QJsonObject{{"components",QJsonArray{QJsonObject{{"uid","net.minecraft"},{"version","1.7.10"}},QJsonObject{{"uid","com.mumfrey.liteloader"},{"version","1.7.10"}}}}}));
+        QVERIFY_EXCEPTION_THROWN(service.install({{"provider","import"},{"path",prism}},{},"Lite"),std::runtime_error);
+    }
     void ftbAppImport(){
         QTemporaryDir root;auto source=root.path()+"/source";QDir().mkpath(source+"/mods");QDir().mkpath(source+"/saves");ModRepository::write(source+"/instance.json",{{"name","FTB"},{"mcVersion","1.21.1"},{"modLoader","neoforge-21.1.200"}});writeFile(source+"/mods/test.jar","mod");writeFile(source+"/saves/world.dat","world");
         auto dir=PackService(root.path()).install({{"provider","import_ftb"},{"path",source}},{},"Copied");QCOMPARE(readFile(dir+"/saves/world.dat"),QByteArray("world"));QVERIFY(QFile::exists(source+"/mods/test.jar"));QCOMPARE(ModRepository::read(dir+"/instance.json")["loader"].toString(),QString("neoforge"));
@@ -70,6 +88,13 @@ private slots:
     void livePackCatalogs(){
         if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");QTemporaryDir root;PackService service(root.path());
         for(auto pair:{qMakePair("modrinth","Fabulously"),qMakePair("atlauncher","All The Forge 10"),qMakePair("ftb","Evolution"),qMakePair("legacy_ftb","Academy"),qMakePair("technic","tekkit")}){auto results=service.search(pair.first,pair.second);QVERIFY2(!results.isEmpty(),pair.first);auto builds=service.versions(results.first().toObject());QVERIFY2(!builds.isEmpty(),pair.first);}
+    }
+    void liveModpackInstall(){
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");QTemporaryDir root;PackService service(root.path());
+        auto results=service.search("modrinth","Fabulously Optimized");QVERIFY(!results.isEmpty());auto pack=results.first().toObject();QCOMPARE(pack["name"].toString(),QString("Fabulously Optimized"));
+        QJsonObject build;for(auto v:service.versions(pack))if(v.toObject()["data"].toObject()["version_type"]=="release"){build=v.toObject();break;}QVERIFY(!build.isEmpty());
+        auto dir=service.install(pack,build,"FO");auto info=ModRepository::read(dir+"/instance.json");QCOMPARE(info["loader"].toString(),QString("fabric"));QVERIFY(!info["mcVersion"].toString().isEmpty());
+        QVERIFY(QDir(dir+"/mods").entryList({"*.jar"},QDir::Files).size()>10);if(QImageReader::supportedImageFormats().contains("webp")){QVERIFY(QFile::exists(dir+"/instance-icon.png"));QCOMPARE(info["icon"].toString(),QString("custom"));} // Modrinth icons are WebP (Qt Image Formats)
     }
     void javaVersionFormats(){
         QCOMPARE(JavaRuntime::parse("java","openjdk version \"1.8.0_462\"\nOpenJDK 64-Bit Server VM").major,8);
