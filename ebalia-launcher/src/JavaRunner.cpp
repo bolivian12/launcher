@@ -3,6 +3,7 @@
 #include "ModRepository.hpp"
 #include <QSettings>
 #include "VersionManager.hpp"
+#include "LostInstaller.hpp"
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QDir>
@@ -35,7 +36,7 @@ void JavaRunner::locateJava()
 
 QStringList JavaRunner::findJava() { return JavaRuntime::candidates(); }
 
-void JavaRunner::launch(const VersionInfo &version, const QString &installDir)
+void JavaRunner::launch(const VersionInfo &version, const QString &installDir, const QString &java8)
 {
     if(m_process && m_process->state()!=QProcess::NotRunning){emit processError("A lost version is already running.");return;}
     QString target;try{auto saved=ModRepository::read(installDir+"/.installed.json")["launchFile"].toString();if(!saved.isEmpty()&&!QDir::isAbsolutePath(saved)&&!saved.split('/').contains(".."))target=QDir(installDir).filePath(saved);}catch(...){}
@@ -48,10 +49,14 @@ void JavaRunner::launch(const VersionInfo &version, const QString &installDir)
     }
     auto env=QProcessEnvironment::systemEnvironment();
 #ifdef Q_OS_WIN
-    auto java8=JavaRuntime::select(8);if(!java8.isEmpty()){env.insert("JAVA_HOME",QFileInfo(QFileInfo(java8).absolutePath()).absolutePath());env.insert("PATH",QFileInfo(java8).absolutePath()+";"+env.value("PATH"));}
+    auto java8path=java8.isEmpty()?JavaRuntime::select(8):java8;
+    if(!java8path.isEmpty()){auto bin=QFileInfo(java8path).absolutePath();env.insert("JAVA_HOME",QDir::toNativeSeparators(QFileInfo(bin).absolutePath()));env.insert("PATH",QDir::toNativeSeparators(bin)+";"+env.value("PATH"));}
     if(version.launcher=="UltimMC")env.insert("APPDATA",QDir::toNativeSeparators(installDir));
 #else
-    auto prefix=qEnvironmentVariable("EBALIA_WINEPREFIX");if(!prefix.isEmpty())env.insert("WINEPREFIX",prefix);
+    // A separate Wine prefix keeps the player's own Wine setup untouched; Wine maps / to drive Z:.
+    auto prefix=LostInstaller::winePrefix(JavaRuntime::dataDir());QDir().mkpath(prefix);env.insert("WINEPREFIX",prefix);env.insert("WINEDEBUG","-all");
+    auto windows=[](QString path){return "Z:"+path.replace('/','\\');};
+    if(!java8.isEmpty()&&java8.endsWith(".exe",Qt::CaseInsensitive)){auto bin=QFileInfo(java8).absolutePath();env.insert("WINEPATH",windows(bin));env.insert("JAVA_HOME",windows(QFileInfo(bin).absolutePath()));}
 #endif
     QString program;QStringList args;auto suffix=QFileInfo(target).suffix().toLower();
     if(suffix=="exe"||suffix=="bat"||suffix=="cmd"){
@@ -59,13 +64,20 @@ void JavaRunner::launch(const VersionInfo &version, const QString &installDir)
         if(suffix=="exe")program=target;
         else{program="cmd.exe";args={"/c",target};}
 #else
-        program=QStandardPaths::findExecutable("wine");
+        program=LostInstaller::wine();
         if(program.isEmpty()){emit processError("This Windows package requires Wine. Install Wine or run it on Windows.");return;}
-        if(suffix=="exe")args={target};else args={"cmd","/c",target};
+        // Wine maps the working folder to its current drive, so the script is started by name.
+        if(suffix=="exe")args={target};else args={"cmd","/c",QFileInfo(target).fileName()};
 #endif
     }else if(suffix=="jar"){
-        auto java=findJava();if(java.isEmpty()){emit processError("Install Java for this version before launching.");return;}
-        program=java.first();args={"-Xmx1024m","-jar",target};
+#ifdef Q_OS_WIN
+        auto java=java8;
+#else
+        auto java=java8.endsWith(".exe",Qt::CaseInsensitive)?QString():java8; // a Windows runtime prepared for Wine cannot run a .jar here
+#endif
+        if(java.isEmpty())java=JavaRuntime::select(8);
+        if(java.isEmpty()){auto all=findJava();if(all.isEmpty()){emit processError("Install Java for this version before launching.");return;}java=all.first();}
+        program=java;args={"-Xmx1024m","-jar",target};
     }else if(suffix=="sh") {program="/bin/sh";args={target};}
     else {emit processError("Unsupported launch file: "+version.launchCommand);return;}
     if(m_process)m_process->deleteLater();m_process=new QProcess(this);
@@ -76,6 +88,19 @@ void JavaRunner::launch(const VersionInfo &version, const QString &installDir)
     connect(m_process,&QProcess::errorOccurred,this,&JavaRunner::onErrorOccurred);
     connect(m_process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,&JavaRunner::onFinished);
     m_process->start(program,args);
+}
+
+void JavaRunner::stop()
+{
+    if (!isRunning()) return;
+#ifndef Q_OS_WIN
+    if (QFileInfo(m_process->program()).fileName().startsWith("wine")) {
+        auto server = QFileInfo(m_process->program()).dir().filePath("wineserver");
+        if (!QFileInfo(server).isExecutable()) server = QStandardPaths::findExecutable("wineserver");
+        if (!server.isEmpty()) { QProcess kill; kill.setProcessEnvironment(m_process->processEnvironment()); kill.start(server, {"-k"}); kill.waitForFinished(5000); }
+    }
+#endif
+    m_process->kill();
 }
 
 void JavaRunner::onErrorOccurred(QProcess::ProcessError error)

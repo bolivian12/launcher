@@ -52,6 +52,8 @@ private:
     void searchMods(int offset=0);
     void account(bool microsoft);
     void lostAction(bool launch);
+    void lostSelection();
+    static QString lostCategory(const QString &category);
     void work(const QString &label,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done);
     void error(const QString &message);
     QString m_root;
@@ -69,7 +71,8 @@ private:
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
     QComboBox *m_playInstance=nullptr,*m_modProvider=nullptr;
-    QPushButton *m_playButton=nullptr;
+    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr;
+    QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;
     QTabWidget *m_clientTabs=nullptr;
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;

@@ -16,7 +16,11 @@ public:
     void locateJava();
     QStringList findJava();
 
-    void launch(const VersionInfo &version, const QString &installDir);
+    // java: Java 8 for the package (a Windows java.exe when the package runs in Wine).
+    void launch(const VersionInfo &version, const QString &installDir, const QString &java = {});
+    bool isRunning() const { return m_process && m_process->state() != QProcess::NotRunning; }
+    // Under Wine the game is a child of wineserver; the separate prefix is closed as a whole.
+    void stop();
 
 signals:
     void javaFound(const QString &path);

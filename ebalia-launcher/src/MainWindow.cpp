@@ -17,6 +17,7 @@
 #include "PackService.hpp"
 #include "InstanceViews.hpp"
 #include "InstanceIcons.hpp"
+#include "Icons.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
 #include <QFutureWatcher>
@@ -71,7 +72,8 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_mc,&McInstanceManager::launchFailed,this,[this](const QString &,const QString &e){error(e);refreshInstances();});
     connect(m_accounts,&AccountManager::accountsChanged,this,&MainWindow::refreshAccounts);
     connect(m_java,&JavaRunner::processError,this,&MainWindow::error);
-    connect(m_java,&JavaRunner::processStarted,this,[this]{m_status->setText(text("Versión perdida en ejecución","Lost version is running","Versão perdida em execução"));});
+    connect(m_java,&JavaRunner::processStarted,this,[this]{m_status->setText(text("Versión perdida en ejecución","Lost version is running","Versão perdida em execução"));m_lostPlay->setText("■  "+Language::key("Stop"));});
+    connect(m_java,&JavaRunner::processFinished,this,[this]{m_lostPlay->setText(text("▶ Jugar","▶ Play","▶ Jogar"));m_status->setText(text("Todo listo","Ready","Tudo pronto"));});
 
     if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){m_mc->fetchManifest();refreshNews();m_patreon->refreshNews();auto timer=new QTimer(this);connect(timer,&QTimer::timeout,this,[this]{m_mc->fetchManifest();refreshNews();});timer->start(30*60*1000);}
     if(!QSettings().value("ui/tutorialSeen",false).toBool()){showPage(5);QSettings().setValue("ui/tutorialSeen",true);}
@@ -133,11 +135,18 @@ void MainWindow::build() {
     m_catalog=label(text("Consultando versiones…","Checking versions…","Consultando versões…"),l,"muted");
     m_clientTabs->addTab(new SkinsPage(m_root,m_accounts,m_mc,[this](const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){work(title,job,done);},this),Language::key("Skins"));
     page(m_pages,text("Versiones perdidas","Lost versions","Versões perdidas"),text("El archivo de EBALIA. Cada versión conserva su instalación y su forma de inicio original.","The EBALIA archive. Each version keeps its own installation and original launch method.","O arquivo da EBALIA. Cada versão mantém sua instalação e sua forma original de iniciar."),l);
-    m_lostFilter=new QLineEdit;m_lostFilter->setPlaceholderText(text("Buscar por nombre o categoría…","Search by name or category…","Buscar por nome ou categoria…"));l->addWidget(m_lostFilter);
-    m_lost=new QListWidget;l->addWidget(m_lost,1);connect(m_lostFilter,&QLineEdit::textChanged,this,[this]{refreshLost();});
-    auto lostActions=new QHBoxLayout;l->addLayout(lostActions);button(text("Instalar","Install","Instalar"),lostActions,[this]{lostAction(false);},this);button(text("▶ Jugar","▶ Play","▶ Jogar"),lostActions,[this]{lostAction(true);},this,true);
-
+    m_lostFilter=new QLineEdit;m_lostFilter->setPlaceholderText(text("Buscar por nombre o categoría…","Search by name or category…","Buscar por nome ou categoria…"));m_lostFilter->setClearButtonEnabled(true);l->addWidget(m_lostFilter);
+    auto lostSplit=new QHBoxLayout;lostSplit->setSpacing(16);l->addLayout(lostSplit,1);
+    m_lost=new QListWidget;m_lost->setObjectName("lostList");m_lost->setIconSize(QSize(36,36));m_lost->setMinimumWidth(300);lostSplit->addWidget(m_lost,2);connect(m_lostFilter,&QLineEdit::textChanged,this,[this]{refreshLost();});
+    auto lostCard=new QFrame;lostCard->setObjectName("card");auto lc=new QVBoxLayout(lostCard);lc->setContentsMargins(24,22,24,22);lc->setSpacing(10);lostSplit->addWidget(lostCard,3);
+    m_lostTitle=label("",lc,"detailTitle");m_lostInfo=label("",lc,"muted");lc->addStretch();
+    auto lostActions=new QHBoxLayout;lc->addLayout(lostActions);
+    m_lostPlay=button(text("▶ Jugar","▶ Play","▶ Jogar"),lostActions,[this]{lostAction(true);},this);m_lostPlay->setProperty("play",true);m_lostPlay->setMinimumSize(180,50);
+    m_lostInstall=button(text("Instalar","Install","Instalar"),lostActions,[this]{lostAction(false);},this);
+    auto lostFolder=button("",lostActions,[this]{auto id=filename(m_lost);for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v))QDesktopServices::openUrl(QUrl::fromLocalFile(m_versions->getInstallPath(v)));},this);
+    lostFolder->setIcon(QIcon(icons::folder(22)));lostFolder->setToolTip(Language::key("Open instance folder"));lostFolder->setAccessibleName(lostFolder->toolTip());lostActions->addStretch();
     button(Language::key("Setup & diagnostics"),lostActions,[this]{SetupDialog dialog(this);dialog.exec();},this);
+    connect(m_lost,&QListWidget::currentRowChanged,this,[this]{lostSelection();});
     label(text("Los paquetes de Windows necesitan Windows o Wine. La disponibilidad depende del archivo original.","Windows packages require Windows or Wine. Availability depends on the original archive.","Pacotes do Windows precisam de Windows ou Wine. A disponibilidade depende do arquivo original."),l,"muted");
     page(m_pages,text("Encontrá tus próximos mods","Find your next mods","Encontre seus próximos mods"),Language::key("Mods for your Minecraft version and loader. Select one or more mods."),l);
     m_modProvider=new QComboBox;m_modProvider->addItem("Modrinth","modrinth");m_modProvider->addItem("CurseForge","curseforge");l->addWidget(m_modProvider);
@@ -240,7 +249,26 @@ void MainWindow::selection(){
     m_playButton->setEnabled(!m_installing.contains(i.dir)&&!m_mc->isInstalling(i.dir));m_playButton->setProperty("danger",running);m_playButton->setProperty("play",!running);m_playButton->style()->unpolish(m_playButton);m_playButton->style()->polish(m_playButton);
 }
 void MainWindow::refreshPacks(){m_packs->clear();try{m_packData=ModRepository(m_root).packs();for(const auto &v:m_packData){auto p=v.toObject();m_packs->addItem(p["name"].toString()+"\n"+QString::number(p["projects"].toArray().size())+" mods");}if(m_packs->count())m_packs->setCurrentRow(0);else m_packDetails->setText(text("Todavía no hay packs. Guardá los mods de una instancia para empezar.","No packs yet. Save an instance's mods to get started.","Ainda não há packs. Salve os mods de uma instância para começar."));}catch(...){m_packDetails->setText(exception());}}
-void MainWindow::refreshLost(){m_lost->clear();for(const auto &v:m_versions->getVersions()){if(!(v.name+v.category).contains(m_lostFilter->text(),Qt::CaseInsensitive))continue;auto item=new QListWidgetItem(v.name+"\n"+v.category+(m_versions->isVersionInstalled(v)?text(" · Instalada"," · Installed"," · Instalada"):""),m_lost);item->setData(Qt::UserRole,v.id);}if(m_lost->count())m_lost->setCurrentRow(0);}
+void MainWindow::refreshLost(){
+    auto keep=filename(m_lost);{QSignalBlocker block(m_lost);m_lost->clear();}
+    for(const auto &v:m_versions->getVersions()){
+        if(!(v.name+v.category).contains(m_lostFilter->text().trimmed(),Qt::CaseInsensitive))continue;
+        auto icon=v.category=="horror"?icons::horror(36):v.category=="release"?icons::release(36):icons::alpha(36);
+        auto item=new QListWidgetItem(QIcon(icon),v.name+"\n"+lostCategory(v.category)+(m_versions->isVersionInstalled(v)?"  ·  "+text("Instalada","Installed","Instalada"):""),m_lost);item->setData(Qt::UserRole,v.id);if(v.id==keep)m_lost->setCurrentItem(item);
+    }
+    if(m_lost->currentRow()<0&&m_lost->count())m_lost->setCurrentRow(0);lostSelection();
+}
+QString MainWindow::lostCategory(const QString &category){return category=="horror"?Language::key("Horror"):category=="release"?Language::key("Release"):category=="alpha"?Language::key("Alpha"):category;}
+void MainWindow::lostSelection(){
+    auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;
+    m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();return;}
+    const bool installed=m_versions->isVersionInstalled(v);m_lostTitle->setText(v.name);
+    QStringList info{lostCategory(v.category)+"  ·  "+v.description,installed?text("Instalada","Installed","Instalada"):text("Pendiente de instalación","Not installed yet","Ainda não instalada")};
+    if(LostInstaller::windowsPackage(v))info<<Language::key("Original Windows package. Runs with Java 8, which EBALIA prepares automatically. On Linux and macOS it runs in Wine with its own prefix.");
+    else info<<Language::key("Runs with Java 8, which EBALIA prepares automatically.");
+    if(!installed&&v.archiveSize>0)info<<Language::key("The first installation downloads the original archive (%1 MB); later versions reuse it.").arg(v.archiveSize/1024/1024);
+    m_lostInfo->setText(info.join("\n\n"));m_lostInstall->setText(installed?Language::key("Reinstall"):text("Instalar","Install","Instalar"));m_lostPlay->setEnabled(installed);
+}
 void MainWindow::work(const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){
     if(m_jobs)return;++m_jobs;auto dialog=new QProgressDialog(title,QString(),0,0,this);dialog->setCancelButton(nullptr);dialog->setWindowModality(Qt::ApplicationModal);dialog->setMinimumDuration(0);dialog->show();
     auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,dialog,watcher,done]{auto result=watcher->result();watcher->deleteLater();dialog->close();dialog->deleteLater();--m_jobs;if(result.contains("_error"))error(result["_error"].toString());else done(result);});
@@ -401,7 +429,18 @@ void MainWindow::lostAction(bool launch){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;if(v.id.isEmpty())return;
 
     auto dest=m_versions->getInstallPath(v);
-    if(launch){if(!m_versions->isVersionInstalled(v)){error(text("Primero instalá esta versión.","Install this version first.","Instale esta versão primeiro."));return;}m_java->launch(v,dest);return;}
+    if(launch){
+        if(m_java->isRunning()){if(QMessageBox::question(this,"EBALIA",Language::key("Stop")+" · "+v.name+"?")==QMessageBox::Yes)m_java->stop();return;}
+        if(!m_versions->isVersionInstalled(v)){error(text("Primero instalá esta versión.","Install this version first.","Instale esta versão primeiro."));return;}
+        const bool windows=LostInstaller::windowsPackage(v);
+#ifndef Q_OS_WIN
+        if(windows&&LostInstaller::wine().isEmpty()){error(Language::key("This Windows package requires Wine. Install Wine or run it on Windows."));return;}
+#endif
+        auto root=m_root;
+        work(Language::key("Preparing Java 8 for this version…"),[root,windows]{try{return QJsonObject{{"java",LostInstaller::java(root,windows)}};}catch(const std::exception &e){return QJsonObject{{"warning",QString::fromUtf8(e.what())}};}},
+            [this,v,dest](QJsonObject r){if(r.contains("warning"))m_status->setText(Language::message(r["warning"].toString()));m_java->launch(v,dest,r["java"].toString());});
+        return;
+    }
     work(text("Descargando y preparando la versión perdida…","Downloading and preparing the lost version…","Baixando e preparando a versão perdida…"),[v,dest]{
         LostInstaller::install(v,dest);return QJsonObject{};
     },[this](QJsonObject){refreshLost();m_status->setText(text("Versión perdida instalada","Lost version installed","Versão perdida instalada"));});

@@ -2,6 +2,8 @@
 #include "Download.hpp"
 #include "Archive.hpp"
 #include "ModRepository.hpp"
+#include "JavaRuntime.hpp"
+#include "JavaDownloader.hpp"
 #include <QtCore>
 #include <stdexcept>
 void LostInstaller::install(const VersionInfo &v,const QString &destination,std::function<void(qint64,qint64)> progress){
@@ -14,3 +16,19 @@ void LostInstaller::install(const VersionInfo &v,const QString &destination,std:
     QString backup;if(QFile::exists(destination)){backup=destination+".backup-"+QString::number(QDateTime::currentMSecsSinceEpoch());if(!QDir().rename(destination,backup))fail("Could not preserve previous installation");}
     if(!QDir().rename(content,destination)){if(!backup.isEmpty())QDir().rename(backup,destination);fail("Could not install archive");}
 }
+bool LostInstaller::windowsPackage(const VersionInfo &v){auto suffix=QFileInfo(v.launchCommand).suffix().toLower();return suffix=="exe"||suffix=="bat"||suffix=="cmd";}
+QString LostInstaller::winePrefix(const QString &dataDir){auto prefix=qEnvironmentVariable("EBALIA_WINEPREFIX");return prefix.isEmpty()?dataDir+"/wine":prefix;}
+QString LostInstaller::java(const QString &dataDir,bool windows,std::function<void(int,int)> progress){
+    const auto root=dataDir+"/mc/java";
+#ifdef Q_OS_WIN
+    Q_UNUSED(windows)
+    auto found=JavaRuntime::select(8);if(!found.isEmpty())return found;
+    return JavaDownloader::install(root,"jre-legacy",{},progress);
+#else
+    // Inside Wine only a Windows Java works; the Linux or macOS Java of this computer cannot replace it.
+    if(windows){auto existing=JavaDownloader::installed(root,"jre-legacy","windows-x64");return existing.isEmpty()?JavaDownloader::install(root,"jre-legacy","windows-x64",progress):existing;}
+    auto found=JavaRuntime::select(8);if(!found.isEmpty()||QFile::exists("/etc/NIXOS"))return found;
+    return JavaDownloader::install(root,"jre-legacy",{},progress);
+#endif
+}
+QString LostInstaller::wine(){for(auto name:{"wine","wine64"}){auto path=QStandardPaths::findExecutable(name);if(!path.isEmpty())return path;}for(auto path:{"/usr/lib/wine/wine64","/opt/wine-stable/bin/wine","/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine"})if(QFileInfo(path).isExecutable())return path;return {};}
