@@ -11,9 +11,17 @@ add_library(ebalia-core STATIC
   src/VersionManager.cpp src/Language.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
+# CurseForge issues one API key per launcher (Prism, ATLauncher and the CurseForge app each have theirs).
+set(EBALIA_CURSEFORGE_API_KEY "" CACHE STRING "CurseForge API key issued to EBALIA")
+if(EBALIA_CURSEFORGE_API_KEY STREQUAL "" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/curseforge-api-key.txt")
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/curseforge-api-key.txt" EBALIA_CURSEFORGE_API_KEY)
+  string(STRIP "${EBALIA_CURSEFORGE_API_KEY}" EBALIA_CURSEFORGE_API_KEY)
+endif()
+configure_file(src/BuildConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/BuildConfig.hpp" @ONLY)
+target_include_directories(ebalia-core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(ebalia-core PUBLIC Qt6::Widgets Qt6::Network Qt6::Concurrent LibArchive::LibArchive)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
-  include/MainWindow.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
+  include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
 if(WIN32)
@@ -40,8 +48,8 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
-      include/MainWindow.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/AccountManager.cpp src/MsAuth.cpp
+      include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   target_link_libraries(ebalia-ui-tests PRIVATE ebalia-core Qt6::Test)
   add_test(NAME ui COMMAND ebalia-ui-tests)

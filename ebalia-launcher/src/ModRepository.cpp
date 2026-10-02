@@ -1,4 +1,5 @@
 #include "ModRepository.hpp"
+#include "BuildConfig.hpp"
 #include <QCryptographicHash>
 #include <QDir>
 #include <QDirIterator>
@@ -80,7 +81,7 @@ QJsonArray ModRepository::search(const QString &q, const QString &game, const QS
         auto data=curse("mods/search",{{"gameId","432"},{"classId","6"},{"gameVersion",game},{"modLoaderType",QString::number(type)},
             {"searchFilter",q},{"sortField","2"},{"sortOrder","desc"},{"index",QString::number(offset)},{"pageSize","30"}}).object()["data"].toArray();
         QJsonArray hits;for(const auto &v:data){auto o=v.toObject();QStringList authors;for(const auto &a:o["authors"].toArray())authors<<a.toObject()["name"].toString();
-            hits.append(QJsonObject{{"project_id","cf-"+QString::number(o["id"].toInteger())},{"title",o["name"]},{"description",o["summary"]},{"author",authors.join(", ")},{"provider","curseforge"},{"slug",o["slug"]},{"website",o["links"].toObject()["websiteUrl"]}});
+            hits.append(QJsonObject{{"project_id","cf-"+QString::number(o["id"].toInteger())},{"title",o["name"]},{"description",o["summary"]},{"author",authors.join(", ")},{"provider","curseforge"},{"slug",o["slug"]},{"website",o["links"].toObject()["websiteUrl"]},{"icon_url",o["logo"].toObject()["thumbnailUrl"]}});
         }return hits;
     }
     QJsonArray facets{QJsonArray{"project_type:mod"}, QJsonArray{"versions:" + game}, QJsonArray{"categories:" + loader}};
@@ -92,8 +93,8 @@ QJsonDocument ModRepository::curse(const QString &path,const QList<QPair<QString
     QByteArray data;
     if(m_transport)data=m_transport(url);
     else {
-        auto key=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY");if(key.isEmpty())key=QSettings().value("integrations/curseforgeKey").toString();
-        if(key.isEmpty())fail("CurseForge requires an API key. Configure it in Accounts & settings.");
+        auto key=curseForgeKey();
+        if(key.isEmpty())fail("CurseForge requires your EBALIA API key in Provider settings.");
         data=fetch(url,{{"x-api-key",key.toUtf8()}});
     }
     QJsonParseError error;auto doc=QJsonDocument::fromJson(data,&error);if(error.error!=QJsonParseError::NoError||!doc.isObject())fail("Invalid CurseForge response.");return doc;
@@ -299,4 +300,8 @@ QJsonArray ModRepository::packs() const {
         auto p = read(dir.filePath(file)); p["path"] = dir.filePath(file); out.append(p);
     }
     return out;
+}
+QString ModRepository::curseForgeKey(){
+    auto key=qEnvironmentVariable("EBALIA_CURSEFORGE_API_KEY").trimmed();if(key.isEmpty())key=QSettings().value("integrations/curseforgeKey").toString().trimmed();
+    return key.isEmpty()?QString::fromLatin1(EBALIA_BUILTIN_CURSEFORGE_KEY).trimmed():key;
 }

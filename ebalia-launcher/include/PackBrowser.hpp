@@ -17,6 +17,6 @@ private:
     void loadIcon(const QString &url,const QString &id);
     QString m_root,m_provider,m_query;
     QLineEdit *m_search;QListWidget *m_results;QComboBox *m_versions;QLabel *m_status;QTextBrowser *m_description;QPushButton *m_find,*m_more;
-    QNetworkAccessManager *m_icons=nullptr;
+    QNetworkAccessManager *m_icons=nullptr;QWidget *m_keyRow=nullptr;
     int m_searchEpoch=0,m_versionEpoch=0,m_page=0;bool m_started=false;
 };

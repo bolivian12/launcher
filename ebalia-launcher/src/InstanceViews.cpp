@@ -1,13 +1,13 @@
 #include "InstanceViews.hpp"
 #include "InstanceIcons.hpp"
-#include "Icons.hpp"
 #include "Language.hpp"
+#include "Ui.hpp"
 #include <QtWidgets>
 #include <algorithm>
 namespace {
 QString t(const char *s){return Language::key(QString::fromUtf8(s));}
-const QStringList banners{":/art/f1_2.jpg",":/art/f1_6.jpg",":/art/f2_2.jpg",":/art/f2_6.jpg",":/art/f2_10.jpg",":/art/f3_6.jpg"};
 constexpr int spacing=16;
+const QColor green(111,209,91),light(225,225,230);
 // Landscape art with the instance icon in a dark badge; the HUD at the bottom of some screenshots is cropped away.
 class Banner:public QWidget {
 public:
@@ -15,13 +15,13 @@ public:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);p.setRenderHint(QPainter::Antialiasing);p.setRenderHint(QPainter::SmoothPixmapTransform);
-        QPainterPath clip;clip.addRoundedRect(QRectF(rect()).adjusted(0,0,0,14),11,11);p.setClipPath(clip);
-        auto scaled=m_art.scaled(size(),Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation);p.drawPixmap(0,0,scaled,(scaled.width()-width())/2,0,width(),height());
-        QLinearGradient shade(0,0,0,height());shade.setColorAt(0.45,QColor(10,14,18,0));shade.setColorAt(1,QColor(10,14,18,170));p.fillRect(rect(),shade);p.setClipping(false);
-        QRect box(12,height()-60,50,50);p.setBrush(QColor(12,16,22,215));p.setPen(QPen(QColor(255,255,255,45)));p.drawRoundedRect(box,10,10);m_icon.paint(&p,box.adjusted(7,7,-7,-7));
+        QPainterPath clip;clip.addRoundedRect(QRectF(rect()).adjusted(0,0,0,14),13,13);p.setClipPath(clip);
+        if(m_scaled.size()!=size())m_scaled=Ui::cover(m_art,size());p.drawPixmap(0,0,m_scaled);
+        QLinearGradient shade(0,0,0,height());shade.setColorAt(0.4,QColor(14,14,16,0));shade.setColorAt(1,QColor(14,14,16,190));p.fillRect(rect(),shade);p.setClipping(false);
+        QRect box(12,height()-58,48,48);p.setBrush(QColor(18,18,20,225));p.setPen(QPen(QColor(255,255,255,40)));p.drawRoundedRect(box,11,11);m_icon.paint(&p,box.adjusted(7,7,-7,-7));
     }
 private:
-    QPixmap m_art;QIcon m_icon;
+    QPixmap m_art,m_scaled;QIcon m_icon;
 };
 class Card:public QFrame {
 public:
@@ -30,9 +30,17 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override {if(event->button()==Qt::LeftButton&&rect().contains(event->position().toPoint())&&clicked)clicked();}
     void contextMenuEvent(QContextMenuEvent *event) override {if(context)context();event->accept();}
 };
-QString playText(const InstanceInfo &i){return i.running?"■  "+t("Stop"):i.busy?t("Working…"):i.base.ready?"▶  "+t("Play"):"⬇  "+t("Install");}
+QString playText(const InstanceInfo &i){return i.running?t("Stop"):i.busy?t("Working…"):t("Play");} // Play also installs what is missing
+QString playIcon(const InstanceInfo &i){return i.running?"square":i.busy?QString():"play";}
 QLabel *muted(const QString &text){auto l=new QLabel(text);l->setObjectName("muted");l->setWordWrap(true);return l;}
 int count(const QString &dir,const QStringList &names,QDir::Filters filters){return QDir(dir).entryList(names,filters|QDir::NoDotAndDotDot).size();}
+QPushButton *iconButton(const QString &text,const QString &icon,const char *name,bool primary=false){
+    auto b=new QPushButton(icon.isEmpty()?text:" "+text);b->setObjectName(name);b->setCursor(Qt::PointingHandCursor);if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,primary?QColor(Qt::white):light));b->setIconSize(QSize(18,18));}
+    if(primary)b->setProperty("play",true);return b;
+}
+QToolButton *toolButton(const QString &icon,const QString &tip,const char *name){
+    auto b=new QToolButton;b->setObjectName(name);b->setIcon(Ui::icon(icon));b->setIconSize(QSize(20,20));b->setToolTip(tip);b->setAccessibleName(tip);b->setCursor(Qt::PointingHandCursor);return b;
+}
 }
 QString InstanceText::loader(const QString &loader){return loader=="neoforge"?QString("NeoForge"):loader=="vanilla"||loader.isEmpty()?QString("Vanilla"):loader.left(1).toUpper()+loader.mid(1);}
 QString InstanceText::lastPlayed(qint64 seconds){
@@ -41,26 +49,32 @@ QString InstanceText::lastPlayed(qint64 seconds){
     return t("Played %1 days ago").arg(ago/86400);
 }
 InstanceGrid::InstanceGrid(QWidget *parent):QWidget(parent){
-    setObjectName("instanceGrid");auto layout=new QVBoxLayout(this);layout->setContentsMargins(0,14,0,0);layout->setSpacing(12);
-    auto top=new QHBoxLayout;layout->addLayout(top);top->setSpacing(6);
-    for(int i=0;i<4;++i){auto tab=new QPushButton;tab->setCheckable(true);tab->setChecked(i==0);tab->setProperty("tab",true);tab->setCursor(Qt::PointingHandCursor);m_tabs<<tab;top->addWidget(tab);connect(tab,&QPushButton::clicked,this,[this,i]{m_tab=i;for(int n=0;n<m_tabs.size();++n)m_tabs[n]->setChecked(n==i);rebuild();});}
-    top->addStretch();
-    auto group=new QPushButton(icons::folder(18),t("New group"));group->setObjectName("newGroup");top->addWidget(group);connect(group,&QPushButton::clicked,this,[this]{if(newGroup)newGroup();});
-    auto import=new QPushButton(t("Import"));import->setObjectName("importInstance");top->addWidget(import);connect(import,&QPushButton::clicked,this,[this]{if(importPack)importPack();});
-    auto create=new QPushButton("＋  "+t("New instance"));create->setObjectName("newInstance");create->setProperty("play",true);top->addWidget(create);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
-    m_search=new QLineEdit;m_search->setObjectName("instanceSearch");m_search->setPlaceholderText(t("Search instances…"));m_search->setClearButtonEnabled(true);layout->addWidget(m_search);
+    setObjectName("instanceGrid");auto layout=new QVBoxLayout(this);layout->setContentsMargins(32,26,20,0);layout->setSpacing(14);
+    auto head=new QHBoxLayout;head->setSpacing(8);layout->addLayout(head);
+    auto titles=new QVBoxLayout;titles->setSpacing(4);head->addLayout(titles,1);
+    auto title=new QLabel(t("Instances"));title->setObjectName("pageTitle");titles->addWidget(title);
+    m_summary=new QLabel;m_summary->setObjectName("pageSubtitle");titles->addWidget(m_summary);
+    auto group=iconButton(t("New group"),"folder-plus","newGroup");head->addWidget(group,0,Qt::AlignBottom);connect(group,&QPushButton::clicked,this,[this]{if(newGroup)newGroup();});
+    auto import=iconButton(t("Import"),"download","importInstance");head->addWidget(import,0,Qt::AlignBottom);connect(import,&QPushButton::clicked,this,[this]{if(importPack)importPack();});
+    auto create=iconButton(t("New instance"),"plus","newInstance",true);head->addWidget(create,0,Qt::AlignBottom);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
+    head->addSpacing(12);
+    auto filters=new QHBoxLayout;filters->setSpacing(6);layout->addLayout(filters);
+    for(int i=0;i<4;++i){auto tab=new QPushButton;tab->setCheckable(true);tab->setChecked(i==0);tab->setProperty("tab",true);tab->setCursor(Qt::PointingHandCursor);m_tabs<<tab;filters->addWidget(tab);connect(tab,&QPushButton::clicked,this,[this,i]{m_tab=i;for(int n=0;n<m_tabs.size();++n)m_tabs[n]->setChecked(n==i);rebuild();});}
+    filters->addStretch();
+    m_search=new QLineEdit;m_search->setObjectName("instanceSearch");m_search->setPlaceholderText(t("Search instances…"));m_search->setClearButtonEnabled(true);m_search->addAction(Ui::icon("search",QColor(150,150,158)),QLineEdit::LeadingPosition);m_search->setMinimumWidth(180);m_search->setMaximumWidth(300);filters->addWidget(m_search,1);filters->addSpacing(12);
     connect(m_search,&QLineEdit::textChanged,this,[this]{rebuild();});
     m_scroll=new QScrollArea;m_scroll->setWidgetResizable(true);m_scroll->setFrameShape(QFrame::NoFrame);m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);layout->addWidget(m_scroll,1);
     rebuild();
 }
-int InstanceGrid::columns()const{int width=m_scroll->viewport()->width()-12;return qMax(1,(width+spacing)/(250+spacing));}
+int InstanceGrid::columns()const{int width=m_scroll->viewport()->width()-12;return qMax(1,(width+spacing)/(240+spacing));}
 void InstanceGrid::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);if(columns()!=m_columns)rebuild();}
 void InstanceGrid::setInstances(const QList<InstanceInfo> &instances,const QStringList &emptyGroups,const QString &selected){m_items=instances;m_emptyGroups=emptyGroups;m_selected=selected;rebuild();}
 void InstanceGrid::rebuild(){
-    m_columns=columns();const int cardWidth=qBound(230,(m_scroll->viewport()->width()-12-(m_columns-1)*spacing)/m_columns,360);
+    m_columns=columns();const int cardWidth=qBound(220,(m_scroll->viewport()->width()-12-(m_columns-1)*spacing)/m_columns,360);
     auto kind=[](const InstanceInfo &i){return i.modpack?3:i.base.loader=="vanilla"?1:2;};
     int counts[4]={int(m_items.size()),0,0,0};for(const auto &i:m_items)++counts[kind(i)];
-    const QStringList titles{t("All"),"Vanilla",t("With mods"),t("Modpacks")};for(int n=0;n<4;++n)m_tabs[n]->setText(titles[n]+" ("+QString::number(counts[n])+")");
+    const QStringList titles{t("All"),"Vanilla",t("With mods"),t("Modpacks")};for(int n=0;n<4;++n)m_tabs[n]->setText(titles[n]+"  "+QString::number(counts[n]));
+    m_summary->setText(t("Each instance keeps its own worlds, mods and settings."));
     const auto query=m_search->text().trimmed();
     QMap<QString,QList<InstanceInfo>> groups;
     for(const auto &i:m_items){
@@ -72,14 +86,14 @@ void InstanceGrid::rebuild(){
     std::sort(order.begin(),order.end(),[](const QString &a,const QString &b){if(a.isEmpty()!=b.isEmpty())return a.isEmpty();return a.compare(b,Qt::CaseInsensitive)<0;});
     const bool headers=order.size()>1||(order.size()==1&&!order.first().isEmpty());
     const int scroll=m_scroll->verticalScrollBar()->value();
-    auto content=new QWidget;content->setObjectName("instanceCards");auto layout=new QVBoxLayout(content);layout->setContentsMargins(0,0,12,12);layout->setSpacing(12);
+    auto content=new QWidget;content->setObjectName("instanceCards");auto layout=new QVBoxLayout(content);layout->setContentsMargins(0,4,12,16);layout->setSpacing(12);
     for(const auto &name:order){
         auto items=groups.value(name);std::sort(items.begin(),items.end(),[](const InstanceInfo &a,const InstanceInfo &b){return a.base.name.compare(b.base.name,Qt::CaseInsensitive)<0;});
         if(headers){
-            auto row=new QHBoxLayout;layout->addLayout(row);const bool collapsed=m_collapsed.contains(name);
-            auto header=new QPushButton(icons::folder(20),(collapsed?"▸  ":"▾  ")+(name.isEmpty()?t("No group"):name)+"  ("+QString::number(items.size())+")");header->setObjectName("groupHeader");header->setCursor(Qt::PointingHandCursor);row->addWidget(header);row->addStretch();
+            auto row=new QHBoxLayout;row->setSpacing(6);layout->addLayout(row);const bool collapsed=m_collapsed.contains(name);
+            auto header=new QPushButton(Ui::icon(collapsed?"chevron-right":"chevron-down",QColor(170,170,178)),"  "+(name.isEmpty()?t("No group"):name)+"   "+QString::number(items.size()));header->setObjectName("groupHeader");header->setIconSize(QSize(18,18));header->setCursor(Qt::PointingHandCursor);row->addWidget(header);row->addStretch();
             connect(header,&QPushButton::clicked,this,[this,name]{if(m_collapsed.contains(name))m_collapsed.remove(name);else m_collapsed.insert(name);rebuild();});
-            if(!name.isEmpty()){auto gear=new QToolButton;gear->setIcon(icons::gear(18));gear->setToolTip(t("Group options"));gear->setAccessibleName(gear->toolTip());row->addWidget(gear);connect(gear,&QToolButton::clicked,this,[this,name]{if(groupMenu)groupMenu(name);});}
+            if(!name.isEmpty()){auto gear=toolButton("settings",t("Group options"),"groupOptions");gear->setIconSize(QSize(16,16));row->addWidget(gear);connect(gear,&QToolButton::clicked,this,[this,name]{if(groupMenu)groupMenu(name);});}
             if(collapsed)continue;
         }
         if(items.isEmpty()){layout->addWidget(muted(t("Empty group. Use “Change group” on an instance to move it here.")));continue;}
@@ -88,15 +102,16 @@ void InstanceGrid::rebuild(){
             const auto info=items[n];const auto dir=info.base.dir;
             auto card=new Card;card->setObjectName("instanceCard");card->setProperty("dir",dir);card->setProperty("selected",dir==m_selected);card->setFixedWidth(cardWidth);card->setCursor(Qt::PointingHandCursor);
             card->setToolTip(info.base.name);card->clicked=[this,dir]{if(open)open(dir);};card->context=[this,dir]{if(menu)menu(dir);};
-            auto l=new QVBoxLayout(card);l->setContentsMargins(0,0,0,12);l->setSpacing(6);
-            l->addWidget(new Banner(banners[int(qHash(dir)%uint(banners.size()))],InstanceIcons::icon(info.icon,dir),qBound(104,cardWidth*9/20,150)));
+            auto l=new QVBoxLayout(card);l->setContentsMargins(1,1,1,12);l->setSpacing(6);
+            l->addWidget(new Banner(Ui::artFor(dir),InstanceIcons::icon(info.icon,dir),qBound(100,cardWidth*9/20,150)));
             auto body=new QVBoxLayout;body->setContentsMargins(14,4,14,0);body->setSpacing(5);l->addLayout(body);
             auto title=new QLabel;title->setObjectName("cardTitle");title->setText(title->fontMetrics().elidedText(info.base.name,Qt::ElideRight,cardWidth-28));body->addWidget(title);
             auto sub=new QLabel(InstanceText::loader(info.base.loader)+" "+info.base.mcVersion+(info.modpack?"  ·  "+t("Modpack"):QString()));sub->setObjectName("muted");body->addWidget(sub);
             auto buttons=new QHBoxLayout;buttons->setSpacing(8);body->addLayout(buttons);
-            auto play=new QPushButton(playText(info));play->setObjectName("cardPlay");play->setProperty(info.running?"danger":"play",true);play->setEnabled(!info.busy);play->setCursor(Qt::PointingHandCursor);buttons->addWidget(play,1);
+            auto play=new QPushButton(" "+playText(info));play->setObjectName("cardPlay");play->setProperty(info.running?"danger":"play",true);play->setEnabled(!info.busy);play->setCursor(Qt::PointingHandCursor);
+            if(!playIcon(info).isEmpty()){play->setIcon(Ui::icon(playIcon(info),info.running?QColor(255,163,174):QColor(Qt::white)));play->setIconSize(QSize(16,16));}buttons->addWidget(play,1);
             connect(play,&QPushButton::clicked,this,[this,dir]{if(this->play)this->play(dir);});
-            auto gear=new QToolButton;gear->setObjectName("cardSettings");gear->setIcon(icons::gear(20));gear->setToolTip(t("Instance settings"));gear->setAccessibleName(gear->toolTip());gear->setCursor(Qt::PointingHandCursor);buttons->addWidget(gear);
+            auto gear=toolButton("settings",t("Instance settings"),"cardSettings");buttons->addWidget(gear);
             connect(gear,&QToolButton::clicked,this,[this,dir]{if(settings)settings(dir);});
             auto when=new QLabel(info.running?t("Running"):info.busy?t("Installing…"):!info.base.ready?t("Not installed yet"):InstanceText::lastPlayed(info.base.lastPlayed));when->setObjectName("cardFooter");body->addWidget(when);
             grid->addWidget(card,n/m_columns,n%m_columns,Qt::AlignTop|Qt::AlignLeft);
@@ -105,9 +120,10 @@ void InstanceGrid::rebuild(){
     }
     if(m_items.isEmpty()){
         auto empty=new QFrame;empty->setObjectName("card");auto el=new QVBoxLayout(empty);el->setContentsMargins(30,30,30,30);el->setSpacing(10);
+        auto icon=new QLabel;icon->setPixmap(Ui::pixmap("layout-grid",40,green));el->addWidget(icon);
         auto title=new QLabel(t("A place for every world"));title->setObjectName("sectionTitle");el->addWidget(title);
         el->addWidget(muted(t("Create your first instance. You can have several of the same version with different mods; each keeps its own worlds and settings.")));
-        auto create=new QPushButton("＋  "+t("New instance"));create->setProperty("play",true);create->setMaximumWidth(260);el->addWidget(create);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
+        auto create=iconButton(t("New instance"),"plus","emptyNewInstance",true);create->setMaximumWidth(260);el->addWidget(create);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
         layout->addWidget(empty);
     }else if(order.isEmpty())layout->addWidget(muted(t("No instances match this search.")));
     // The click that triggered this rebuild may come from a card inside the old content: delete it later, not now.
@@ -115,48 +131,67 @@ void InstanceGrid::rebuild(){
     QTimer::singleShot(0,m_scroll,[bar=m_scroll->verticalScrollBar(),scroll]{bar->setValue(scroll);});
 }
 InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
-    setObjectName("instanceDetail");auto l=new QVBoxLayout(this);l->setContentsMargins(0,12,0,0);l->setSpacing(14);
-    auto backRow=new QHBoxLayout;l->addLayout(backRow);auto backButton=new QPushButton("←  "+t("All instances"));backButton->setObjectName("backButton");backButton->setProperty("link",true);backButton->setCursor(Qt::PointingHandCursor);backRow->addWidget(backButton);backRow->addStretch();
+    setObjectName("instanceDetail");auto outer=new QVBoxLayout(this);outer->setContentsMargins(0,0,0,0);
+    // Scrolls instead of squeezing when the window is short; the artwork stays painted behind.
+    auto scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);scroll->viewport()->setAutoFillBackground(false);outer->addWidget(scroll);
+    auto content=new QWidget;content->setObjectName("instanceDetailContent");scroll->setWidget(content);
+    auto l=new QVBoxLayout(content);l->setContentsMargins(32,18,32,24);l->setSpacing(14);
+    auto backRow=new QHBoxLayout;backRow->setSpacing(6);l->addLayout(backRow);auto backButton=new QPushButton(Ui::icon("chevron-left",green),t("All instances"));backButton->setObjectName("backButton");backButton->setProperty("link",true);backButton->setCursor(Qt::PointingHandCursor);backRow->addWidget(backButton);backRow->addStretch();
     connect(backButton,&QPushButton::clicked,this,[this]{if(back)back();});
-    auto header=new QHBoxLayout;header->setSpacing(16);l->addLayout(header);
-    m_icon=new QLabel;m_icon->setFixedSize(76,76);m_icon->setObjectName("detailIcon");m_icon->setAlignment(Qt::AlignCenter);header->addWidget(m_icon,0,Qt::AlignTop);
-    auto info=new QVBoxLayout;info->setSpacing(8);header->addLayout(info,1);
+    auto tools=backRow; // quick tools sit at the top right, over the artwork
+    auto tool=[this,tools](const QString &icon,const QString &tip,const char *name,std::function<void()> InstanceDetail::*action){auto b=toolButton(icon,tip,name);tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this,action]{if(this->*action)(this->*action)();});};
+    tool("share-2",t("Export instance"),"exportInstance",&InstanceDetail::exportZip);tool("file-text",t("Log"),"showLog",&InstanceDetail::log);
+    auto folderButton=toolButton("folder",t("Open instance folder"),"openFolder");tools->addWidget(folderButton);connect(folderButton,&QToolButton::clicked,this,[this]{if(openFolder)openFolder({});});
+    tool("settings",t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
+    l->addSpacing(28); // the artwork shows above the title, like the instance page of the Minecraft Launcher
+    auto header=new QHBoxLayout;header->setSpacing(18);l->addLayout(header);
+    m_icon=new QLabel;m_icon->setFixedSize(84,84);m_icon->setObjectName("detailIcon");m_icon->setAlignment(Qt::AlignCenter);header->addWidget(m_icon,0,Qt::AlignVCenter);
+    auto info=new QVBoxLayout;info->setSpacing(6);header->addLayout(info,1);info->addStretch();
     m_name=new QLabel;m_name->setObjectName("detailTitle");info->addWidget(m_name);
-    m_state=new QLabel;m_state->setObjectName("muted");info->addWidget(m_state); // no stretch here: spare height belongs below the cards
-    auto chipRow=new QHBoxLayout;chipRow->setSpacing(8);l->addLayout(chipRow);
-    m_chips=new QWidget;auto chips=new QHBoxLayout(m_chips);chips->setContentsMargins(0,0,0,0);chips->setSpacing(8);chipRow->addWidget(m_chips,1);
-    auto tools=new QHBoxLayout;tools->setSpacing(6);chipRow->addLayout(tools);
-    auto tool=[this,tools](const QPixmap &icon,const QString &tip,const char *name,std::function<void()> InstanceDetail::*action){auto b=new QToolButton;b->setObjectName(name);b->setIcon(icon);b->setIconSize(QSize(22,22));b->setToolTip(tip);b->setAccessibleName(tip);b->setCursor(Qt::PointingHandCursor);tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this,action]{if(this->*action)(this->*action)();});};
-    tool(icons::server(22),t("Export instance"),"exportInstance",&InstanceDetail::exportZip);tool(icons::news(22),t("Log"),"showLog",&InstanceDetail::log);
-    auto folderButton=new QToolButton;folderButton->setObjectName("openFolder");folderButton->setIcon(icons::folder(22));folderButton->setIconSize(QSize(22,22));folderButton->setToolTip(t("Open instance folder"));folderButton->setAccessibleName(folderButton->toolTip());tools->addWidget(folderButton);
-    connect(folderButton,&QToolButton::clicked,this,[this]{if(openFolder)openFolder({});});
-    tool(icons::gear(22),t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
-    m_play=new QPushButton;m_play->setObjectName("detailPlay");m_play->setMinimumSize(200,54);m_play->setCursor(Qt::PointingHandCursor);header->addWidget(m_play,0,Qt::AlignTop);connect(m_play,&QPushButton::clicked,this,[this]{if(play)play();});
-    auto cards=new QGridLayout;cards->setSpacing(14);l->addLayout(cards);
-    struct Stat{QPixmap icon;QString title,action,folder;};
-    const QList<Stat> stats{{icons::mods(20),t("Mods"),t("MANAGE MODS"),"mods"},{icons::fanart(20),t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{icons::release(20),t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{icons::wiki(20),t("Worlds"),t("MANAGE WORLDS"),"saves"}};
+    m_state=new QLabel;m_state->setObjectName("muted");info->addWidget(m_state);info->addStretch();
+    m_play=new QPushButton;m_play->setObjectName("detailPlay");m_play->setMinimumSize(220,58);m_play->setIconSize(QSize(22,22));m_play->setCursor(Qt::PointingHandCursor);header->addWidget(m_play,0,Qt::AlignVCenter);connect(m_play,&QPushButton::clicked,this,[this]{if(play)play();});
+    m_chips=new QWidget;auto chips=new QHBoxLayout(m_chips);chips->setContentsMargins(0,0,0,0);chips->setSpacing(8);l->addWidget(m_chips);
+    m_cardGrid=new QGridLayout;m_cardGrid->setSpacing(14);l->addLayout(m_cardGrid);
+    struct Stat{QString icon,title,action,folder;};
+    const QList<Stat> stats{{"puzzle",t("Mods"),t("MANAGE MODS"),"mods"},{"palette",t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{"sparkles",t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{"map",t("Worlds"),t("MANAGE WORLDS"),"saves"}};
     for(int n=0;n<stats.size();++n){
-        auto card=new QFrame;card->setObjectName("statCard");card->setFixedHeight(128);auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
-        auto titleRow=new QHBoxLayout;cl->addLayout(titleRow);auto icon=new QLabel;icon->setPixmap(stats[n].icon);titleRow->addWidget(icon);auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");titleRow->addWidget(title,1);
+        auto card=new QFrame;card->setObjectName("statCard");card->setFixedHeight(150);m_cards<<card;auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
+        auto icon=new QLabel;icon->setObjectName("statIcon");m_cardIcons<<icon;icon->setFixedSize(40,40);icon->setAlignment(Qt::AlignCenter);icon->setPixmap(Ui::pixmap(stats[n].icon,22,green));cl->addWidget(icon);
+        auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");cl->addWidget(title);
         auto value=muted({});m_counts<<value;cl->addWidget(value);cl->addStretch();
         auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);cl->addWidget(action);
         const auto folder=stats[n].folder;connect(action,&QPushButton::clicked,this,[this,folder]{if(folder=="mods"){if(mods)mods();}else if(openFolder)openFolder(folder);});
-        cards->addWidget(card,0,n);
     }
     auto actions=new QHBoxLayout;actions->setSpacing(8);l->addLayout(actions);
-    auto action=[this,actions](const QString &text,const char *name,std::function<void()> InstanceDetail::*callback){auto b=new QPushButton(text);b->setObjectName(name);b->setCursor(Qt::PointingHandCursor);actions->addWidget(b);connect(b,&QPushButton::clicked,this,[this,callback]{if(this->*callback)(this->*callback)();});return b;};
-    action(t("Find mods"),"findMods",&InstanceDetail::findMods);action(t("Save mods as a pack"),"savePack",&InstanceDetail::savePack);action(t("Copy instance"),"copyInstance",&InstanceDetail::copy);action(t("Change group"),"changeGroup",&InstanceDetail::changeGroup);
-    actions->addStretch();auto remove=action(t("Delete instance"),"deleteInstance",&InstanceDetail::remove);remove->setProperty("danger",true);
-    l->addStretch();
+    auto action=[this,actions](const QString &text,const QString &icon,const char *name,std::function<void()> InstanceDetail::*callback){auto b=iconButton(text,icon,name);b->setToolTip(text);b->setAccessibleName(text);m_actions<<qMakePair(b,text);actions->addWidget(b);connect(b,&QPushButton::clicked,this,[this,callback]{if(this->*callback)(this->*callback)();});return b;};
+    action(t("Find mods"),"compass","findMods",&InstanceDetail::findMods);action(t("Save mods as a pack"),"package","savePack",&InstanceDetail::savePack);action(t("Copy instance"),"copy","copyInstance",&InstanceDetail::copy);action(t("Change group"),"layers","changeGroup",&InstanceDetail::changeGroup);
+    actions->addStretch();auto remove=action(t("Delete instance"),"trash-2","deleteInstance",&InstanceDetail::remove);remove->setProperty("danger",true);remove->setIcon(Ui::icon("trash-2",QColor(255,163,174)));
+    l->addStretch();arrange();
+}
+// Narrow windows: the four cards go two by two and the actions keep only their icons.
+void InstanceDetail::arrange(){
+    const bool compact=width()<1000;if(compact==m_compact&&m_cardGrid->count())return;m_compact=compact;
+    for(auto card:m_cards)m_cardGrid->removeWidget(card);
+    for(int n=0;n<m_cards.size();++n){m_cardGrid->addWidget(m_cards[n],compact?n/2:0,compact?n%2:n);m_cards[n]->setFixedHeight(compact?112:150);m_cardIcons[n]->setVisible(!compact);}
+    for(const auto &action:m_actions)action.first->setText(compact?QString():" "+action.second);
+}
+void InstanceDetail::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);arrange();}
+void InstanceDetail::paintEvent(QPaintEvent *){
+    if(m_backdrop.isNull())return;
+    QPainter p(this);const int height=qMin(this->height(),340);const QSize area(width(),height);
+    if(m_scaled.size()!=area)m_scaled=Ui::cover(m_backdrop,area);p.drawPixmap(0,0,m_scaled);
+    QLinearGradient fade(0,0,0,height);fade.setColorAt(0,QColor(20,20,22,120));fade.setColorAt(0.55,QColor(20,20,22,200));fade.setColorAt(1,QColor(20,20,22,255));p.fillRect(QRect(QPoint(0,0),area),fade);
 }
 void InstanceDetail::showInstance(const InstanceInfo &i){
-    m_dir=i.base.dir;m_icon->setPixmap(InstanceIcons::icon(i.icon,i.base.dir).pixmap(60,60));m_name->setText(i.base.name);
+    if(m_dir!=i.base.dir){m_backdrop=QPixmap(Ui::artFor(i.base.dir));m_scaled={};update();}
+    m_dir=i.base.dir;m_icon->setPixmap(InstanceIcons::icon(i.icon,i.base.dir).pixmap(62,62));m_name->setText(i.base.name);
     auto chips=static_cast<QHBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
     auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
     chip(InstanceText::loader(i.base.loader)+(i.base.loader=="vanilla"||i.loaderVersion.isEmpty()?QString():" "+i.loaderVersion),true);chip("Minecraft "+i.base.mcVersion);chip(QString::number(i.base.xmx)+" MB");
     if(!i.group.isEmpty())chip(i.group);if(i.modpack)chip(t("Modpack"));chips->addStretch();
     m_state->setText((i.running?t("Running"):i.busy?t("Installing…"):i.base.ready?t("Ready to play"):t("Not installed yet"))+"  ·  "+InstanceText::lastPlayed(i.base.lastPlayed));
-    m_play->setText(playText(i));m_play->setProperty("play",!i.running);m_play->setProperty("danger",i.running);m_play->setEnabled(!i.busy);m_play->style()->unpolish(m_play);m_play->style()->polish(m_play);
+    m_play->setText("  "+playText(i).toUpper());m_play->setIcon(playIcon(i).isEmpty()?QIcon():Ui::icon(playIcon(i),Qt::white));
+    m_play->setProperty("play",!i.running);m_play->setProperty("danger",i.running);m_play->setEnabled(!i.busy);m_play->style()->unpolish(m_play);m_play->style()->polish(m_play);
     const auto dir=i.base.dir;const int enabled=count(dir+"/mods",{"*.jar"},QDir::Files),disabled=count(dir+"/mods",{"*.jar.disabled"},QDir::Files);
     m_counts[0]->setText(t("%1 mods enabled").arg(enabled)+(disabled?" · "+t("%1 disabled").arg(disabled):QString()));
     const int packs=count(dir+"/resourcepacks",{},QDir::Files|QDir::Dirs),shaders=count(dir+"/shaderpacks",{},QDir::Files|QDir::Dirs),worlds=count(dir+"/saves",{},QDir::Dirs);

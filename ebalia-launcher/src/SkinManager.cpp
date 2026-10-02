@@ -88,7 +88,7 @@ void SkinManager::applyLocal(const QString &file,const QString &variant,const QS
     if(archive_read_open_filename(a.get(),QFile::encodeName(clientJar).constData(),65536)!=ARCHIVE_OK)fail("Install the instance before applying a local skin.");
     archive_entry *entry;int format=0;QStringList textures;
     while(archive_read_next_header(a.get(),&entry)==ARCHIVE_OK){auto path=QString::fromUtf8(archive_entry_pathname(entry));
-        if(path=="version.json"){QByteArray data;char buffer[8192];la_ssize_t n;while((n=archive_read_data(a.get(),buffer,sizeof(buffer)))>0){data.append(buffer,n);if(data.size()>1024*1024)fail("Invalid game metadata.");}auto p=QJsonDocument::fromJson(data).object()["pack_version"].toObject()["resource"];format=p.isObject()?p.toObject()["major"].toInt():p.toInt();}
+        if(path=="version.json"){QByteArray data;char buffer[8192];la_ssize_t n;while((n=archive_read_data(a.get(),buffer,sizeof(buffer)))>0){data.append(buffer,n);if(data.size()>1024*1024)fail("Invalid game metadata.");}const auto version=QJsonDocument::fromJson(data).object()["pack_version"].toObject();const QJsonValue p=version["resource"];format=p.isObject()?p.toObject()["major"].toInt():p.toInt();}
         if(path.startsWith("assets/minecraft/textures/entity/player/")&&path.endsWith(".png")&&path.split('/').size()==7)textures<<path;
         if(path=="assets/minecraft/textures/entity/steve.png"||path=="assets/minecraft/textures/entity/alex.png")textures<<path;
     }

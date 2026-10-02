@@ -4,18 +4,19 @@
 #include "McInstanceManager.hpp"
 #include "MsAuth.hpp"
 #include "Language.hpp"
+#include "Ui.hpp"
 #include <QtWidgets>
 using Language::key;
 SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *instances,Work work,QWidget *parent)
     :QWidget(parent),m_root(std::move(root)),m_accounts(accounts),m_instances(instances),m_work(std::move(work)){
-    auto layout=new QHBoxLayout(this);layout->setContentsMargins(0,16,0,0);layout->setSpacing(22);
-    auto visual=new QVBoxLayout;layout->addLayout(visual,1);m_preview=new QLabel;m_preview->setAlignment(Qt::AlignCenter);m_preview->setMinimumSize(240,320);m_preview->setStyleSheet("background:#1b2830;border-radius:12px;");visual->addWidget(m_preview,1);
+    auto layout=new QHBoxLayout(this);layout->setContentsMargins(0,0,0,0);layout->setSpacing(22);
+    auto visual=new QVBoxLayout;layout->addLayout(visual,1);m_preview=new QLabel;m_preview->setAlignment(Qt::AlignCenter);m_preview->setMinimumSize(240,320);m_preview->setObjectName("skinPreview");visual->addWidget(m_preview,1);
     auto turn=new QPushButton(key("Front / back"));visual->addWidget(turn);connect(turn,&QPushButton::clicked,this,[this]{m_back=!m_back;showSkin();});
     auto controls=new QVBoxLayout;layout->addLayout(controls,2);m_list=new QListWidget;controls->addWidget(m_list,1);connect(m_list,&QListWidget::currentRowChanged,this,[this]{showSkin();});
     m_details=new QLabel;m_details->setWordWrap(true);m_details->setTextFormat(Qt::PlainText);controls->addWidget(m_details);
     auto add=[&](QString title,std::function<void()> fn){auto b=new QPushButton(title);controls->addWidget(b);connect(b,&QPushButton::clicked,this,fn);return b;};
     add(key("Import PNG skin"),[this]{importSkin();});
-    add(key("Apply to Microsoft account"),[this]{apply(false);})->setProperty("primary",true);
+    add(key("Apply to Microsoft account"),[this]{apply(false);})->setProperty("play",true);
     add(key("Apply locally to an instance"),[this]{apply(true);});
     add(key("Restore local appearance"),[this]{
         QStringList names;QList<McInstance> targets;for(const auto &i:m_instances->instances())if(!m_instances->isRunning(i.dir)&&!m_instances->isInstalling(i.dir)){names<<i.name+" · "+i.mcVersion;targets<<i;}
@@ -27,7 +28,7 @@ SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *in
 void SkinsPage::refresh(){m_list->clear();try{m_skins=SkinManager(m_root).skins();for(const auto &v:m_skins){auto o=v.toObject();m_list->addItem(o["name"].toString()+" · "+(o["variant"].toString()=="slim"?key("Slim"):key("Classic")));}if(m_list->count())m_list->setCurrentRow(0);else{m_details->setText(key("Import a 64 × 64 or 64 × 32 PNG to start your skin library."));m_preview->setText(key("Skins"));}}catch(const std::exception &e){m_details->setText(QString::fromUtf8(e.what()));}}
 void SkinsPage::showSkin(){int index=m_list->currentRow();if(index<0||index>=m_skins.size())return;auto o=m_skins[index].toObject();QImage image(o["file"].toString());m_preview->setPixmap(QPixmap::fromImage(SkinManager::preview(image,o["variant"].toString(),m_back)));m_details->setText(o["name"].toString());}
 void SkinsPage::importSkin(){
-    auto file=QFileDialog::getOpenFileName(this,key("Import PNG skin"),{},"PNG (*.png)");if(file.isEmpty())return;QDialog dialog(this);dialog.setWindowTitle(key("Import PNG skin"));QFormLayout form(&dialog);QLineEdit name(QFileInfo(file).completeBaseName());QComboBox variant;variant.addItem(key("Classic"),"classic");variant.addItem(key("Slim"),"slim");form.addRow(key("Name"),&name);form.addRow(key("Model"),&variant);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);if(dialog.exec()!=QDialog::Accepted)return;
+    auto file=QFileDialog::getOpenFileName(this,key("Import PNG skin"),{},"PNG (*.png)");if(file.isEmpty())return;QDialog dialog(this);dialog.setWindowTitle(key("Import PNG skin"));QFormLayout form(&dialog);QLineEdit name(QFileInfo(file).completeBaseName());QComboBox variant;variant.addItem(key("Classic"),"classic");variant.addItem(key("Slim"),"slim");form.addRow(key("Name"),&name);form.addRow(key("Model"),&variant);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);if(Ui::openWindow(dialog)!=QDialog::Accepted)return;
     try{SkinManager(m_root).importSkin(file,name.text(),variant.currentData().toString());refresh();}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",QString::fromUtf8(e.what()));}
 }
 void SkinsPage::apply(bool local){

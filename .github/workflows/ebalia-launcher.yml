@@ -65,6 +65,9 @@ jobs:
       - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix libarchive)"
       - run: cmake --build build
       - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - name: Backtrace of a crashing core test
+        if: failure()
+        run: QT_QPA_PLATFORM=offscreen lldb --batch -o run -k "thread backtrace all" -- build/ebalia-tests
       - run: cmake --install build --prefix package
       - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -dmg -always-overwrite'
       - uses: actions/upload-artifact@v4

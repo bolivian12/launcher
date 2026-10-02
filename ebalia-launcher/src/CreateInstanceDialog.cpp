@@ -14,7 +14,7 @@ const QStringList sourceKeys{"custom","import","atlauncher","curseforge","ftb","
 QString describeLocal(const QJsonObject &o){auto loader=loaderTitle(o["loader"].toString());return o["name"].toString()+"\n"+o["source"].toString()+" · Minecraft "+o["mcVersion"].toString()+(loader.isEmpty()?QString():" · "+loader+" "+o["loaderVersion"].toString());}
 }
 CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QList<McVersion> &catalog,const QJsonArray &packs,const McInstance &source,bool copy,QWidget *parent):QDialog(parent),m_manager(manager),m_catalog(catalog){
-    setObjectName("createInstanceDialog");setWindowTitle(t("New instance"));resize(1040,760);setMinimumSize(840,640);setAcceptDrops(true);
+    setObjectName("createInstanceDialog");setWindowTitle(t("New instance"));resize(1040,760);setMinimumSize(720,520);setAcceptDrops(true);
     auto outer=new QVBoxLayout(this);outer->setSpacing(12);
     auto header=new QHBoxLayout;outer->addLayout(header);
     if(copy){try{m_iconKey=ModRepository::read(source.dir+"/instance.json")["icon"].toString(m_iconKey);if(m_iconKey=="custom")m_iconKey="grass";}catch(...){}}
