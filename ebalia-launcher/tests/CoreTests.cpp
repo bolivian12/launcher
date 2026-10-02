@@ -52,11 +52,11 @@ private slots:
         PackService service(root.path(),[&](QUrl url){
             auto path=url.path();
             if(path.endsWith("packsnew.json"))return QByteArray(R"([{"name":"Test Pack","type":"public","versions":[{"version":"v1","minecraft":"1.20.1"}]}])");
-            if(path.endsWith("Configs.json")){auto o=QJsonDocument::fromJson(R"({"minecraft":"1.20.1","noConfigs":true,"loader":{"type":"fabric","metadata":{"loader":"0.16.0"}},"mods":[{"file":"test.jar","type":"mods","url":"https://example.test/mod"}]})").object();auto mods=o["mods"].toArray();auto mod=mods[0].toObject();mod["md5"]=hash;mods[0]=mod;o["mods"]=mods;return encode(o);}
+            if(path.endsWith("Configs.json")){auto o=QJsonDocument::fromJson(R"({"minecraft":"1.20.1","noConfigs":true,"loader":{"type":"fabric","metadata":{"loader":"0.16.0"}},"mods":[{"file":"test.jar","type":"mods"}]})").object();auto mods=o["mods"].toArray();auto mod=mods[0].toObject();mod["md5"]=hash;mod["url"]="https://example.test/mod";mods[0]=mod;o["mods"]=mods;return encode(o);}
             if(path=="/mod")return QByteArray("mod");
             if(path.contains("static/"))return QByteArray("<modpacks><modpack name='Legacy' dir='legacy' version='1.0' mcVersion='1.12.2' url='pack.zip'/></modpacks>");
             if(path=="/trending")return QByteArray(R"({"modpacks":[{"slug":"test","name":"Technic Test"}]})");
-            if(path=="/modpack/test")return QByteArray(R"({"version":"1","minecraft":"1.20.1","url":"https://example.test/archive"})");
+            if(path=="/modpack/test")return encode(QJsonObject{{"version","1"},{"minecraft","1.20.1"},{"url","https://example.test/archive"}});
             return QByteArray("{}");
         });
 
