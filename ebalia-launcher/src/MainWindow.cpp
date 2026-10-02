@@ -24,6 +24,7 @@
 #include <QCryptographicHash>
 #include <QTemporaryDir>
 #include <stdexcept>
+#include <algorithm>
 using Language::text;
 namespace {
 class GameBanner : public QWidget {

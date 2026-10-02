@@ -18,7 +18,7 @@
           src = pkgs.lib.cleanSourceWith { src = ./.; filter = path: type: !(builtins.elem (baseNameOf path) [ "build" "legacy" "Bexe16.4" "codigo generacion" "result" "result-v4" "artifacts" ]); };
 
           nativeBuildInputs = [ pkgs.cmake pkgs.qt6.wrapQtAppsHook pkgs.pkg-config ];
-          buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qttools pkgs.libarchive ];
+          buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qttools pkgs.qt6.qtimageformats pkgs.libarchive ];
 
           cmakeFlags = [
             "-DCMAKE_BUILD_TYPE=Release"
@@ -41,7 +41,7 @@
 
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = [ pkgs.cmake pkgs.qt6.wrapQtAppsHook pkgs.pkg-config ];
-          buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qttools pkgs.libarchive ];
+          buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qttools pkgs.qt6.qtimageformats pkgs.libarchive ];
         };
       });
 }
