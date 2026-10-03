@@ -220,6 +220,13 @@ const translations = {
     "unavailable": "Verfügbare Downloads findest du auf der Veröffentlichungsseite."
   }
 };
+Object.entries({
+ es: {availability:'Ver descarga',unavailable:'Los paquetes aún no están disponibles. Podés comprobar su estado aquí.', panelPending:'El paquete para esta plataforma todavía no está publicado. Volvé a comprobarlo en unos minutos.',panelError:'No pudimos comprobar la disponibilidad. Intentá nuevamente en unos momentos.',retry:'Comprobar de nuevo',close:'Cerrar',panelReady:'Tu descarga está lista. Pulsá el botón para guardar el archivo.'},
+ en: {availability:'View download',unavailable:'Packages are not available yet. Check their status here.',panelPending:'The package for this platform has not been published yet. Check again in a few minutes.',panelError:'We could not check availability. Please try again shortly.',retry:'Check again',close:'Close',panelReady:'Your download is ready. Press the button to save the file.'},
+ pt: {availability:'Ver download',unavailable:'Os pacotes ainda não estão disponíveis. Consulte o estado aqui.',panelPending:'O pacote desta plataforma ainda não foi publicado. Confira novamente em alguns minutos.',panelError:'Não foi possível verificar a disponibilidade. Tente novamente em instantes.',retry:'Verificar novamente',close:'Fechar',panelReady:'Seu download está pronto. Clique no botão para salvar o arquivo.'},
+ fr: {availability:'Voir le téléchargement',unavailable:'Les paquets ne sont pas encore disponibles. Consultez leur état ici.',panelPending:'Le paquet de cette plateforme n’est pas encore publié. Réessayez dans quelques minutes.',panelError:'Impossible de vérifier la disponibilité. Réessayez dans un instant.',retry:'Vérifier à nouveau',close:'Fermer',panelReady:'Votre téléchargement est prêt. Cliquez pour enregistrer le fichier.'},
+ de: {availability:'Download ansehen',unavailable:'Die Pakete sind noch nicht verfügbar. Prüfe den Status hier.',panelPending:'Das Paket für diese Plattform wurde noch nicht veröffentlicht. Prüfe es in einigen Minuten erneut.',panelError:'Die Verfügbarkeit konnte nicht geprüft werden. Versuche es gleich erneut.',retry:'Erneut prüfen',close:'Schließen',panelReady:'Dein Download ist bereit. Klicke auf die Schaltfläche, um die Datei zu speichern.'}
+}).forEach(([language, values]) => Object.assign(translations[language], values));
 (() => {
   const key = 'ebalia-language';
   const toggle = document.querySelector('#language-toggle');
