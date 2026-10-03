@@ -91,7 +91,7 @@ private slots:
             auto play=window.findChild<QPushButton*>("homePlay");auto picker=window.findChild<QPushButton*>("instancePicker");auto bar=window.findChild<QFrame*>("playBar");
             QRect playRect(play->mapTo(bar,QPoint()),play->size()),pickerRect(picker->mapTo(bar,QPoint()),picker->size());
             QVERIFY(bar->rect().contains(playRect));QVERIFY(bar->rect().contains(pickerRect));QVERIFY(!playRect.intersects(pickerRect));
-            window.showPage(MainWindow::Lost);QTest::qWait(80);auto archive=qobject_cast<QScrollArea*>(pages->currentWidget());QVERIFY(archive);QCOMPARE(archive->horizontalScrollBar()->maximum(),0);
+            window.showPage(MainWindow::Lost);QTest::qWait(80);auto archive=qobject_cast<QScrollArea*>(pages->currentWidget());QVERIFY(archive);QVERIFY2(archive->horizontalScrollBar()->maximum()==0,qPrintable(QString("Lost archive overflows by %1 px at %2 px").arg(archive->horizontalScrollBar()->maximum()).arg(size.width())));
             auto detail=window.findChild<QFrame*>("lostDetail");auto install=window.findChild<QPushButton*>("lostInstall");auto launch=window.findChild<QPushButton*>("lostPlay");
             QRect installRect(install->mapTo(detail,QPoint()),install->size()),launchRect(launch->mapTo(detail,QPoint()),launch->size());
             QVERIFY(detail->rect().contains(installRect));QVERIFY(detail->rect().contains(launchRect));QVERIFY(!installRect.intersects(launchRect));
@@ -121,7 +121,7 @@ private slots:
         CreateInstanceDialog dialog(&manager,{{"1.20.1","release","","2023-06-12"}},{},{},false);dialog.resize(640,480);dialog.show();
         for(int page=0;page<=CreateInstanceDialog::Technic;++page){
             dialog.showPage(page);QTest::qWait(30);QCOMPARE(dialog.size(),QSize(640,480));
-            auto area=dialog.findChild<QScrollArea*>("instanceFormScroll");QVERIFY(area);QCOMPARE(area->horizontalScrollBar()->maximum(),0);
+            auto area=dialog.findChild<QScrollArea*>("instanceFormScroll");QVERIFY(area);QVERIFY2(area->horizontalScrollBar()->maximum()==0,qPrintable(QString("Instance page %1 overflows by %2 px").arg(page).arg(area->horizontalScrollBar()->maximum())));
             auto create=dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
             QVERIFY(dialog.rect().contains(QRect(create->mapTo(&dialog,QPoint()),create->size())));
         }
