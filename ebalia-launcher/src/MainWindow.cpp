@@ -17,6 +17,9 @@
 #include "InstanceIcons.hpp"
 #include "Icons.hpp"
 #include "Ui.hpp"
+#include "HomeBanner.hpp"
+#include "CreatorDialog.hpp"
+#include "PatreonNewsPage.hpp"
 #include <QtWidgets>
 #include <QtNetwork>
 #include <QtConcurrent>
@@ -28,33 +31,62 @@ using Language::text;
 namespace {
 QString k(const char *source){return Language::key(QString::fromUtf8(source));}
 const QColor green(111,209,91),dim(180,180,188);
-// Full-bleed artwork behind the Home title, fading into the play bar like the Minecraft Launcher.
-class GameBanner:public QWidget {
-public:
-    explicit GameBanner(const QString &art,QWidget *parent=nullptr):QWidget(parent),m_image(art){setObjectName("hero");setMinimumHeight(170);setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);}
+class PlayBar:public QFrame {
 protected:
-    void paintEvent(QPaintEvent *) override {
-        QPainter p(this);p.drawPixmap((width()-m_scaled.width())/2,-(m_scaled.height()-height())/3,m_scaled);
-        QLinearGradient side(0,0,width(),0);side.setColorAt(0,QColor(12,12,14,175));side.setColorAt(0.6,QColor(12,12,14,0));p.fillRect(rect(),side);
-        QLinearGradient bottom(0,0,0,height());bottom.setColorAt(0.5,QColor(27,27,30,0));bottom.setColorAt(1,QColor(27,27,30,245));p.fillRect(rect(),bottom);
+    void resizeEvent(QResizeEvent *event) override {
+        QFrame::resizeEvent(event);auto grid=qobject_cast<QGridLayout*>(layout());if(!grid)return;
+        auto play=findChild<QPushButton*>("homePlay");if(!play)return;
+        const bool compact=width()<740;if(property("compact").isValid()&&property("compact").toBool()==compact)return;
+        setProperty("compact",compact);grid->removeWidget(play);
+        if(compact)grid->addWidget(play,1,0,1,3,Qt::AlignHCenter);else grid->addWidget(play,0,1,Qt::AlignCenter);
+        grid->setVerticalSpacing(14);grid->invalidate();updateGeometry();
     }
-    void resizeEvent(QResizeEvent *) override {m_scaled=m_image.scaled(size(),Qt::KeepAspectRatioByExpanding,Qt::SmoothTransformation);}
-private:
-    QPixmap m_image,m_scaled;
 };
-// Picture that fills its box (news images, lost version covers); only the top corners are rounded unless told otherwise.
+class ArchivePanels:public QWidget {
+public:
+    ArchivePanels(QWidget *list,QWidget *detail):m_list(list),m_detail(detail){m_layout=new QBoxLayout(QBoxLayout::LeftToRight,this);m_layout->setContentsMargins(0,0,0,0);m_layout->setSpacing(18);m_layout->addWidget(list);m_layout->addWidget(detail,1);}
+protected:
+    void resizeEvent(QResizeEvent *event)override{
+        QWidget::resizeEvent(event);bool compact=width()<760;if(property("compact").isValid()&&property("compact").toBool()==compact)return;
+        setProperty("compact",compact);m_layout->setDirection(compact?QBoxLayout::TopToBottom:QBoxLayout::LeftToRight);
+        m_list->setMaximumWidth(compact?QWIDGETSIZE_MAX:336);m_list->setMinimumHeight(compact?170:100);m_list->setMaximumHeight(compact?210:QWIDGETSIZE_MAX);
+        m_detail->setMinimumHeight(compact?440:340);m_layout->invalidate();updateGeometry();
+    }
+private:
+    QWidget *m_list,*m_detail;QBoxLayout *m_layout;
+};
+// Covers fill their box by default; news use an aspect-ratio box and show the whole image.
 class Cover:public QWidget {
 public:
     explicit Cover(int radius,bool allCorners=false,QWidget *parent=nullptr):QWidget(parent),m_radius(radius),m_all(allCorners){setAttribute(Qt::WA_TransparentForMouseEvents);}
-    void setPixmap(const QPixmap &pixmap){m_pixmap=pixmap;m_scaled={};update();}
+    void setPixmap(const QPixmap &pixmap){m_resource.clear();assign(pixmap);}
+    void setArtwork(const QString &path){if(m_resource==path)return;m_resource=path;assign({});Ui::loadArt(path,{1920,1080},this,[this,path](const QPixmap &p){if(m_resource==path)assign(p);});}
+    void setShaded(bool shaded){m_shaded=shaded;update();}
+    void setAspectRatio(qreal ratio){m_ratio=ratio;auto policy=QSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);policy.setHeightForWidth(true);setSizePolicy(policy);updateGeometry();}
+    QSize sizeHint() const override {return m_ratio>0?QSize(300,heightForWidth(300)):QWidget::sizeHint();}
+    QSize minimumSizeHint() const override {return m_ratio>0?QSize(0,0):QWidget::minimumSizeHint();}
+    int heightForWidth(int width) const override {return m_ratio>0?qRound(width/m_ratio):QWidget::heightForWidth(width);}
 protected:
     void paintEvent(QPaintEvent *) override {
-        if(m_scaled.size()!=size()*devicePixelRatioF()&&!m_pixmap.isNull()){m_scaled=Ui::cover(m_pixmap,size()*devicePixelRatioF());m_scaled.setDevicePixelRatio(devicePixelRatioF());}
+        const auto target=size()*devicePixelRatioF();
+        if(m_targetSize!=target&&!m_pixmap.isNull()){m_scaled=m_ratio>0?m_pixmap.scaled(target,Qt::KeepAspectRatio,Qt::SmoothTransformation):Ui::cover(m_pixmap,target);m_scaled.setDevicePixelRatio(devicePixelRatioF());m_targetSize=target;}
         QPainter p(this);p.setRenderHint(QPainter::Antialiasing);QPainterPath clip;clip.addRoundedRect(m_all?QRectF(rect()):QRectF(rect()).adjusted(0,0,0,m_radius),m_radius,m_radius);p.setClipPath(clip);
-        if(m_scaled.isNull())p.fillRect(rect(),QColor(40,40,46));else p.drawPixmap(0,0,m_scaled);
+        p.fillRect(rect(),QColor(24,24,27));
+        if(!m_scaled.isNull()){const auto logical=m_scaled.deviceIndependentSize();p.drawPixmap(QPointF((width()-logical.width())/2,(height()-logical.height())/2),m_scaled);}
+        if(m_shaded){QLinearGradient shade(0,height()*0.25,0,height());shade.setColorAt(0,Qt::transparent);shade.setColorAt(1,QColor(18,18,24,240));p.fillRect(rect(),shade);}
     }
 private:
-    QPixmap m_pixmap,m_scaled;int m_radius;bool m_all;
+    void assign(const QPixmap &pixmap){m_pixmap=pixmap;m_scaled={};m_targetSize={};update();}
+    QPixmap m_pixmap,m_scaled;QSize m_targetSize;QString m_resource;int m_radius;bool m_all,m_shaded=false;qreal m_ratio=0;
+};
+// QPushButton's default size hint ignores its child layout.
+class ContentButton:public QPushButton {
+public:
+    using QPushButton::QPushButton;
+    QSize sizeHint() const override {return layout()?layout()->sizeHint():QPushButton::sizeHint();}
+    QSize minimumSizeHint() const override {return layout()?layout()->minimumSize():QPushButton::minimumSizeHint();}
+    bool hasHeightForWidth() const override {return layout()&&layout()->hasHeightForWidth();}
+    int heightForWidth(int width) const override {return layout()?layout()->totalHeightForWidth(width):QPushButton::heightForWidth(width);}
 };
 // One-line label that shrinks with "…" instead of being cut (picker, account and player names).
 class Elided:public QLabel {
@@ -66,7 +98,8 @@ protected:
 };
 QLabel *elided(QLayout *layout,const char *name,Qt::Alignment alignment=Qt::AlignLeft|Qt::AlignVCenter){auto l=new Elided;l->setObjectName(name);l->setAlignment(alignment);l->setTextFormat(Qt::PlainText);layout->addWidget(l);return l;}
 QPushButton *button(const QString &label,QLayout *layout,std::function<void()> action,QObject *owner,bool primary=false,const QString &icon={}) {
-    auto b=new QPushButton(icon.isEmpty()||label.isEmpty()?label:" "+label);b->setCursor(Qt::PointingHandCursor);if(primary)b->setProperty("play",true);
+    auto caption=label;caption.replace("&","&&"); // Labels are literal text, not Qt keyboard mnemonics.
+    auto b=new QPushButton(icon.isEmpty()||caption.isEmpty()?caption:" "+caption);b->setCursor(Qt::PointingHandCursor);if(primary)b->setProperty("play",true);
     if(!icon.isEmpty()){b->setIcon(Ui::icon(icon,primary?QColor(Qt::white):QColor(225,225,230)));b->setIconSize(QSize(18,18));}
     if(layout)layout->addWidget(b);QObject::connect(b,&QPushButton::clicked,owner,std::move(action));return b;
 }
@@ -77,8 +110,9 @@ QLabel *label(const QString &value,QLayout *layout,const char *name="",bool wrap
 struct Section {QWidget *widget;QVBoxLayout *layout;QHBoxLayout *actions;};
 Section section(const QString &title,const QString &subtitle) {
     auto page=new QWidget;auto layout=new QVBoxLayout(page);layout->setContentsMargins(32,26,32,22);layout->setSpacing(16);
-    auto head=new QHBoxLayout;head->setSpacing(8);layout->addLayout(head);auto texts=new QVBoxLayout;texts->setSpacing(4);head->addLayout(texts,1);
-    label(title,texts,"pageTitle",false);if(!subtitle.isEmpty())label(subtitle,texts,"pageSubtitle");return {page,layout,head};
+    auto row=new Ui::ResponsiveRow(760);layout->addWidget(row);auto texts=new QVBoxLayout;texts->setSpacing(4);row->box()->addLayout(texts,1);
+    label(title,texts,"pageTitle");if(!subtitle.isEmpty())label(subtitle,texts,"pageSubtitle");
+    auto actions=new QHBoxLayout;actions->setSpacing(10);row->box()->addLayout(actions);return {page,layout,actions};
 }
 // A rounded card with an icon, a title and an optional description, used by Settings.
 QVBoxLayout *settingsCard(QVBoxLayout *parent,const QString &icon,const QString &title,const QString &description) {
@@ -92,18 +126,29 @@ QAction *menuAction(QMenu &menu,const QString &icon,const QString &label,QObject
     auto a=menu.addAction(icon.isEmpty()?QIcon():Ui::icon(icon),label);QObject::connect(a,&QAction::triggered,context,std::move(action));return a;
 }
 bool minecraftLink(const QUrl &url){return url.scheme()=="https"&&(url.host()=="minecraft.net"||url.host().endsWith(".minecraft.net"));}
-// Technic-style tile for a lost version: artwork, its category icon, the name and whether it is installed.
-QPixmap lostTile(const VersionInfo &v,bool installed,const QString &category) {
-    const QSize size(300,84);auto tile=Ui::art(Ui::artFor(v.id),size,10);QPainter p(&tile);p.setRenderHint(QPainter::Antialiasing);
-    QLinearGradient shade(0,0,size.width(),0);shade.setColorAt(0,QColor(10,10,12,235));shade.setColorAt(0.75,QColor(10,10,12,120));shade.setColorAt(1,QColor(10,10,12,60));
-    QPainterPath clip;clip.addRoundedRect(QRectF(QPointF(0,0),QSizeF(size)),10,10);p.setClipPath(clip);p.fillRect(QRect(QPoint(0,0),size),shade);
-    auto icon=v.category=="horror"?icons::horror(34):v.category=="release"?icons::release(34):icons::alpha(34);p.drawPixmap(16,(size.height()-34)/2,icon);
-    QFont title=QApplication::font();title.setBold(true);title.setPixelSize(16);p.setFont(title);p.setPen(Qt::white);
-    p.drawText(QRect(62,16,size.width()-74,24),Qt::AlignLeft|Qt::AlignVCenter,QFontMetrics(title).elidedText(v.name,Qt::ElideRight,size.width()-74));
-    QFont small=QApplication::font();small.setPixelSize(12);small.setBold(installed);p.setFont(small);p.setPen(installed?green:QColor(190,190,198));
-    p.drawText(QRect(62,44,size.width()-74,20),Qt::AlignLeft|Qt::AlignVCenter,category+(installed?"  ·  "+text("Instalada","Installed","Instalada"):QString()));
-    return tile;
-}
+class ArchiveDelegate:public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    QSize sizeHint(const QStyleOptionViewItem &,const QModelIndex &)const override{return {210,94};}
+    void paint(QPainter *p,const QStyleOptionViewItem &option,const QModelIndex &index)const override{
+        const auto data=index.data(Qt::UserRole+1).toJsonObject();const auto r=option.rect.adjusted(3,3,-3,-3);p->save();p->setRenderHint(QPainter::Antialiasing);
+        QPainterPath clip;clip.addRoundedRect(r,10,10);p->setClipPath(clip);
+        const auto path=data["art"].toString();auto thumbnail=Ui::cachedArt(path,{768,432});
+        if(thumbnail.isNull()&&!m_pending.contains(path)){
+            m_pending.insert(path);auto self=const_cast<ArchiveDelegate*>(this);QPointer<QWidget> view=const_cast<QWidget*>(option.widget);
+            Ui::loadArt(path,{768,432},self,[self,path,view](const QPixmap &){self->m_pending.remove(path);if(view)view->update();if(auto list=qobject_cast<QAbstractItemView*>(view.data()))list->viewport()->update();});
+        }
+        p->fillRect(r,QColor(27,31,36));if(!thumbnail.isNull()){const qreal cropHeight=thumbnail.width()*qreal(r.height())/r.width();p->setRenderHint(QPainter::SmoothPixmapTransform);p->drawPixmap(r,thumbnail,QRectF(0,0,thumbnail.width(),qMin(cropHeight,qreal(thumbnail.height()))));}
+        QLinearGradient shade(r.topLeft(),r.topRight());shade.setColorAt(0,QColor(10,10,16,220));shade.setColorAt(1,QColor(10,10,16,65));p->fillRect(r,shade);
+        const auto category=data["category"].toString();p->drawPixmap(r.left()+14,r.center().y()-16,category=="horror"?icons::horror(32):category=="release"?icons::release(32):icons::alpha(32));
+        auto font=option.font;font.setPixelSize(14);font.setBold(true);p->setFont(font);p->setPen(Qt::white);const int width=r.width()-72;
+        p->drawText(QRect(r.left()+58,r.top()+20,width,24),Qt::AlignVCenter,QFontMetrics(font).elidedText(data["name"].toString(),Qt::ElideRight,width));
+        font.setPixelSize(11);font.setBold(false);p->setFont(font);p->setPen(QColor(214,220,224));p->drawText(QRect(r.left()+58,r.top()+46,width,20),Qt::AlignVCenter,data["label"].toString());
+        p->setClipping(false);p->setBrush(Qt::NoBrush);p->setPen(QPen(option.state&QStyle::State_Selected?green:QColor(65,65,74),option.state&QStyle::State_Selected?2:1));p->drawRoundedRect(r,10,10);p->restore();
+    }
+private:
+    mutable QSet<QString> m_pending;
+};
 }
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     m_root=qEnvironmentVariable("EBALIA_DATA_DIR");if(m_root.isEmpty())m_root=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -114,7 +159,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     m_patreon=new PatreonAuth(this);
     m_accounts=new AccountManager(m_mc->mcDir(),this);m_java=new JavaRunner(this);
     qApp->setStyleSheet(Ui::styleSheet()); // application-wide, so separate windows (new instance, settings, logs) share the look
-    build();setWindowTitle("EBALIA Launcher");setMinimumSize(900,600);Ui::fitToScreen(this,{1280,800});
+    build();setWindowTitle("EBALIA Launcher");setMinimumSize(640,480);Ui::fitToScreen(this,{1280,800});
     connect(m_mc,&McInstanceManager::manifestReady,this,[this](const QList<McVersion> &v){m_manifest=v;m_catalog->setText(text("Catálogo actualizado · ","Catalog updated · ","Catálogo atualizado · ")+QString::number(v.size())+text(" versiones"," versions"," versões"));});
     connect(m_mc,&McInstanceManager::manifestFailed,this,[this](const QString &e){m_catalog->setText(Language::message(e));});
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
@@ -129,6 +174,14 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
 
     if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){m_mc->fetchManifest();refreshNews();m_patreon->refreshNews();auto timer=new QTimer(this);connect(timer,&QTimer::timeout,this,[this]{m_mc->fetchManifest();refreshNews();});timer->start(30*60*1000);}
     if(!QSettings().value("ui/tutorialSeen",false).toBool()){showPage(Guide);QSettings().setValue("ui/tutorialSeen",true);}
+    if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")&&!QSettings().value("ui/patreonInviteSeen",false).toBool()&&!QSettings().value("ui/hidePatreonInvite",false).toBool()){
+        auto invite=new QTimer(this);invite->setInterval(15000);
+        connect(invite,&QTimer::timeout,this,[this,invite]{
+            if(m_patreon->verified()||QSettings().value("ui/hidePatreonInvite",false).toBool()){invite->stop();return;}
+            if(!isActiveWindow()||m_pages->currentIndex()!=Home||Ui::openWindows()||m_jobs)return;
+            invite->stop();QSettings().setValue("ui/patreonInviteSeen",true);openCreatorDialog(true);
+        });invite->start();
+    }
 }
 void MainWindow::build() {
     const int current=m_pages?m_pages->currentIndex():int(Home);
@@ -138,11 +191,14 @@ void MainWindow::build() {
     auto right=new QVBoxLayout;right->setContentsMargins(0,0,0,0);right->setSpacing(0);outer->addLayout(right,1);
     m_pages=new QStackedWidget;right->addWidget(m_pages,1);
     // Same order as Page and the sidebar.
-    for(auto page:{buildHome(),buildInstances(),buildExplore(),buildLost(),buildPacks(),buildSkins(),buildNews(),buildCommunity(),buildGuide(),buildSettings()})m_pages->addWidget(page);
+    for(auto page:{buildHome(),buildInstances(),buildExplore(),buildLost(),buildPacks(),buildSkins(),buildNews(),buildCommunity(),buildGuide(),buildSettings()}){
+        auto scroll=new QScrollArea;scroll->setObjectName("pageScroll");scroll->setFrameShape(QFrame::NoFrame);scroll->setWidgetResizable(true);scroll->setWidget(page);
+        if(page->layout())page->layout()->setSizeConstraint(QLayout::SetMinimumSize);m_pages->addWidget(scroll);
+    }
     auto status=new QFrame;status->setObjectName("statusBar");auto sl=new QHBoxLayout(status);sl->setContentsMargins(20,7,20,7);sl->setSpacing(14);
     m_status=label(text("Todo listo","Ready","Tudo pronto"),sl,"statusText",false);m_status->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);sl->setStretch(0,1);
     m_progress=new QProgressBar;m_progress->setFixedWidth(200);m_progress->setValue(0);m_progress->setTextVisible(false);m_progress->hide();sl->addWidget(m_progress);right->addWidget(status);
-    refreshAccounts();refreshInstances();refreshPacks();refreshLost();refreshNews(false);showPage(current);
+    refreshAccounts();refreshInstances();refreshPacks();refreshLost();refreshNews(false);showPage(current);adaptSidebar();
 }
 QWidget *MainWindow::buildSidebar() {
     auto bar=new QFrame;bar->setObjectName("sidebar");bar->setFixedWidth(244);auto l=new QVBoxLayout(bar);l->setContentsMargins(14,16,14,12);l->setSpacing(10);
@@ -152,41 +208,43 @@ QWidget *MainWindow::buildSidebar() {
     auto al=new QHBoxLayout(m_accountButton);al->setContentsMargins(10,8,12,8);al->setSpacing(10);
     m_accountAvatar=new QLabel;m_accountAvatar->setFixedSize(40,40);al->addWidget(m_accountAvatar);
     auto names=new QVBoxLayout;names->setSpacing(1);al->addLayout(names,1);m_accountName=elided(names,"accountName");m_accountType=elided(names,"accountType");
-    auto chevron=new QLabel;chevron->setPixmap(Ui::pixmap("chevron-down",16,dim));al->addWidget(chevron);
+    auto chevron=new QLabel;chevron->setObjectName("accountChevron");chevron->setPixmap(Ui::pixmap("chevron-down",16,dim));al->addWidget(chevron);
     for(QWidget *w:{static_cast<QWidget*>(m_accountAvatar),static_cast<QWidget*>(m_accountName),static_cast<QWidget*>(m_accountType),static_cast<QWidget*>(chevron)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
     connect(m_accountButton,&QPushButton::clicked,this,[this]{accountMenu();});l->addWidget(m_accountButton);
-    m_nav=new QListWidget;m_nav->setObjectName("navigation");m_nav->setIconSize(QSize(20,20));m_nav->setFocusPolicy(Qt::NoFocus);m_nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_nav->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_nav->setFrameShape(QFrame::NoFrame);
+    m_nav=new QListWidget;m_nav->setObjectName("navigation");m_nav->setIconSize(QSize(28,28));m_nav->setFocusPolicy(Qt::NoFocus);m_nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_nav->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);m_nav->setFrameShape(QFrame::NoFrame);
     const QList<QPair<QString,QString>> items{{"house",k("Home")},{"layout-grid",k("Instances")},{"compass",k("Discover mods")},{"ghost",k("Lost versions")},{"package",k("My packs")},{"shirt",k("Skins")},{"newspaper",k("News")},{"users",k("Community")},{"book-open",k("Guide & tutorial")}};
     for(const auto &item:items){
-        QIcon icon;icon.addPixmap(Ui::pixmap(item.first,20,dim));icon.addPixmap(Ui::pixmap(item.first,20,green),QIcon::Selected);
-        auto entry=new QListWidgetItem(icon,"  "+item.second,m_nav);entry->setSizeHint(QSize(0,38));entry->setToolTip(item.second);
+        auto entry=new QListWidgetItem(Ui::navigationIcon(item.first),"  "+item.second,m_nav);entry->setSizeHint(QSize(0,42));entry->setToolTip(item.second);
     }
     l->addWidget(m_nav,1);
     connect(m_nav,&QListWidget::currentRowChanged,this,[this](int row){if(row>=0)showPage(row);});
     connect(m_nav,&QListWidget::itemClicked,this,[this](QListWidgetItem *item){if(m_nav->row(item)==Instances)m_library->setCurrentWidget(m_grid);}); // the sidebar entry always leads back to the library
-    m_navSettings=new QPushButton(Ui::icon("settings",dim),"  "+k("Settings"));m_navSettings->setObjectName("navSettings");m_navSettings->setCheckable(true);m_navSettings->setIconSize(QSize(20,20));m_navSettings->setCursor(Qt::PointingHandCursor);
+    m_navSettings=new QPushButton(Ui::navigationIcon("settings"),"  "+k("Settings"));m_navSettings->setObjectName("navSettings");m_navSettings->setCheckable(true);m_navSettings->setIconSize(QSize(28,28));m_navSettings->setCursor(Qt::PointingHandCursor);
     connect(m_navSettings,&QPushButton::clicked,this,[this]{showPage(Settings);});l->addWidget(m_navSettings);
     auto version=label("EBALIA Launcher "+QCoreApplication::applicationVersion().section('.',0,1),l,"sidebarVersion",false);version->setContentsMargins(12,0,0,0);
-    if(QCoreApplication::applicationVersion().isEmpty())version->setText("EBALIA Launcher 4.0");
+    if(QCoreApplication::applicationVersion().isEmpty())version->setText("EBALIA Launcher 1.0.0");
     return bar;
 }
 QWidget *MainWindow::buildHome() {
     auto home=new QWidget;home->setObjectName("homePage");auto l=new QVBoxLayout(home);l->setContentsMargins(0,0,0,0);l->setSpacing(0);
-    auto hero=new GameBanner(":/art/f1_2.jpg");auto hl=new QVBoxLayout(hero);hl->setContentsMargins(40,34,40,22);hl->setSpacing(0);
-    label("MINECRAFT",hl,"heroTitle",false);label("JAVA EDITION",hl,"heroEdition",false);hl->addStretch();label(k("Your next adventure"),hl,"heroTagline",false);
+    auto hero=new HomeBanner;
     l->addWidget(hero,1);
-    auto bar=new QFrame;bar->setObjectName("playBar");auto bl=new QGridLayout(bar);bl->setContentsMargins(28,14,28,16);bl->setHorizontalSpacing(16);
-    m_instancePicker=new QPushButton;m_instancePicker->setObjectName("instancePicker");m_instancePicker->setCursor(Qt::PointingHandCursor);m_instancePicker->setFixedHeight(62);m_instancePicker->setMinimumWidth(190);m_instancePicker->setMaximumWidth(310);m_instancePicker->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
+    auto bar=new PlayBar;bar->setObjectName("playBar");auto bl=new QGridLayout(bar);bl->setContentsMargins(28,14,28,16);bl->setHorizontalSpacing(16);
+    m_instancePicker=new ContentButton;m_instancePicker->setObjectName("instancePicker");m_instancePicker->setCursor(Qt::PointingHandCursor);m_instancePicker->setFixedHeight(62);m_instancePicker->setMinimumWidth(190);m_instancePicker->setMaximumWidth(360);m_instancePicker->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
     auto pl=new QHBoxLayout(m_instancePicker);pl->setContentsMargins(10,8,12,8);pl->setSpacing(10);m_pickerIcon=new QLabel;m_pickerIcon->setFixedSize(40,40);m_pickerIcon->setAlignment(Qt::AlignCenter);pl->addWidget(m_pickerIcon);
     auto pickerText=new QVBoxLayout;pickerText->setSpacing(1);pl->addLayout(pickerText,1);m_pickerName=elided(pickerText,"pickerName");m_pickerSub=elided(pickerText,"pickerSub");
     auto up=new QLabel;up->setPixmap(Ui::pixmap("chevron-down",16,dim).transformed(QTransform().rotate(180)));pl->addWidget(up);
     for(QWidget *w:{static_cast<QWidget*>(m_pickerIcon),static_cast<QWidget*>(m_pickerName),static_cast<QWidget*>(m_pickerSub),static_cast<QWidget*>(up)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
-    connect(m_instancePicker,&QPushButton::clicked,this,[this]{instancePickerMenu();});bl->addWidget(m_instancePicker,0,0,Qt::AlignLeft|Qt::AlignVCenter);
+    connect(m_instancePicker,&QPushButton::clicked,this,[this]{instancePickerMenu();});
+    auto pickerSlot=new QWidget;auto pickerSlotLayout=new QHBoxLayout(pickerSlot);pickerSlotLayout->setContentsMargins(0,0,0,0);pickerSlotLayout->addWidget(m_instancePicker,0,Qt::AlignLeft|Qt::AlignVCenter);pickerSlotLayout->addStretch();bl->addWidget(pickerSlot,0,0);
     m_playButton=new QPushButton;m_playButton->setObjectName("homePlay");m_playButton->setProperty("play",true);m_playButton->setCursor(Qt::PointingHandCursor);m_playButton->setMinimumSize(250,64);m_playButton->setIconSize(QSize(24,24));
     connect(m_playButton,&QPushButton::clicked,this,[this]{play();});bl->addWidget(m_playButton,0,1,Qt::AlignCenter);
     auto player=new QWidget;player->setMaximumWidth(310);auto playerLayout=new QHBoxLayout(player);playerLayout->setContentsMargins(0,0,0,0);playerLayout->setSpacing(10);
     auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
-    bl->addWidget(player,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
+    auto playerSlot=new QWidget;auto playerSlotLayout=new QHBoxLayout(playerSlot);playerSlotLayout->setContentsMargins(0,0,0,0);playerSlotLayout->addStretch();playerSlotLayout->addWidget(player);bl->addWidget(playerSlot,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
+    auto creator=new QWidget;creator->setObjectName("creatorStrip");auto creatorLayout=new QHBoxLayout(creator);creatorLayout->setContentsMargins(28,12,28,0);creatorLayout->setSpacing(12);
+    auto mods=button(k("My Mods"),creatorLayout,[this]{openCreatorDialog(false);},this,false,"package");mods->setObjectName("myModsButton");mods->setIcon(Ui::navigationIcon("package"));mods->setIconSize({24,24});
+    creatorLayout->addStretch();auto patreon=button("EBALIA · Patreon",creatorLayout,[this]{openCreatorDialog(true);},this,false,"heart");patreon->setObjectName("patreonInviteButton");patreon->setProperty("patreon",true);patreon->setIcon(Ui::icon("heart",Qt::white));l->addWidget(creator);
     auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,14,28,20);nl->setSpacing(12);
     auto head=new QHBoxLayout;nl->addLayout(head);label(k("What's new"),head,"sectionTitle",false);head->addStretch();
     auto all=button(k("See all"),head,[this]{showPage(News);},this);all->setProperty("link",true);all->setIcon(Ui::icon("chevron-right",green));all->setLayoutDirection(Qt::RightToLeft);
@@ -212,6 +270,11 @@ QWidget *MainWindow::buildInstances() {
     auto deleteShortcut=new QShortcut(QKeySequence::Delete,m_library);deleteShortcut->setContext(Qt::WidgetWithChildrenShortcut);connect(deleteShortcut,&QShortcut::activated,this,[this]{removeInstance();});
     return m_library;
 }
+void MainWindow::openCreatorDialog(bool patreonOnly){
+    const auto name=patreonOnly?"patreonInvite":"myModsDialog";
+    if(auto dialog=findChild<QDialog*>(name)){dialog->show();dialog->raise();dialog->activateWindow();return;}
+    auto dialog=new CreatorDialog(patreonOnly,this);dialog->setAttribute(Qt::WA_DeleteOnClose);dialog->setWindowModality(Qt::NonModal);dialog->setSizeGripEnabled(true);dialog->show();dialog->raise();dialog->activateWindow();
+}
 QWidget *MainWindow::buildExplore() {
     auto s=section(k("Discover mods"),Language::key("Mods for your Minecraft version and loader. Select one or more mods."));auto l=s.layout;
     auto filters=new QHBoxLayout;filters->setSpacing(10);l->addLayout(filters);
@@ -221,25 +284,28 @@ QWidget *MainWindow::buildExplore() {
     auto search=new QHBoxLayout;search->setSpacing(10);l->addLayout(search);m_query=new QLineEdit;m_query->setObjectName("modQuery");m_query->setPlaceholderText("Sodium, Dynamic Lights, FallingTree, Veinminer…");m_query->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_query->setClearButtonEnabled(true);search->addWidget(m_query,1);
     button(text("Buscar","Search","Buscar"),search,[this]{searchMods();},this,true,"search");connect(m_query,&QLineEdit::returnPressed,this,[this]{searchMods();});
     m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);l->addWidget(m_results,1);
-    auto browse=new QHBoxLayout;browse->setSpacing(10);l->addLayout(browse);
+    auto browseRow=new Ui::ResponsiveRow(720);l->addWidget(browseRow);auto browse=browseRow->box();browse->setSpacing(10);
     button(text("Ver instalación y dependencias","Preview installation & dependencies","Ver instalação e dependências"),browse,[this]{QJsonArray projects;for(auto item:m_results->selectedItems()){auto p=item->data(Qt::UserRole).toJsonObject();projects.append(QJsonObject{{"project_id",p["project_id"]},{"name",p["title"]}});}if(!projects.isEmpty())preview(projects,m_target->currentData().toString());},this,true,"download");
     button(text("Más resultados","More results","Mais resultados"),browse,[this]{searchMods(m_offset+30);},this,false,"plus");browse->addStretch();
     return s.widget;
 }
 QWidget *MainWindow::buildLost() {
     auto s=section(k("Lost versions"),text("El archivo de EBALIA. Cada versión conserva su instalación y su forma de inicio original.","The EBALIA archive. Each version keeps its own installation and original launch method.","O arquivo da EBALIA. Cada versão mantém sua instalação e sua forma original de iniciar."));auto l=s.layout;
-    m_lostFilter=new QLineEdit;m_lostFilter->setObjectName("lostFilter");m_lostFilter->setPlaceholderText(text("Buscar por nombre o categoría…","Search by name or category…","Buscar por nome ou categoria…"));m_lostFilter->setClearButtonEnabled(true);m_lostFilter->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_lostFilter->setFixedWidth(270);
-    button(k("Setup & diagnostics"),s.actions,[this]{SetupDialog dialog(this);Ui::openWindow(dialog);},this,false,"wrench")->setObjectName("lostDiagnostics");
-    s.actions->addWidget(m_lostFilter,0,Qt::AlignBottom);connect(m_lostFilter,&QLineEdit::textChanged,this,[this]{refreshLost();});
-    auto split=new QHBoxLayout;split->setSpacing(18);l->addLayout(split,1);
-    m_lost=new QListWidget;m_lost->setObjectName("lostList");m_lost->setIconSize(QSize(300,84));m_lost->setFixedWidth(336);m_lost->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);split->addWidget(m_lost);
-    auto detail=new QFrame;detail->setObjectName("lostDetail");auto dl=new QVBoxLayout(detail);dl->setContentsMargins(1,1,1,1);dl->setSpacing(0);split->addWidget(detail,1);
-    auto cover=new Cover(13);cover->setMinimumHeight(150);cover->setMaximumHeight(260);cover->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);m_lostImage=cover;dl->addWidget(cover,3);
-    auto body=new QVBoxLayout;body->setContentsMargins(24,18,24,22);body->setSpacing(10);dl->addLayout(body,4);
-    m_lostTitle=label({},body,"detailTitle");m_lostInfo=label({},body,"muted");body->addStretch();
-    auto actions=new QHBoxLayout;actions->setSpacing(10);body->addLayout(actions);
-    m_lostPlay=button({},actions,[this]{lostAction(true);},this,true);m_lostPlay->setObjectName("lostPlay");m_lostPlay->setMinimumSize(170,52);m_lostPlay->setIconSize(QSize(20,20));
-    m_lostInstall=button({},actions,[this]{lostAction(false);},this);m_lostInstall->setObjectName("lostInstall");m_lostInstall->setProperty("secondary",true);m_lostInstall->setMinimumSize(150,52);m_lostInstall->setIcon(Ui::icon("download",Qt::white));m_lostInstall->setIconSize(QSize(20,20));
+    auto filters=new QHBoxLayout;filters->setSpacing(14);l->addLayout(filters);
+    m_lostFilter=new QLineEdit;m_lostFilter->setObjectName("lostFilter");m_lostFilter->setPlaceholderText(text("Buscar por nombre o categoría…","Search by name or category…","Buscar por nome ou categoria…"));m_lostFilter->setClearButtonEnabled(true);m_lostFilter->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_lostFilter->setMinimumWidth(150);
+    filters->addWidget(m_lostFilter,1);button(k("Setup & diagnostics"),filters,[this]{SetupDialog dialog(this);Ui::openWindow(dialog);},this,false,"wrench")->setObjectName("lostDiagnostics");
+    connect(m_lostFilter,&QLineEdit::textChanged,this,[this]{refreshLost();});
+    m_lost=new QListWidget;m_lost->setObjectName("lostList");m_lost->setItemDelegate(new ArchiveDelegate(m_lost));m_lost->setMinimumWidth(210);m_lost->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto detail=new QFrame;detail->setObjectName("lostDetail");detail->setMinimumWidth(310);auto dl=new QVBoxLayout(detail);dl->setContentsMargins(1,1,1,1);dl->setSpacing(0);
+    auto panels=new ArchivePanels(m_lost,detail);panels->setObjectName("archivePanels");l->addWidget(panels,1);
+    auto cover=new Cover(13);cover->setObjectName("lostCover");cover->setShaded(true);cover->setMinimumHeight(180);cover->setMaximumHeight(420);cover->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Expanding);m_lostImage=cover;dl->addWidget(cover,3);
+    auto overlay=new QVBoxLayout(cover);overlay->setContentsMargins(20,20,20,20);overlay->addStretch();label("EBALIA  /  "+k("Lost versions").toUpper(),overlay,"archiveEyebrow");m_lostTitle=label({},overlay,"detailTitle");m_lostTitle->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);
+    auto description=new QScrollArea;description->setWidgetResizable(true);description->setFrameShape(QFrame::NoFrame);description->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);description->setMinimumHeight(75);dl->addWidget(description,2);
+    auto textBody=new QWidget;description->setWidget(textBody);auto body=new QVBoxLayout(textBody);body->setContentsMargins(20,18,20,18);body->setSpacing(10);
+    m_lostInfo=label({},body,"muted");body->addStretch();
+    auto actions=new QHBoxLayout;actions->setContentsMargins(16,14,16,16);actions->setSpacing(12);dl->addLayout(actions);
+    m_lostPlay=button({},actions,[this]{lostAction(true);},this,true);m_lostPlay->setObjectName("lostPlay");m_lostPlay->setMinimumSize(100,48);m_lostPlay->setIconSize(QSize(18,18));
+    m_lostInstall=button({},actions,[this]{lostAction(false);},this);m_lostInstall->setObjectName("lostInstall");m_lostInstall->setProperty("secondary",true);m_lostInstall->setMinimumSize(110,48);m_lostInstall->setIcon(Ui::icon("download",Qt::white));m_lostInstall->setIconSize(QSize(18,18));
     auto folder=new QToolButton;folder->setIcon(Ui::icon("folder"));folder->setIconSize(QSize(20,20));folder->setToolTip(k("Open instance folder"));folder->setAccessibleName(folder->toolTip());folder->setCursor(Qt::PointingHandCursor);actions->addWidget(folder);
     connect(folder,&QToolButton::clicked,this,[this]{auto id=filename(m_lost);for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v))QDesktopServices::openUrl(QUrl::fromLocalFile(m_versions->getInstallPath(v)));});
     actions->addStretch();
@@ -263,8 +329,10 @@ QWidget *MainWindow::buildSkins() {
     return s.widget;
 }
 QWidget *MainWindow::buildNews() {
-    auto s=section(k("News"),text("Noticias oficiales. Abrí un artículo para leerlo en Minecraft.net.","Official news. Open an article to read it on Minecraft.net.","Notícias oficiais. Abra um artigo para ler no Minecraft.net."));auto l=s.layout;
-    button(text("Actualizar","Refresh","Atualizar"),s.actions,[this]{refreshNews();},this,false,"refresh-cw");
+    auto s=section(k("News"),k("Minecraft updates and the latest creations from EBALIA."));
+    button(text("Actualizar","Refresh","Atualizar"),s.actions,[this]{refreshNews();m_patreon->refreshNews();},this,false,"refresh-cw");
+    auto tabs=new QTabWidget;tabs->setObjectName("newsTabs");tabs->setDocumentMode(true);s.layout->addWidget(tabs,1);auto minecraft=new QWidget;auto l=new QVBoxLayout(minecraft);l->setContentsMargins(0,12,0,0);tabs->addTab(minecraft,"Minecraft");tabs->addTab(new PatreonNewsPage(m_patreon),"EBALIA · Patreon");
+    connect(tabs,&QTabWidget::currentChanged,this,[this](int index){if(index==1)m_patreon->refreshNews();});
     m_news=new QListWidget;m_news->setObjectName("newsList");m_news->setIconSize(QSize(176,80));m_news->setWordWrap(true);l->addWidget(m_news,1);
     connect(m_news,&QListWidget::itemDoubleClicked,this,[](QListWidgetItem *i){auto u=QUrl(i->data(Qt::UserRole).toString());if(minecraftLink(u))QDesktopServices::openUrl(u);});
     auto row=new QHBoxLayout;l->addLayout(row);button(text("Leer artículo","Read article","Ler artigo"),row,[this]{if(auto i=m_news->currentItem())emit m_news->itemDoubleClicked(i);},this,true,"external-link");row->addStretch();
@@ -318,7 +386,7 @@ QWidget *MainWindow::buildSettings() {
     button(Language::key("Save"),providerRow,[this,curse,microsoft]{QSettings settings;settings.setValue("integrations/curseforgeKey",curse->text().trimmed());settings.setValue("auth/microsoftClientId",microsoft->text().trimmed());m_status->setText(k("Saved"));},this,true);
     auto getKey=button(k("Get a key"),providerRow,[]{QDesktopServices::openUrl(QUrl("https://console.curseforge.com/"));},this,false,"external-link");getKey->setProperty("link",true);providerRow->addStretch();
     // Data
-    auto data=settingsCard(column,"folder",k("Data"),text("EBALIA 4.0 · La actualización automática es del catálogo y las noticias. No cambia los mundos, mods ni la versión de tus instancias.","EBALIA 4.0 · Automatic refresh updates the catalog and news. It does not change worlds, mods or existing instance versions.","EBALIA 4.0 · A atualização automática é do catálogo e das notícias. Não altera mundos, mods ou versões das instâncias."));
+    auto data=settingsCard(column,"folder",k("Data"),text("EBALIA 1.0.0 · La actualización automática es del catálogo y las noticias. No cambia los mundos, mods ni la versión de tus instancias.","EBALIA 1.0.0 · Automatic refresh updates the catalog and news. It does not change worlds, mods or existing instance versions.","EBALIA 1.0.0 · A atualização automática é do catálogo e das notícias. Não altera mundos, mods ou versões das instâncias."));
     auto dataRow=new QHBoxLayout;dataRow->setSpacing(10);data->addLayout(dataRow);
     button(text("Abrir carpeta de datos","Open data folder","Abrir pasta de dados"),dataRow,[this]{QDesktopServices::openUrl(QUrl::fromLocalFile(m_root));},this,false,"folder");
     button(text("Abrir papelera de instancias","Open instance trash","Abrir lixeira de instâncias"),dataRow,[this]{QDir().mkpath(m_mc->mcDir()+"/trash");QDesktopServices::openUrl(QUrl::fromLocalFile(m_mc->mcDir()+"/trash"));},this,false,"trash-2");
@@ -331,6 +399,16 @@ void MainWindow::showPage(int i) {
     if(!m_pages)return;i=qBound(0,i,m_pages->count()-1);m_pages->setCurrentIndex(i);
     {QSignalBlocker block(m_nav);if(i==Settings){m_nav->setCurrentRow(-1);m_nav->clearSelection();}else m_nav->setCurrentRow(i);}
     m_navSettings->setChecked(i==Settings);
+}
+void MainWindow::resizeEvent(QResizeEvent *event){QMainWindow::resizeEvent(event);adaptSidebar();}
+void MainWindow::adaptSidebar(){
+    if(!centralWidget()||!m_nav)return;auto sidebar=centralWidget()->findChild<QFrame*>("sidebar");if(!sidebar)return;
+    const bool compact=width()<1100;if(sidebar->property("compact").isValid()&&sidebar->property("compact").toBool()==compact)return;sidebar->setProperty("compact",compact);sidebar->setFixedWidth(compact?76:244);sidebar->layout()->setContentsMargins(compact?8:14,16,compact?8:14,12);
+    for(auto name:{"brand","sidebarVersion","accountName","accountType","accountChevron"})if(auto w=sidebar->findChild<QWidget*>(name))w->setVisible(!compact);
+    m_accountButton->layout()->setContentsMargins(compact?4:10,8,compact?4:12,8);
+    for(int n=0;n<m_nav->count();++n){auto item=m_nav->item(n);item->setText(compact?QString():"  "+item->toolTip());item->setData(Qt::AccessibleTextRole,item->toolTip());}
+    m_nav->setStyleSheet(compact?"QListWidget{padding:0;} QListWidget::item{padding:7px 4px;margin:1px 0px;}":QString());
+    m_navSettings->setText(compact?QString():"  "+k("Settings"));m_navSettings->setToolTip(k("Settings"));m_navSettings->setAccessibleName(k("Settings"));m_navSettings->setStyleSheet(compact?"padding:8px 4px;":QString());
 }
 void MainWindow::error(const QString &e){QMessageBox::warning(this,"EBALIA",Language::message(e));}
 void MainWindow::refreshAccounts(){
@@ -405,19 +483,20 @@ void MainWindow::refreshPacks(){
     catch(...){m_packDetails->setText(exception());}
 }
 void MainWindow::refreshLost(){
-    auto keep=filename(m_lost);{QSignalBlocker block(m_lost);m_lost->clear();}
+    auto keep=filename(m_lost);QSignalBlocker block(m_lost);m_lost->clear();
     for(const auto &v:m_versions->getVersions()){
         if(!(v.name+" "+v.category+" "+lostCategory(v.category)).contains(m_lostFilter->text().trimmed(),Qt::CaseInsensitive))continue;
-        QIcon tile;const auto pixmap=lostTile(v,m_versions->isVersionInstalled(v),lostCategory(v.category));tile.addPixmap(pixmap);tile.addPixmap(pixmap,QIcon::Selected);
-        auto item=new QListWidgetItem(tile,QString(),m_lost);item->setData(Qt::UserRole,v.id);item->setToolTip(v.name);item->setData(Qt::AccessibleTextRole,v.name);item->setSizeHint(QSize(304,90));
+        auto item=new QListWidgetItem(m_lost);item->setData(Qt::UserRole,v.id);item->setToolTip(v.name);item->setData(Qt::AccessibleTextRole,v.name);
+        item->setData(Qt::UserRole+1,QJsonObject{{"name",v.name},{"category",v.category},{"art",Ui::lostArtFor(v.id,v.category)},
+            {"label",lostCategory(v.category)+(m_versions->isVersionInstalled(v)?" · "+text("Instalada","Installed","Instalada"):QString())}});
         if(v.id==keep)m_lost->setCurrentItem(item);
     }
-    if(m_lost->currentRow()<0&&m_lost->count())m_lost->setCurrentRow(0);lostSelection();
+    if(m_lost->currentRow()<0&&m_lost->count())m_lost->setCurrentRow(0);block.unblock();lostSelection();
 }
 QString MainWindow::lostCategory(const QString &category){return category=="horror"?Language::key("Horror"):category=="release"?Language::key("Release"):category=="alpha"?Language::key("Alpha"):category;}
 void MainWindow::lostSelection(){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;
-    auto cover=static_cast<Cover*>(m_lostImage);cover->setPixmap(QPixmap(Ui::artFor(v.id.isEmpty()?QString("lost"):v.id)));
+    auto cover=static_cast<Cover*>(m_lostImage);cover->setArtwork(Ui::lostArtFor(v.id,v.category));
     const bool running=m_java->isRunning();
     m_lostPlay->setText("  "+(running?k("Stop"):k("Play")).toUpper());m_lostPlay->setIcon(Ui::icon(running?"square":"play",Qt::white));m_lostPlay->setProperty("danger",running);m_lostPlay->setProperty("play",!running);m_lostPlay->style()->unpolish(m_lostPlay);m_lostPlay->style()->polish(m_lostPlay);
     m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
@@ -624,10 +703,10 @@ void MainWindow::refreshNews(bool network){
     auto render=[this](QJsonObject o){
         while(auto item=m_homeNews->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
         auto addCard=[this](const QString &title,const QString &meta,const QString &art,const QString &image,std::function<void()> open){
-            auto card=new QPushButton;card->setObjectName("newsCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(title);card->setToolTip(title);card->setMinimumWidth(150);card->setFixedHeight(190);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
-            auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setFixedHeight(118);cover->setPixmap(QPixmap(art));cl->addWidget(cover);
+            auto card=new ContentButton;card->setObjectName("newsCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(title);card->setToolTip(title);card->setMinimumWidth(150);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);
+            auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setObjectName("newsCover");cover->setAspectRatio(16.0/9.0);cover->setArtwork(art);cl->addWidget(cover);
             auto body=new QVBoxLayout;body->setContentsMargins(14,0,14,0);body->setSpacing(4);cl->addLayout(body);
-            auto m=elided(body,"newsMeta");m->setText(meta);auto t=label(title,body,"newsTitle");t->setAlignment(Qt::AlignLeft|Qt::AlignTop);t->setMaximumHeight(t->fontMetrics().lineSpacing()*2+4);body->addStretch(); // long titles keep their first two lines
+            auto m=elided(body,"newsMeta");m->setText(meta);auto t=label(title,body,"newsTitle");t->setAlignment(Qt::AlignLeft|Qt::AlignTop);body->addStretch();
             for(auto w:{m,t})w->setAttribute(Qt::WA_TransparentForMouseEvents);connect(card,&QPushButton::clicked,this,std::move(open));m_homeNews->addWidget(card,1);
             loadImage(image,[cover=QPointer<Cover>(cover)](const QPixmap &p){if(cover)cover->setPixmap(p);});
         };

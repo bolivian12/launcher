@@ -7,6 +7,10 @@
 #include <QMessageBox>
 #include <QThreadPool>
 #include "MainWindow.hpp"
+#include "UpdateChecker.hpp"
+#include <QStatusBar>
+#include <QPushButton>
+#include <QDesktopServices>
 #include "Language.hpp"
 #include <QTranslator>
 #include <QJsonObject>
@@ -19,8 +23,9 @@
 #include <cstdio>
 class ButtonTranslator:public QTranslator { public: QString translate(const char *,const char *s,const char *,int) const override {return Language::standard(QString::fromUtf8(s));} bool isEmpty() const override {return false;} };
 int main(int argc,char **argv){
-    QApplication::setOrganizationName("EBALIA");QApplication::setApplicationName("EBALIA Launcher");QApplication::setApplicationVersion("4.0.0");
+    QApplication::setOrganizationName("EBALIA");QApplication::setApplicationName("EBALIA Launcher");QApplication::setApplicationVersion(EBALIA_APP_VERSION);
     QApplication app(argc,argv);app.setStyle("Fusion");app.setWindowIcon(QIcon(":/icon.png"));
+    app.setDesktopFileName("ebalia-launcher");
     auto root=qEnvironmentVariable("EBALIA_DATA_DIR");if(root.isEmpty())root=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);QDir().mkpath(root);
     QLockFile lock(root+"/launcher.lock");if(!lock.tryLock()){QMessageBox::information(nullptr,"EBALIA","EBALIA is already running with this data folder.");return 1;}
     auto cli=app.arguments();if(cli.contains("--javatest")){for(auto j:JavaRuntime::discover())fprintf(stdout,"Java %s | %s | %s\n",j.version.toUtf8().constData(),j.architecture.toUtf8().constData(),j.path.toUtf8().constData());return 0;}
@@ -56,6 +61,13 @@ int main(int argc,char **argv){
     }
     ButtonTranslator buttons;app.installTranslator(&buttons);
     MainWindow window;window.show();
+    UpdateChecker updater(&window);QTimer updateTimer;updateTimer.setInterval(6*60*60*1000);
+    QObject::connect(&updateTimer,&QTimer::timeout,&updater,&UpdateChecker::check);updateTimer.start();
+    auto updateButton=new QPushButton(&window);updateButton->setObjectName("launcherUpdateAvailable");updateButton->hide();
+    window.statusBar()->addPermanentWidget(updateButton);
+    QObject::connect(&updater,&UpdateChecker::updateAvailable,&window,[&](const QString &version){updateButton->setText("Nueva versión "+version+" · Descargar ↗");updateButton->show();});
+    QObject::connect(updateButton,&QPushButton::clicked,&window,[&]{QDesktopServices::openUrl(QUrl(updater.releaseUrl()));});
+    QTimer::singleShot(5000,&updater,&UpdateChecker::check);
     auto args=app.arguments();int test=args.indexOf("--selftest");
     if(test>=0){if(test+1<args.size())window.showPage(args[test+1].toInt());QTimer::singleShot(700,&window,[&]{auto path=qEnvironmentVariable("EBALIA_SCREENSHOT","/tmp/ebalia-main.png");window.grab().save(path);app.quit();});}
     int result=app.exec();QThreadPool::globalInstance()->waitForDone();return result;

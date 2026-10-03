@@ -31,10 +31,13 @@ public:
     void showPage(int index);
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 private:
+    void adaptSidebar();
     void build();
     QWidget *buildSidebar();
     QWidget *buildHome();
+    void openCreatorDialog(bool patreonOnly);
     QWidget *buildInstances();
     QWidget *buildExplore();
     QWidget *buildLost();

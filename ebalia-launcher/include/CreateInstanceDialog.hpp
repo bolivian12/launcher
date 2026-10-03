@@ -12,6 +12,7 @@ public:
     void showPage(int page);
     void setImportPath(const QString &path);
 protected:
+    void resizeEvent(QResizeEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 private:

@@ -27,13 +27,15 @@ QIcon InstanceIcons::icon(const QString &value,const QString &dir){
     return icons::alpha(s);
 }
 QIcon InstanceIcons::provider(const QString &provider){
-    // Neutral badges instead of third-party logos.
-    static const QHash<QString,QPair<QString,QColor>> badges{{"custom",{"",{}}},{"import",{"",{}}},{"atlauncher",{"AT",QColor(213,72,62)}},{"curseforge",{"CF",QColor(241,100,54)}},
-        {"ftb",{"FTB",QColor(122,86,196)}},{"legacy_ftb",{"FTB",QColor(96,96,110)}},{"import_ftb",{"FTB",QColor(60,130,190)}},{"modrinth",{"M",QColor(27,217,106)}},{"technic",{"T",QColor(60,110,200)}}};
     if(provider=="custom")return icons::alpha(48);if(provider=="import")return icons::folder(48);
-    auto badge=badges.value(provider,{"?",QColor(120,120,120)});QPixmap pixmap(48,48);pixmap.fill(Qt::transparent);
-    QPainter p(&pixmap);p.setRenderHint(QPainter::Antialiasing);p.setBrush(badge.second);p.setPen(Qt::NoPen);p.drawRoundedRect(QRectF(2,2,44,44),10,10);
-    p.setPen(Qt::white);auto font=p.font();font.setBold(true);font.setPixelSize(badge.first.size()>2?15:19);p.setFont(font);p.drawText(QRect(0,0,48,48),Qt::AlignCenter,badge.first);
-    if(provider=="import_ftb"){p.setBrush(QColor(255,255,255,230));p.setPen(Qt::NoPen);p.drawEllipse(QRectF(31,31,14,14));p.setPen(QPen(badge.second,2.5));p.drawLine(38,34,38,42);p.drawLine(34,38,38,42);p.drawLine(42,38,38,42);}
-    return pixmap;
+    static const QHash<QString,QString> artwork{{"atlauncher","atlauncher"},{"curseforge","curseforge"},{"ftb","ftb"},
+        {"legacy_ftb","ftb-legacy"},{"import_ftb","ftb"},{"modrinth","modrinth"},{"technic","technic"}};
+    auto name=artwork.value(provider);if(name.isEmpty())return icons::mods(48);
+    QIcon logo(":/icons/providers/"+name+".png");
+    if(provider!="import_ftb")return logo;
+    // Preserve the FTB mark and distinguish importing an existing FTB App instance.
+    auto pixmap=logo.pixmap(128,128);QPainter p(&pixmap);p.setRenderHint(QPainter::Antialiasing);
+    p.setBrush(QColor(255,255,255));p.setPen(Qt::NoPen);p.drawEllipse(QRectF(84,84,40,40));
+    p.setPen(QPen(QColor(60,130,190),6,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));p.drawLine(104,92,104,115);p.drawLine(94,105,104,115);p.drawLine(114,105,104,115);
+    p.end();return pixmap;
 }

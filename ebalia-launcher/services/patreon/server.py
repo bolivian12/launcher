@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """EBALIA Patreon bridge. Run behind HTTPS; credentials stay on this server."""
 import hashlib
+import hmac
 import html
 import json
 import os
@@ -16,6 +17,34 @@ from urllib.parse import urlencode, urlparse, parse_qs
 from urllib.request import Request, urlopen
 
 API = 'https://www.patreon.com/api/oauth2/v2'
+
+
+class Database:
+    """SQLite for local tests; external PostgreSQL keeps sessions across free-host restarts."""
+    def __init__(self, path, url=''):
+        self.url, self.connection = url, None
+        if not url:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+            os.close(fd)
+            os.chmod(path, 0o600)
+            self.connection = sqlite3.connect(path, check_same_thread=False)
+
+    def execute(self, sql, values=()):
+        if self.url:
+            import psycopg
+            if self.connection is None or self.connection.closed or self.connection.broken:
+                self.connection = psycopg.connect(self.url, autocommit=True, connect_timeout=10)
+            sql = sql.replace('?', '%s')
+        return self.connection.execute(sql, values)
+
+    def commit(self):
+        if not self.url:
+            self.connection.commit()
+
+    def close(self):
+        if self.connection:
+            self.connection.close()
 
 
 def api(path, token):
@@ -44,7 +73,8 @@ def membership(doc, campaign_id):
         rel = member.get('relationships', {})
         if (member.get('type') != 'member' or member.get('id') not in owned or
                 rel.get('campaign', {}).get('data', {}).get('id') != campaign_id or
-                member.get('attributes', {}).get('patron_status') != 'active_patron'):
+                member.get('attributes', {}).get('patron_status') != 'active_patron' or
+                (member.get('attributes', {}).get('currently_entitled_amount_cents') or 0) <= 0):
             continue
         result['active'] = True
         result['tiers'] = [t['id'] for t in rel.get('currently_entitled_tiers', {}).get('data', [])]
@@ -67,9 +97,10 @@ def visible_posts(doc, identity):
             continue
         allowed = a.get('is_public') is True
         required = a.get('tiers')
-        if not allowed and identity.get('active') and isinstance(required, list):
+        if a.get('is_public') is False and identity.get('active') and isinstance(required, list):
             ids = {str(t.get('id', '')) if isinstance(t, dict) else str(t) for t in required}
-            allowed = bool(ids.intersection(identity.get('tiers', []))) or (not ids and a.get('is_paid') is True)
+            # is_paid means per-post billing, not permission to read the post.
+            allowed = bool(ids.intersection(identity.get('tiers', [])))
         url = a.get('url', '')
         if url.startswith('/'):
             url = 'https://www.patreon.com' + url
@@ -77,25 +108,51 @@ def visible_posts(doc, identity):
         if not allowed or parsed.scheme != 'https' or parsed.hostname not in ('patreon.com', 'www.patreon.com'):
             continue
         output.append({'id': item['id'], 'title': a.get('title') or '', 'content': a.get('content') or '',
-                       'url': url, 'date': a['published_at']})
+                       'url': url, 'date': a['published_at'], 'is_public': a.get('is_public') is True})
     return sorted(output, key=lambda p: p['date'], reverse=True)
 
 
 class Bridge:
     def __init__(self, config, db_path):
         self.config = config
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(db_path, os.O_CREAT | os.O_RDWR, 0o600)
-        os.close(fd)
-        os.chmod(db_path, 0o600)
-        self.db = sqlite3.connect(db_path, check_same_thread=False)
-        self.db.execute('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, state TEXT UNIQUE, expires REAL, access TEXT, refresh TEXT)')
+        self.db = Database(db_path, config.get('database_url', ''))
+        self.db.execute('CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, state TEXT UNIQUE, expires DOUBLE PRECISION, access TEXT, refresh TEXT)')
         self.db.execute('CREATE TABLE IF NOT EXISTS creator (id INTEGER PRIMARY KEY, access TEXT, refresh TEXT)')
         self.db.commit()
         self.lock = threading.RLock()
         self.feed_lock = threading.Lock()
         self.cached_posts = None
         self.cached_at = 0
+        self.events = threading.Condition()
+        self.epoch = secrets.token_hex(8)
+        self.revision = 0
+
+    def version(self):
+        with self.events:
+            return self.epoch + ':' + str(self.revision)
+
+    def wait_for_update(self, after, timeout=25):
+        with self.events:
+            self.events.wait_for(lambda: after != self.version(), timeout)
+            return {'revision': self.version()}
+
+    def webhook(self, body, signature, event):
+        secret = self.config.get('webhook_secret', '')
+        expected = hmac.new(secret.encode(), body, hashlib.md5).hexdigest()
+        if not secret or not hmac.compare_digest(expected, signature):
+            raise PermissionError('Invalid webhook signature')
+        if event not in ('posts:publish', 'posts:update', 'posts:delete', 'members:create', 'members:update',
+                         'members:delete', 'members:pledge:create', 'members:pledge:update', 'members:pledge:delete'):
+            raise ValueError('Unsupported event')
+        doc = json.loads(body)
+        campaign = doc.get('data', {}).get('relationships', {}).get('campaign', {}).get('data', {}).get('id')
+        if campaign is not None and campaign != self.config['campaign_id']:
+            raise PermissionError('Wrong campaign')
+        with self.events:
+            self.cached_at = 0
+            self.revision += 1
+            self.events.notify_all()
+        return {'ok': True}
 
     @staticmethod
     def digest(value):
@@ -141,7 +198,7 @@ class Bridge:
         if not row[0]:
             return {'pending': True}
         path = '/identity?' + urlencode({'include': 'memberships.currently_entitled_tiers,memberships.campaign',
-                                        'fields[user]': 'full_name', 'fields[member]': 'patron_status', 'fields[tier]': 'title'})
+                                        'fields[user]': 'full_name', 'fields[member]': 'patron_status,currently_entitled_amount_cents', 'fields[tier]': 'title'})
         try:
             doc = api(path, row[0])
         except HTTPError as error:
@@ -158,6 +215,7 @@ class Bridge:
 
     def posts(self):
         with self.feed_lock:
+            revision = self.version()
             if self.cached_posts is not None and time.time() - self.cached_at < 30:
                 return self.cached_posts
             with self.lock:
@@ -173,20 +231,23 @@ class Bridge:
                 tokens = oauth({'grant_type': 'refresh_token', 'refresh_token': refresh}, self.config)
                 access = tokens['access_token']
                 with self.lock:
-                    self.db.execute('INSERT OR REPLACE INTO creator VALUES (1, ?, ?)',
+                    self.db.execute('INSERT INTO creator VALUES (1, ?, ?) ON CONFLICT (id) DO UPDATE SET access=excluded.access, refresh=excluded.refresh',
                                     (access, tokens.get('refresh_token', refresh)))
                     self.db.commit()
                 doc = api(path, access)
             if not isinstance(doc.get('data'), list):
                 raise ValueError('Invalid posts response')
-            self.cached_posts, self.cached_at = doc, time.time()
+            with self.events:
+                self.cached_posts, self.cached_at = doc, time.time() if revision == self.version() else 0
             return doc
 
     def feed(self, token):
+        revision = self.version()
         identity = self.identity(token)
         if identity.get('pending'):
             return {'pending': True, 'posts': []}
-        return {'identity': identity, 'posts': visible_posts(self.posts(), identity), 'updated_at': datetime.now(timezone.utc).isoformat()}
+        return {'identity': identity, 'posts': visible_posts(self.posts(), identity), 'revision': revision,
+                'updated_at': datetime.now(timezone.utc).isoformat()}
 
     def logout(self, token):
         with self.lock:
@@ -214,6 +275,14 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.command == 'GET' and path.path == '/health':
                 return self.send(200, {'ok': True})
+            if self.command == 'GET' and path.path == '/v1/events':
+                return self.send(200, bridge.wait_for_update(parse_qs(path.query).get('after', [''])[0]))
+            if self.command == 'POST' and path.path == '/v1/webhook':
+                length = int(self.headers.get('Content-Length', '0'))
+                if length < 1 or length > 1024 * 1024:
+                    return self.send(413, {'error': 'Invalid payload size'})
+                return self.send(200, bridge.webhook(self.rfile.read(length), self.headers.get('X-Patreon-Signature', ''),
+                                                     self.headers.get('X-Patreon-Event', '')))
             if self.command == 'POST' and path.path == '/v1/login':
                 return self.send(200, bridge.start())
             if self.command == 'GET' and path.path == '/callback':
@@ -228,8 +297,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send(404, {'error': 'Not found'})
         except PermissionError:
             self.send(401, {'error': 'Session expired or callback invalid'})
-        except (HTTPError, OSError, ValueError, KeyError, TypeError):
+        except (HTTPError, OSError, ValueError, KeyError, TypeError, sqlite3.Error):
             self.send(502, {'error': 'Patreon is unavailable or the integration needs configuration'})
+        except Exception:
+            # Database drivers can contain connection credentials in their diagnostics.
+            self.send(503, {'error': 'Service temporarily unavailable'})
 
     do_GET = dispatch
     do_POST = dispatch
@@ -238,12 +310,15 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     os.umask(0o077)
     config = {key: os.environ['EBALIA_PATREON_' + key.upper()] for key in
-              ('client_id', 'client_secret', 'campaign_id', 'creator_token', 'public_url')}
+              ('client_id', 'client_secret', 'campaign_id', 'creator_token')}
+    config['public_url'] = os.getenv('EBALIA_PATREON_PUBLIC_URL') or os.environ['RENDER_EXTERNAL_URL']
     config['public_url'] = config['public_url'].rstrip('/')
     config['creator_refresh'] = os.getenv('EBALIA_PATREON_CREATOR_REFRESH', '')
+    config['webhook_secret'] = os.getenv('EBALIA_PATREON_WEBHOOK_SECRET', '')
+    config['database_url'] = os.getenv('DATABASE_URL', '')
     if not config['public_url'].startswith('https://') or not config['campaign_id'].isdigit():
         raise SystemExit('Use an HTTPS public URL and a numeric campaign ID.')
-    server = ThreadingHTTPServer(('127.0.0.1', int(os.getenv('PORT', '8787'))), Handler)
+    server = ThreadingHTTPServer((os.getenv('HOST', '127.0.0.1'), int(os.getenv('PORT', '8787'))), Handler)
     server.bridge = Bridge(config, os.getenv('EBALIA_PATREON_DB', './private/sessions.sqlite'))
     print('EBALIA Patreon bridge listening on loopback. Expose through an HTTPS reverse proxy.')
     server.serve_forever()

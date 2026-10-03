@@ -1,6 +1,6 @@
 # launcher
 
-Código de **EBALIA Launcher 4** (C++20 / Qt 6) en [`ebalia-launcher/`](ebalia-launcher/README.md): instancias de Minecraft con Vanilla, Fabric, Quilt, Forge y NeoForge, modpacks de Modrinth, CurseForge, ATLauncher, FTB y Technic, importación desde Prism Launcher, detección y descarga automática de Java, y el archivo de versiones perdidas de EBALIA.
+Código de **EBALIA Launcher 1.0.0** (C++20 / Qt 6) en [`ebalia-launcher/`](ebalia-launcher/README.md): instancias de Minecraft con Vanilla, Fabric, Quilt, Forge y NeoForge, modpacks de Modrinth, CurseForge, ATLauncher, FTB y Technic, importación desde Prism Launcher, detección y descarga automática de Java, y el archivo de versiones perdidas de EBALIA.
 
 ```sh
 cd ebalia-launcher

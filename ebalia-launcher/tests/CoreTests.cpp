@@ -239,6 +239,28 @@ private slots:
         QImage packed(t.path()+"/unpack/assets/minecraft/textures/entity/player/wide/steve.png");QCOMPARE(packed.size(),QSize(64,64));
         SkinManager::removeLocal(instance);QVERIFY(!readFile(instance+"/options.txt").contains("file/ebalia-local-skin.zip"));QVERIFY(readFile(instance+"/options.txt").contains("music:0.5"));
     }
+    void liveCurseForge(){
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QVERIFY2(!ModRepository::curseForgeKey().isEmpty(),"Configure a CurseForge API key before running this test");
+        QTemporaryDir root;McInstanceManager manager(root.path());ModRepository repo(root.path());
+        auto hits=repo.search("Just Enough Items","1.20.1","forge",0,"curseforge");
+        QJsonObject jei;for(const auto &hit:hits)if(hit.toObject()["slug"]=="jei")jei=hit.toObject();
+        QVERIFY2(!jei.isEmpty(),"CurseForge search did not return JEI for Minecraft 1.20.1 / Forge");
+        auto plan=repo.plan(QJsonArray{QJsonObject{{"project_id",jei["project_id"]},{"name",jei["title"]}}},"1.20.1","forge");
+        QVERIFY2(plan["missing"].toArray().isEmpty(),QJsonDocument(plan).toJson().constData());
+        QVERIFY(!plan["versions"].toArray().isEmpty());
+        auto dir=manager.createInstance("CurseForge live test","1.20.1","forge");repo.apply(dir,plan);
+        for(const auto &version:plan["versions"].toArray()){
+            const auto file=version.toObject()["file"].toObject();auto data=readFile(dir+"/mods/"+file["filename"].toString());
+            QVERIFY(!data.isEmpty());QCOMPARE(QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha1).toHex()),file["hashes"].toObject()["sha1"].toString());
+            qInfo().noquote()<<"Downloaded and verified:"<<file["filename"].toString()<<data.size()<<"bytes";
+        }
+        auto captured=repo.capture(dir,"CurseForge live pack");QVERIFY(!captured["projects"].toArray().isEmpty());
+        PackService service(root.path());auto packs=service.search("curseforge","SkyFactory 4");QVERIFY(!packs.isEmpty());
+        auto pack=packs.first().toObject();QCOMPARE(pack["provider"].toString(),QString("curseforge"));
+        auto versions=service.versions(pack);QVERIFY(!versions.isEmpty());
+        qInfo().noquote()<<"Modpack catalog:"<<pack["name"].toString()<<versions.size()<<"versions";
+    }
     void liveModrinth(){
         if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
         QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("Live","1.20.1","fabric");ModRepository repo(t.path());

@@ -11,7 +11,7 @@ const QColor green(111,209,91),light(225,225,230);
 // Landscape art with the instance icon in a dark badge; the HUD at the bottom of some screenshots is cropped away.
 class Banner:public QWidget {
 public:
-    Banner(const QString &art,const QIcon &icon,int height,QWidget *parent=nullptr):QWidget(parent),m_art(art),m_icon(icon){setFixedHeight(height);setAttribute(Qt::WA_TransparentForMouseEvents);}
+    Banner(const QString &art,const QIcon &icon,int height,QWidget *parent=nullptr):QWidget(parent),m_icon(icon){setFixedHeight(height);setAttribute(Qt::WA_TransparentForMouseEvents);Ui::loadArt(art,{768,432},this,[this](const QPixmap &p){m_art=p;m_scaled={};update();});}
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter p(this);p.setRenderHint(QPainter::Antialiasing);p.setRenderHint(QPainter::SmoothPixmapTransform);
@@ -50,18 +50,19 @@ QString InstanceText::lastPlayed(qint64 seconds){
 }
 InstanceGrid::InstanceGrid(QWidget *parent):QWidget(parent){
     setObjectName("instanceGrid");auto layout=new QVBoxLayout(this);layout->setContentsMargins(32,26,20,0);layout->setSpacing(14);
-    auto head=new QHBoxLayout;head->setSpacing(8);layout->addLayout(head);
-    auto titles=new QVBoxLayout;titles->setSpacing(4);head->addLayout(titles,1);
+    auto header=new Ui::ResponsiveRow(1000);layout->addWidget(header);
+    auto titles=new QVBoxLayout;titles->setSpacing(4);header->box()->addLayout(titles,1);
     auto title=new QLabel(t("Instances"));title->setObjectName("pageTitle");titles->addWidget(title);
-    m_summary=new QLabel;m_summary->setObjectName("pageSubtitle");titles->addWidget(m_summary);
+    m_summary=new QLabel;m_summary->setObjectName("pageSubtitle");m_summary->setWordWrap(true);titles->addWidget(m_summary);
+    auto head=new QHBoxLayout;head->setSpacing(10);header->box()->addLayout(head);
     auto group=iconButton(t("New group"),"folder-plus","newGroup");head->addWidget(group,0,Qt::AlignBottom);connect(group,&QPushButton::clicked,this,[this]{if(newGroup)newGroup();});
     auto import=iconButton(t("Import"),"download","importInstance");head->addWidget(import,0,Qt::AlignBottom);connect(import,&QPushButton::clicked,this,[this]{if(importPack)importPack();});
     auto create=iconButton(t("New instance"),"plus","newInstance",true);head->addWidget(create,0,Qt::AlignBottom);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
     head->addSpacing(12);
-    auto filters=new QHBoxLayout;filters->setSpacing(6);layout->addLayout(filters);
+    auto filterRow=new Ui::ResponsiveRow(740);layout->addWidget(filterRow);auto filters=new QHBoxLayout;filters->setSpacing(6);filterRow->box()->addLayout(filters);
     for(int i=0;i<4;++i){auto tab=new QPushButton;tab->setCheckable(true);tab->setChecked(i==0);tab->setProperty("tab",true);tab->setCursor(Qt::PointingHandCursor);m_tabs<<tab;filters->addWidget(tab);connect(tab,&QPushButton::clicked,this,[this,i]{m_tab=i;for(int n=0;n<m_tabs.size();++n)m_tabs[n]->setChecked(n==i);rebuild();});}
     filters->addStretch();
-    m_search=new QLineEdit;m_search->setObjectName("instanceSearch");m_search->setPlaceholderText(t("Search instances…"));m_search->setClearButtonEnabled(true);m_search->addAction(Ui::icon("search",QColor(150,150,158)),QLineEdit::LeadingPosition);m_search->setMinimumWidth(180);m_search->setMaximumWidth(300);filters->addWidget(m_search,1);filters->addSpacing(12);
+    m_search=new QLineEdit;m_search->setObjectName("instanceSearch");m_search->setPlaceholderText(t("Search instances…"));m_search->setClearButtonEnabled(true);m_search->addAction(Ui::icon("search",QColor(150,150,158)),QLineEdit::LeadingPosition);m_search->setMinimumWidth(180);filterRow->box()->addWidget(m_search,1);
     connect(m_search,&QLineEdit::textChanged,this,[this]{rebuild();});
     m_scroll=new QScrollArea;m_scroll->setWidgetResizable(true);m_scroll->setFrameShape(QFrame::NoFrame);m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);layout->addWidget(m_scroll,1);
     rebuild();
@@ -144,13 +145,13 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     auto folderButton=toolButton("folder",t("Open instance folder"),"openFolder");tools->addWidget(folderButton);connect(folderButton,&QToolButton::clicked,this,[this]{if(openFolder)openFolder({});});
     tool("settings",t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
     l->addSpacing(28); // the artwork shows above the title, like the instance page of the Minecraft Launcher
-    auto header=new QHBoxLayout;header->setSpacing(18);l->addLayout(header);
+    auto titleRow=new Ui::ResponsiveRow(740);l->addWidget(titleRow);auto header=new QHBoxLayout;header->setSpacing(18);titleRow->box()->addLayout(header,1);
     m_icon=new QLabel;m_icon->setFixedSize(84,84);m_icon->setObjectName("detailIcon");m_icon->setAlignment(Qt::AlignCenter);header->addWidget(m_icon,0,Qt::AlignVCenter);
     auto info=new QVBoxLayout;info->setSpacing(6);header->addLayout(info,1);info->addStretch();
-    m_name=new QLabel;m_name->setObjectName("detailTitle");info->addWidget(m_name);
-    m_state=new QLabel;m_state->setObjectName("muted");info->addWidget(m_state);info->addStretch();
-    m_play=new QPushButton;m_play->setObjectName("detailPlay");m_play->setMinimumSize(220,58);m_play->setIconSize(QSize(22,22));m_play->setCursor(Qt::PointingHandCursor);header->addWidget(m_play,0,Qt::AlignVCenter);connect(m_play,&QPushButton::clicked,this,[this]{if(play)play();});
-    m_chips=new QWidget;auto chips=new QHBoxLayout(m_chips);chips->setContentsMargins(0,0,0,0);chips->setSpacing(8);l->addWidget(m_chips);
+    m_name=new QLabel;m_name->setObjectName("detailTitle");m_name->setWordWrap(true);m_name->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);info->addWidget(m_name);
+    m_state=new QLabel;m_state->setObjectName("muted");m_state->setWordWrap(true);info->addWidget(m_state);info->addStretch();
+    m_play=new QPushButton;m_play->setObjectName("detailPlay");m_play->setMinimumSize(220,58);m_play->setIconSize(QSize(22,22));m_play->setCursor(Qt::PointingHandCursor);titleRow->box()->addWidget(m_play,0,Qt::AlignVCenter);connect(m_play,&QPushButton::clicked,this,[this]{if(play)play();});
+    auto chipsRow=new Ui::ResponsiveRow(740);m_chips=chipsRow;chipsRow->box()->setSpacing(8);l->addWidget(m_chips);
     m_cardGrid=new QGridLayout;m_cardGrid->setSpacing(14);l->addLayout(m_cardGrid);
     struct Stat{QString icon,title,action,folder;};
     const QList<Stat> stats{{"puzzle",t("Mods"),t("MANAGE MODS"),"mods"},{"palette",t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{"sparkles",t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{"map",t("Worlds"),t("MANAGE WORLDS"),"saves"}};
@@ -168,11 +169,11 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     actions->addStretch();auto remove=action(t("Delete instance"),"trash-2","deleteInstance",&InstanceDetail::remove);remove->setProperty("danger",true);remove->setIcon(Ui::icon("trash-2",QColor(255,163,174)));
     l->addStretch();arrange();
 }
-// Narrow windows: the four cards go two by two and the actions keep only their icons.
+// Cards reflow to two or one column; narrow windows keep action labels in tooltips.
 void InstanceDetail::arrange(){
-    const bool compact=width()<1000;if(compact==m_compact&&m_cardGrid->count())return;m_compact=compact;
+    const bool compact=width()<1000;const int columns=width()<700?1:compact?2:4;if(columns==m_cardColumns&&m_cardGrid->count())return;m_compact=compact;m_cardColumns=columns;
     for(auto card:m_cards)m_cardGrid->removeWidget(card);
-    for(int n=0;n<m_cards.size();++n){m_cardGrid->addWidget(m_cards[n],compact?n/2:0,compact?n%2:n);m_cards[n]->setFixedHeight(compact?112:150);m_cardIcons[n]->setVisible(!compact);}
+    for(int n=0;n<m_cards.size();++n){m_cardGrid->addWidget(m_cards[n],n/columns,n%columns);m_cards[n]->setFixedHeight(compact?112:150);m_cardIcons[n]->setVisible(!compact);}
     for(const auto &action:m_actions)action.first->setText(compact?QString():" "+action.second);
 }
 void InstanceDetail::resizeEvent(QResizeEvent *event){QWidget::resizeEvent(event);arrange();}
@@ -183,10 +184,10 @@ void InstanceDetail::paintEvent(QPaintEvent *){
     QLinearGradient fade(0,0,0,height);fade.setColorAt(0,QColor(20,20,22,120));fade.setColorAt(0.55,QColor(20,20,22,200));fade.setColorAt(1,QColor(20,20,22,255));p.fillRect(QRect(QPoint(0,0),area),fade);
 }
 void InstanceDetail::showInstance(const InstanceInfo &i){
-    if(m_dir!=i.base.dir){m_backdrop=QPixmap(Ui::artFor(i.base.dir));m_scaled={};update();}
+    if(m_dir!=i.base.dir){const auto dir=i.base.dir;m_dir=dir;m_backdrop={};m_scaled={};Ui::loadArt(Ui::artFor(dir),{1920,1080},this,[this,dir](const QPixmap &p){if(m_dir==dir){m_backdrop=p;m_scaled={};update();}});}
     m_dir=i.base.dir;m_icon->setPixmap(InstanceIcons::icon(i.icon,i.base.dir).pixmap(62,62));m_name->setText(i.base.name);
-    auto chips=static_cast<QHBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
-    auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
+    auto chips=static_cast<QBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
+    auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setWordWrap(true);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
     chip(InstanceText::loader(i.base.loader)+(i.base.loader=="vanilla"||i.loaderVersion.isEmpty()?QString():" "+i.loaderVersion),true);chip("Minecraft "+i.base.mcVersion);chip(QString::number(i.base.xmx)+" MB");
     if(!i.group.isEmpty())chip(i.group);if(i.modpack)chip(t("Modpack"));chips->addStretch();
     m_state->setText((i.running?t("Running"):i.busy?t("Installing…"):i.base.ready?t("Ready to play"):t("Not installed yet"))+"  ·  "+InstanceText::lastPlayed(i.base.lastPlayed));

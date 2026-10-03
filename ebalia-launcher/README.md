@@ -1,6 +1,10 @@
 # EBALIA Launcher 4
 
-Reconstrucción nativa en C++20 / Qt 6. Barra lateral con iconos ([Lucide](https://lucide.dev), licencia ISC) y la cuenta arriba, como el Minecraft Launcher. **Inicio** tiene la imagen principal, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
+Reconstrucción nativa en C++20 / Qt 6. Barra lateral con ilustraciones de colores propias y la cuenta arriba, como el Minecraft Launcher; los controles usan iconos [Lucide](https://lucide.dev) (licencia ISC). **Inicio** tiene fondos que cambian automáticamente, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes completas. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
+
+El carrusel de Inicio alterna cuatro fondos cada nueve segundos, con transición, flechas, indicadores y pausa persistente. Deja de rotar al cambiar de página. Cada una de las 15 versiones perdidas tiene una portada distinta, asignada por su identificador. Las 19 imágenes se incluyen localmente para funcionar sin conexión; proceden de los [fondos oficiales de Minecraft](https://www.minecraft.net/en-us/collectibles), con las fuentes de cada archivo en `resources/art/backgrounds/sources.json`. Las portadas del archivo son ilustrativas, no capturas históricas de esos paquetes. Los proveedores de modpacks usan sus logos, con créditos en `resources/icons/providers`.
+
+La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lateral conserva los iconos y sus ayudas, Jugar pasa a otra fila y los paneles se apilan. En ventanas bajas se desplaza el contenido para conservar el tamaño y la separación de los controles. El creador de instancias mantiene sus botones de confirmación fuera del área desplazable.
 
 ## Incluido
 
@@ -86,7 +90,7 @@ La extracción de ZIP rechaza rutas que salen del destino y enlaces simbólicos.
 
 Forge antiguo puede usar un instalador sin modo de cliente por consola; esos instaladores muestran un error y su registro, no una instalación falsamente exitosa. La compatibilidad de un mod se determina por los metadatos publicados en Modrinth, no garantiza que cualquier combinación funcione en el juego. No se distribuyen archivos de mods dentro del JSON de un pack, ni configuraciones o mundos.
 
-El código anterior está respaldado en `legacy/source-v3.tar.gz`. No se modificó el proyecto `PrismLauncher-Cracked-main`; se consultó su organización de componentes como referencia, sin copiar su código ni sus credenciales.
+El código anterior está respaldado en `legacy/source-v3.tar.gz`. No se modificó el proyecto `PrismLauncher-Cracked-main`; se consultó su organización de componentes como referencia.
 
 ## Verificación
 
@@ -96,7 +100,7 @@ EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModrinth
 EBALIA_DATA_DIR=/tmp/ebalia-install-test QT_QPA_PLATFORM=offscreen ./build/ebalia-launcher --installtest 1.20.1 fabric
 ```
 
-La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. La prueba de UI recorre las siete páginas en los diez idiomas y crea dos instancias homónimas mediante los controles reales.
+La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. Las pruebas de UI recorren las diez páginas en los diez idiomas y crean dos instancias homónimas mediante los controles reales. También verifican el carrusel, su pausa, las 15 imágenes distintas y la disposición de las páginas entre 640×480 y 1920×1080.
 
 Otras comprobaciones manuales:
 
@@ -110,7 +114,7 @@ EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModpackIn
 
 `EBALIA_TEST_ARTIFACTS` guarda capturas de inicio y guía por idioma. `EBALIA_NO_NETWORK=1` evita consultas de inicio durante pruebas de UI. `--selftest <0..6>` guarda una captura y cierra; `EBALIA_SCREENSHOT` define su destino.
 
-Fuentes de integración: [Modrinth API](https://docs.modrinth.com/api/), [Fabric Meta](https://meta.fabricmc.net/), [instalador oficial de Forge](https://github.com/MinecraftForge/Installer). La imagen de portada proviene de los recursos que ya incluía este proyecto.
+Fuentes de integración: [Modrinth API](https://docs.modrinth.com/api/), [Fabric Meta](https://meta.fabricmc.net/), [instalador oficial de Forge](https://github.com/MinecraftForge/Installer).
 
 ## Skins
 
@@ -122,6 +126,35 @@ En el modo cliente, la pestaña **Skins** permite importar PNG de 64×64 o 64×3
 
 En **Explorar mods**, elegí Modrinth o CurseForge y seleccioná uno o varios resultados. Ambos proveedores usan el mismo flujo de revisión, dependencias y archivos verificados. Los packs pueden conservar referencias de los dos orígenes y recordar los mods que este launcher instaló.
 
-CurseForge exige una clave de API para aplicaciones externas: cada launcher tiene la suya (Prism, ATLauncher y la app de CurseForge incluyen la propia) y no se reutiliza la de otro. Para que funcione sin configurar nada en todas las copias, guardá la clave de EBALIA en `curseforge-api-key.txt` junto a `CMakeLists.txt` (o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake); queda incorporada al compilar, también en el paquete Nix. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. El registro debe corresponder a EBALIA. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
+CurseForge exige una clave de API para aplicaciones externas. Para esta prueba local se configuró en `curseforge-api-key.txt` la misma clave presente en `PrismLauncher-Cracked-main`, según lo solicitado. Ese archivo está excluido de Git y CMake lo incorpora al compilar, también en el paquete Nix. Para cambiarla, reemplazá el archivo junto a `CMakeLists.txt` y volvé a configurar y compilar, o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
 
-El adaptador de CurseForge se prueba con respuestas controladas, dependencias y archivos SHA-1 (el registro local conserva además SHA-512). La prueba de red real requiere la clave propia. [Documentación oficial de CurseForge](https://docs.curseforge.com/rest-api/).
+El adaptador de CurseForge se prueba con respuestas controladas, dependencias y archivos SHA-1 (el registro local conserva además SHA-512). Las pruebas de red usan la clave configurada: buscan y descargan JEI para Forge 1.20.1, verifican su SHA-1 y consultan modpacks y versiones. La prueba de interfaz busca un modpack de CurseForge y comprueba que se pueda seleccionar una versión y crear la instancia. [Documentación oficial de CurseForge](https://docs.curseforge.com/rest-api/).
+
+```sh
+EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveCurseForge
+EBALIA_LIVE_TESTS=1 EBALIA_TEST_ARTIFACTS=./artifacts QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tests liveCurseForgeBrowser
+```
+
+## Mis Mods y noticias de Patreon
+
+Inicio incluye **Mis Mods**, una ventana con los iconos y enlaces originales de `ooo.jar`, `In Your World` y `Secret 01 · SOON`, y una invitación a Patreon que puede cerrarse o desactivarse. La invitación automática aparece una sola vez, cuando Inicio está activo; siempre se puede abrir desde su botón.
+
+**Noticias** separa Minecraft de **EBALIA · Patreon**. Patreon distingue publicaciones públicas y publicaciones autorizadas para una cuenta con membresía activa de pago. El servidor recibe webhooks firmados, avisa a los launchers conectados y vuelve a verificar la membresía antes de entregar publicaciones privadas. Se conserva una consulta de respaldo cada minuto. Sin el servicio configurado no se simula que una cuenta esté enlazada ni que haya contenido privado disponible.
+
+El servicio está en [services/patreon](services/patreon/README.md), con plantilla **Render Free + Neon Free**, contenedor y pruebas. La guía explica qué hacer con la aplicación OAuth de Patreon ya creada, la URL de redirección y el webhook. Los secretos quedan en variables del servidor; el ejecutable incorpora únicamente su URL pública mediante `patreon-service-url.txt` o `EBALIA_PATREON_SERVICE_URL` de CMake.
+
+## Rendimiento e iconos de los paquetes
+
+La decodificación de portadas trabaja fuera del hilo de la interfaz, con dos tareas como máximo. Las miniaturas tienen una caché separada para que un fondo grande no las expulse durante el scroll. Las solicitudes simultáneas se agrupan y los resultados de widgets cerrados se descartan. En la prueba local de 1920×1080, el scroll del archivo pasó de 716 ms a 3,6 ms de media por actualización; estas mediciones no garantizan la misma cifra en cualquier equipo.
+
+El paquete de Windows incorpora `ebalia.ico` con seis tamaños (16–256 px), macOS incluye `ebalia.icns` dentro del bundle y Linux instala PNGs de 16–512 px en el tema hicolor, junto al archivo `.desktop` y la identidad de ventana. `packaging/verify-icons.py` verifica los contenedores y el paquete nativo; el workflow lo ejecuta después de instalar cada plataforma. Linux se verificó localmente; una ejecución de CI en Windows y macOS sigue siendo necesaria para confirmar sus paquetes.
+
+Para analizar la carpeta final de Windows en un equipo con Microsoft Defender activo:
+
+```powershell
+./packaging/check-windows-release.ps1 -PackagePath ./package/bin
+# En una distribución firmada:
+./packaging/check-windows-release.ps1 -PackagePath ./package/bin -RequireSignature
+```
+
+La comprobación no modifica Defender ni agrega exclusiones. Un resultado sin detecciones corresponde a esos archivos y esa versión de las firmas. No garantiza resultados futuros ni elimina por sí solo avisos de SmartScreen. La firma requiere un certificado real del editor; no se ha firmado ni escaneado un ejecutable Windows desde este equipo Linux. Los falsos positivos se envían al [portal oficial de Microsoft](https://www.microsoft.com/wdsi/filesubmission).

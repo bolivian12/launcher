@@ -7,10 +7,126 @@
 #include "ModRepository.hpp"
 #include "SetupDialog.hpp"
 #include "AccountManager.hpp"
+#include "HomeBanner.hpp"
+#include "CreatorDialog.hpp"
+#include "PatreonAuth.hpp"
+#include "UpdateChecker.hpp"
+#include "PatreonNewsPage.hpp"
+#include "Ui.hpp"
 class UiTests:public QObject {
     Q_OBJECT
+public:
+    Q_INVOKABLE void captureUrl(const QUrl &url){lastUrl=url;}
+private:
+    QUrl lastUrl;
 private slots:
     void initTestCase(){QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");qputenv("EBALIA_NO_NETWORK","1");}
+    void asynchronousArtwork(){
+        const QString path=":/art/backgrounds/village.png";const QSize bounds(137,137);QObject receiver;auto removed=new QObject;
+        int delivered=0;QPixmap first,second;bool stale=false;
+        Ui::loadArt(path,bounds,removed,[&](const QPixmap &){stale=true;});delete removed;
+        Ui::loadArt(path,bounds,&receiver,[&](const QPixmap &p){first=p;++delivered;});Ui::loadArt(path,bounds,&receiver,[&](const QPixmap &p){second=p;++delivered;});
+        QCOMPARE(delivered,0);QTRY_COMPARE_WITH_TIMEOUT(delivered,2,5000);QVERIFY(!stale);QVERIFY(!first.isNull());QCOMPARE(first.cacheKey(),second.cacheKey());QVERIFY(first.width()<=137&&first.height()<=137);
+        Ui::loadArt(path,bounds,&receiver,[&](const QPixmap &p){QCOMPARE(p.cacheKey(),first.cacheKey());++delivered;});QCOMPARE(delivered,3);
+    }
+    void creatorPopupsAndPatreonSections(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");MainWindow window;window.resize(900,600);window.show();window.showPage(MainWindow::Home);
+        auto mods=window.findChild<QPushButton*>("myModsButton");QVERIFY(mods);QTest::mouseClick(mods,Qt::LeftButton);auto dialog=window.findChild<QDialog*>("myModsDialog");QVERIFY(dialog&&dialog->isVisible());
+        auto links=dialog->findChildren<QPushButton*>("creatorModLink");QCOMPARE(links.size(),3);QDesktopServices::setUrlHandler("https",this,"captureUrl");
+        const QStringList slugs{"ooo-jar","in-your-world","secret-01-proyect"};for(int i=0;i<3;++i){QTest::mouseClick(links[i],Qt::LeftButton);QCOMPARE(lastUrl,QUrl("https://www.curseforge.com/minecraft/mc-mods/"+slugs[i]));QCOMPARE(links[i]->property("soon").toBool(),i==2);}
+        dialog->close();QTest::mouseClick(window.findChild<QPushButton*>("patreonInviteButton"),Qt::LeftButton);auto invite=window.findChild<QDialog*>("patreonInvite");QVERIFY(invite&&invite->isVisible());QTest::mouseClick(invite->findChild<QPushButton*>("joinPatreon"),Qt::LeftButton);QCOMPARE(lastUrl,QUrl("https://www.patreon.com/EBALIA"));
+        auto hide=invite->findChild<QCheckBox*>("hidePatreonInvite");hide->setChecked(true);QVERIFY(QSettings().value("ui/hidePatreonInvite").toBool());QSettings().remove("ui/hidePatreonInvite");invite->close();QDesktopServices::unsetUrlHandler("https");
+        window.showPage(MainWindow::News);auto news=window.findChild<QTabWidget*>("newsTabs");QVERIFY(news);QCOMPARE(news->count(),2);news->setCurrentIndex(1);auto sections=window.findChild<QTabWidget*>("patreonNewsTabs");QVERIFY(sections);QCOMPARE(sections->count(),2);
+        auto paid=window.findChild<QScrollArea*>("patreonPaidPosts");QVERIFY(paid);QVERIFY(paid->findChildren<QPushButton*>("patreonReadPost").isEmpty());QVERIFY(!window.findChild<PatreonAuth*>()->paidMember());
+    }
+    void simulatedPatreonMembershipAndCards(){
+        PatreonAuth auth;auth.m_verified=true;auth.m_paid=true;auth.m_name="SIMULACIÓN · Miembro de prueba";auth.m_title="Gold";
+        auth.m_status="SIMULACIÓN LOCAL · No es una suscripción real";
+        QJsonObject post{{"title","Actualización exclusiva · Nuevo mundo"},{"date","2026-10-03"},{"is_public",false},{"url","https://www.patreon.com/EBALIA"},{"content","<p>Una aventura para los miembros de EBALIA.</p><p><b>Novedades:</b> nuevos biomas, criaturas y mejoras.</p><p><a href='https://www.curseforge.com/minecraft/mc-mods/in-your-world'>Ver el mod en CurseForge ↗</a></p><img src='https://c10.patreonusercontent.com/test-preview.png'><p>Gracias por acompañar el desarrollo.</p>"}};
+        auth.m_posts=QJsonArray{post};PatreonNewsPage page(&auth);page.setStyleSheet(Ui::styleSheet());page.resize(800,700);page.show();page.findChild<QTabWidget*>("patreonNewsTabs")->setCurrentIndex(1);
+        auto paid=page.findChild<QScrollArea*>("patreonPaidPosts");QVERIFY(auth.paidMember());QCOMPARE(paid->findChildren<QFrame*>("patreonPostCard").size(),1);
+        auto body=paid->findChild<QTextBrowser*>("patreonPostBody");QVERIFY(body);QImage art(800,360,QImage::Format_RGB32);art.fill(QColor("#427659"));QPainter painter(&art);painter.setPen(Qt::white);painter.setFont(QFont("Sans",28,QFont::Bold));painter.drawText(art.rect(),Qt::AlignCenter,"EBALIA · VISTA PREVIA");painter.end();body->document()->addResource(QTextDocument::ImageResource,QUrl("https://c10.patreonusercontent.com/test-preview.png"),art);
+        for(int width:{640,1280}){page.resize(width,720);QTest::qWait(60);QCOMPARE(paid->horizontalScrollBar()->maximum(),0);QCOMPARE(body->horizontalScrollBar()->maximum(),0);auto dir=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!dir.isEmpty()){QDir().mkpath(dir);QVERIFY(page.grab().save(dir+"/patreon-subscriber-"+QString::number(width)+".png"));}}
+        QDesktopServices::setUrlHandler("https",this,"captureUrl");QTest::mouseClick(paid->findChild<QPushButton*>("patreonReadPost"),Qt::LeftButton);QCOMPARE(lastUrl,QUrl("https://www.patreon.com/EBALIA"));QDesktopServices::unsetUrlHandler("https");
+        auth.m_paid=false;emit auth.changed();QVERIFY(!auth.paidMember());QVERIFY(paid->findChildren<QFrame*>("patreonPostCard").isEmpty());
+        auth.m_paid=true;auth.m_verified=false;emit auth.changed();QVERIFY(!auth.paidMember());QVERIFY(paid->findChildren<QFrame*>("patreonPostCard").isEmpty());
+    }
+    void patreonTiersRefreshWithoutRestart(){
+        PatreonAuth auth;PatreonNewsPage page(&auth);page.show();
+        auto label=page.findChild<QLabel*>("patreonAvailableTiers");QVERIFY(label);
+        for(const QString &name:{QString("Exclusive Chad"),QString("Explicit Chad"),QString("SENIOR CHAD"),QString("Nuevo nivel creado después")}){
+            auth.m_availableTiers.append(QJsonObject{{"id",QString::number(auth.m_availableTiers.size()+1)},{"title",name},{"amount_cents",250}});
+            auth.m_verified=true;auth.m_paid=true;auth.m_title=name;auth.m_tierIds={QString::number(auth.m_availableTiers.size())};emit auth.changed();
+            QVERIFY(label->text().contains(name));QVERIFY(page.findChild<QLabel*>("patreonMembership")->text().contains(name));QCOMPARE(auth.tierIds().size(),1);
+        }
+        auth.m_paid=false;emit auth.changed();QVERIFY(auth.tierIds().isEmpty());
+    }
+    void releaseDetection(){
+        QVERIFY(UpdateChecker::newerStable("v4.0.1","4.0.0"));QVERIFY(!UpdateChecker::newerStable("v4.0.1","v4.1.0"));QVERIFY(UpdateChecker::newerStable("4.10.0","4.9.0"));
+        for(const QString &tag:{QString("v4.0.0"),QString("3.9.0"),QString("v5.0.0-beta"),QString("latest")})QVERIFY(!UpdateChecker::newerStable(tag,"4.0.0"));
+        QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/bolivian12/launcher/releases/tag/v4.1.0"}},false).isEmpty());
+        QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://evil.test/bolivian12/launcher/releases/tag/v5.0.0"}},false).isEmpty());
+    }
+    void backgroundCarousel(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");QSettings().setValue("ui/rotateBackgrounds",true);
+        MainWindow window;window.resize(1280,800);window.show();window.showPage(MainWindow::Home);
+        auto banner=window.findChild<HomeBanner*>();QVERIFY(banner);auto timer=banner->findChild<QTimer*>("heroRotation");QVERIFY(timer);
+        auto pause=banner->findChild<QToolButton*>("heroPause");auto next=banner->findChild<QToolButton*>("heroNext");auto previous=banner->findChild<QToolButton*>("heroPrevious");QVERIFY(pause&&next&&previous);
+        QVERIFY(timer->isActive());QCOMPARE(banner->slideCount(),4);
+        QTest::mouseClick(pause,Qt::LeftButton);QVERIFY(!timer->isActive());QVERIFY(!QSettings().value("ui/rotateBackgrounds").toBool());
+        for(int i=1;i<=banner->slideCount();++i){QTest::mouseClick(next,Qt::LeftButton);QCOMPARE(banner->currentSlide(),i%banner->slideCount());QVERIFY(!timer->isActive());}
+        QTest::mouseClick(previous,Qt::LeftButton);QCOMPARE(banner->currentSlide(),banner->slideCount()-1);
+        auto dots=banner->findChildren<QToolButton*>("heroDot");QCOMPARE(dots.size(),banner->slideCount());QTest::mouseClick(dots[1],Qt::LeftButton);QCOMPARE(banner->currentSlide(),1);QVERIFY(dots[1]->isChecked());
+        {HomeBanner another;another.show();QVERIFY(another.findChild<QToolButton*>("heroPause")->isChecked());QVERIFY(!another.findChild<QTimer*>("heroRotation")->isActive());}
+        timer->setInterval(80);QTest::mouseClick(pause,Qt::LeftButton);QTRY_VERIFY_WITH_TIMEOUT(banner->currentSlide()!=1,500);
+        window.showPage(MainWindow::Instances);QVERIFY(!timer->isActive());const int hidden=banner->currentSlide();QTest::qWait(180);QCOMPARE(banner->currentSlide(),hidden);
+        window.showPage(MainWindow::Home);QVERIFY(timer->isActive());window.close();QSettings().remove("ui/rotateBackgrounds");
+    }
+    void responsiveHomeAndArchive(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        MainWindow window;window.show();auto pages=window.findChild<QStackedWidget*>();QVERIFY(pages);
+        for(const QSize size:{QSize(640,480),QSize(800,600),QSize(1280,800),QSize(1920,1080)}){
+            window.resize(size);window.showPage(MainWindow::Home);QTest::qWait(80);QCOMPARE(window.size(),size);
+            auto home=qobject_cast<QScrollArea*>(pages->currentWidget());QVERIFY(home);QCOMPARE(home->horizontalScrollBar()->maximum(),0);
+            auto play=window.findChild<QPushButton*>("homePlay");auto picker=window.findChild<QPushButton*>("instancePicker");auto bar=window.findChild<QFrame*>("playBar");
+            QRect playRect(play->mapTo(bar,QPoint()),play->size()),pickerRect(picker->mapTo(bar,QPoint()),picker->size());
+            QVERIFY(bar->rect().contains(playRect));QVERIFY(bar->rect().contains(pickerRect));QVERIFY(!playRect.intersects(pickerRect));
+            window.showPage(MainWindow::Lost);QTest::qWait(80);auto archive=qobject_cast<QScrollArea*>(pages->currentWidget());QVERIFY(archive);QCOMPARE(archive->horizontalScrollBar()->maximum(),0);
+            auto detail=window.findChild<QFrame*>("lostDetail");auto install=window.findChild<QPushButton*>("lostInstall");auto launch=window.findChild<QPushButton*>("lostPlay");
+            QRect installRect(install->mapTo(detail,QPoint()),install->size()),launchRect(launch->mapTo(detail,QPoint()),launch->size());
+            QVERIFY(detail->rect().contains(installRect));QVERIFY(detail->rect().contains(launchRect));QVERIFY(!installRect.intersects(launchRect));
+            QVERIFY(installRect.left()-launchRect.right()>=10);
+            for(int page=0;page<=MainWindow::Settings;++page){
+                window.showPage(page);QTest::qWait(30);auto area=qobject_cast<QScrollArea*>(pages->currentWidget());
+                QVERIFY2(area->horizontalScrollBar()->maximum()==0,qPrintable(QString("Page %1 overflows at %2 px").arg(page).arg(size.width())));
+            }
+        }
+        auto list=window.findChild<QListWidget*>("lostList");QVERIFY(list);QSet<QByteArray> images;
+        for(int i=0;i<list->count();++i){auto path=list->item(i)->data(Qt::UserRole+1).toJsonObject()["art"].toString();QFile image(path);QVERIFY2(image.open(QIODevice::ReadOnly),qPrintable(path));images.insert(QCryptographicHash::hash(image.readAll(),QCryptographicHash::Sha256));}
+        QCOMPARE(images.size(),list->count());window.close();
+    }
+    void compactInstanceDetail(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        {McInstanceManager manager(data.path());manager.createInstance("Mi mundo de aventuras con amigos","1.20.1","vanilla");}
+        MainWindow window;window.resize(640,480);window.show();window.showPage(MainWindow::Instances);QTest::qWait(60);
+        auto card=window.findChild<QFrame*>("instanceCard");QVERIFY(card);QTest::mouseClick(card,Qt::LeftButton,{},QPoint(30,30));QTest::qWait(60);
+        auto content=window.findChild<QWidget*>("instanceDetailContent");auto play=window.findChild<QPushButton*>("detailPlay");auto name=content->findChild<QLabel*>("detailTitle");
+        QVERIFY(content&&play&&name);QRect playRect(play->mapTo(content,QPoint()),play->size()),nameRect(name->mapTo(content,QPoint()),name->size());
+        QVERIFY(content->rect().contains(playRect));QVERIFY(content->rect().contains(nameRect));QVERIFY(!playRect.intersects(nameRect));
+        QCOMPARE(content->width(),content->parentWidget()->width());
+        for(auto stat:content->findChildren<QFrame*>("statCard"))QVERIFY(content->rect().contains(QRect(stat->mapTo(content,QPoint()),stat->size())));
+    }
+    void compactInstanceWizard(){
+        QTemporaryDir data;McInstanceManager manager(data.path());Language::current="es";
+        CreateInstanceDialog dialog(&manager,{{"1.20.1","release","","2023-06-12"}},{},{},false);dialog.resize(640,480);dialog.show();
+        for(int page=0;page<=CreateInstanceDialog::Technic;++page){
+            dialog.showPage(page);QTest::qWait(30);QCOMPARE(dialog.size(),QSize(640,480));
+            auto area=dialog.findChild<QScrollArea*>("instanceFormScroll");QVERIFY(area);QCOMPARE(area->horizontalScrollBar()->maximum(),0);
+            auto create=dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+            QVERIFY(dialog.rect().contains(QRect(create->mapTo(&dialog,QPoint()),create->size())));
+        }
+        auto sources=dialog.findChild<QListWidget*>("instanceSources");QVERIFY(sources->width()<100);for(int i=0;i<sources->count();++i){QVERIFY(!sources->item(i)->toolTip().isEmpty());QVERIFY(!sources->item(i)->icon().isNull());}
+    }
     void everyLanguage(){
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());QSettings().setValue("ui/tutorialSeen",true);
         for(const auto &lang:Language::available()){
@@ -34,7 +150,7 @@ private slots:
     void languageSwitchRebuilds(){
         QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","en");MainWindow window;window.show();window.showPage(MainWindow::Settings);
         auto combo=window.findChild<QComboBox*>("languageChoice");QVERIFY(combo);combo->setCurrentIndex(combo->findData("es"));emit combo->activated(combo->currentIndex());
-        auto first=[&]{auto nav=window.centralWidget()->findChild<QListWidget*>("navigation");return nav?nav->item(0)->text().trimmed():QString();};
+        auto first=[&]{auto nav=window.centralWidget()->findChild<QListWidget*>("navigation");return nav?nav->item(0)->data(Qt::AccessibleTextRole).toString():QString();};
         QTRY_COMPARE(first(),QString("Inicio"));QCOMPARE(window.centralWidget()->findChild<QStackedWidget*>()->currentIndex(),int(MainWindow::Settings));
         QVERIFY(window.findChild<QPushButton*>("navSettings")->isChecked());QSettings().remove("ui/language");
     }
@@ -88,6 +204,30 @@ private slots:
             auto create=window.findChild<QPushButton*>(n?"newInstance":"homePlay");QVERIFY(create);QVERIFY(create->isVisible());QTest::mouseClick(create,Qt::LeftButton);QVERIFY(handled);QVERIFY(window.centralWidget()->isEnabled());
         }
         QCOMPARE(manager->instances().size(),2);QVERIFY(manager->instances()[0].dir!=manager->instances()[1].dir);
+    }
+    void liveCurseForgeBrowser(){
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QVERIFY2(!ModRepository::curseForgeKey().isEmpty(),"Configure a CurseForge API key before running this test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        MainWindow window;window.show();window.showPage(MainWindow::Home);
+        auto manager=window.findChild<McInstanceManager*>();QVERIFY(manager);
+        CreateInstanceDialog dialog(manager,{{"1.20.1","release","","2023-06-12"}},{},{},false,&window);dialog.show();
+        auto sources=dialog.findChild<QListWidget*>("instanceSources");QVERIFY(sources);
+        QTest::mouseClick(sources->viewport(),Qt::LeftButton,{},sources->visualItemRect(sources->item(CreateInstanceDialog::CurseForge)).center());
+        auto page=dialog.findChild<QWidget*>("curseforgePage");QVERIFY(page&&page->isVisible());
+        auto key=page->findChild<QLineEdit*>("curseForgeKey");QVERIFY(key&&!key->isVisible());
+        auto search=page->findChild<QLineEdit*>("packSearch");auto results=page->findChild<QListWidget*>("packResults");
+        auto versions=page->findChild<QComboBox*>("packVersions");QVERIFY(search&&results&&versions);
+        QTest::keyClicks(search,"SkyFactory 4");QTest::keyClick(search,Qt::Key_Return);
+        QTRY_VERIFY_WITH_TIMEOUT(results->count()>0,45000);
+        QTest::mouseClick(results->viewport(),Qt::LeftButton,{},results->visualItemRect(results->item(0)).center());
+        QTRY_VERIFY_WITH_TIMEOUT(versions->count()>0,45000);
+        const auto config=dialog.configuration();QCOMPARE(config["providerPack"].toObject()["provider"].toString(),QString("curseforge"));
+        QVERIFY(!config["providerVersion"].toObject()["id"].toString().isEmpty());
+        QVERIFY(dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->isEnabled());
+        const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!out.isEmpty()){QDir().mkpath(out);QTest::qWait(500);QVERIFY(dialog.grab().save(out+"/curseforge-live.png"));}
+        qInfo().noquote()<<"CurseForge UI:"<<results->count()<<"results,"<<versions->count()<<"versions; instance creation enabled";
+        dialog.close();window.close();
     }
     void screenshots(){
         // Visual check of the main views: EBALIA_TEST_ARTIFACTS=<folder> [EBALIA_SHOT_LANGUAGE=es] [EBALIA_LIVE_TESTS=1 for provider pages].

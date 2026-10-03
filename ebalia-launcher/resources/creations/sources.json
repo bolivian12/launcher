@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "ooo-jar",
+    "name": "ooo.jar",
+    "projectId": 1128697,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/ooo-jar",
+    "icon": "https://media.forgecdn.net/avatars/1105/911/638655651054127554.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "in-your-world",
+    "name": "In Your World",
+    "projectId": 1082195,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/in-your-world",
+    "icon": "https://media.forgecdn.net/avatars/1059/6/638590186757729232.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  },
+  {
+    "slug": "secret-01-proyect",
+    "name": "secret-test",
+    "projectId": 981369,
+    "page": "https://www.curseforge.com/minecraft/mc-mods/secret-01-proyect",
+    "icon": "https://media.forgecdn.net/avatars/1633/763/639046533087280348.png",
+    "credit": "EBALIA \u00b7 CurseForge project icon"
+  }
+]

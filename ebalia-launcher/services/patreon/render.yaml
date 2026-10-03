@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ebalia-patreon
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: EBALIA_PATREON_CLIENT_ID
+        sync: false
+      - key: EBALIA_PATREON_CLIENT_SECRET
+        sync: false
+      - key: EBALIA_PATREON_CAMPAIGN_ID
+        sync: false
+      - key: EBALIA_PATREON_CREATOR_TOKEN
+        sync: false
+      - key: EBALIA_PATREON_CREATOR_REFRESH
+        sync: false
+      - key: EBALIA_PATREON_WEBHOOK_SECRET
+        value: ""

@@ -6,3 +6,4 @@ Icon=ebalia-launcher
 Terminal=false
 Type=Application
 Categories=Game;
+StartupWMClass=EBALIA Launcher

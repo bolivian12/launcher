@@ -1,81 +1,35 @@
 #include "UpdateChecker.hpp"
-
-#include <QNetworkRequest>
+#include <QCoreApplication>
 #include <QNetworkReply>
 #include <QJsonDocument>
-#include <QJsonObject>
 #include <QJsonArray>
-#include <QSettings>
-
-static const char kRepoApi[] =
-    "https://api.github.com/repos/ralphdepriestdepriest2/freever/releases/latest";
-
-UpdateChecker::UpdateChecker(QObject *parent)
-    : QObject(parent)
-{
+#include <QVersionNumber>
+#include <QRegularExpression>
+#include <QTimer>
+UpdateChecker::UpdateChecker(QObject *parent):QObject(parent){m_nam.setTransferTimeout(15000);}
+bool UpdateChecker::newerStable(QString tag,const QString &current){
+ if(tag.startsWith('v'))tag.remove(0,1);
+ static const QRegularExpression semver("^[0-9]+\\.[0-9]+\\.[0-9]+$");
+ return semver.match(tag).hasMatch() && QVersionNumber::compare(QVersionNumber::fromString(tag),QVersionNumber::fromString(current.startsWith('v')?current.mid(1):current))>0;
 }
-
-void UpdateChecker::check()
-{
-    QNetworkRequest req(QUrl(QString::fromLatin1(kRepoApi)));
-    req.setHeader(QNetworkRequest::UserAgentHeader,
-                  QStringLiteral("EBALIA-Launcher/3.0"));
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
-
-    QNetworkReply *reply = m_nam.get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply] {
-        reply->deleteLater();
-
-        if (reply->error() != QNetworkReply::NoError) {
-            emit checkFailed(reply->errorString());
-            return;
-        }
-
-        QJsonObject obj = QJsonDocument::fromJson(reply->readAll()).object();
-        const QString tag = obj[QStringLiteral("tag_name")].toString();
-        m_releaseUrl = obj[QStringLiteral("html_url")].toString();
-        m_stamp      = obj[QStringLiteral("published_at")].toString();
-
-        const QJsonArray assets = obj[QStringLiteral("assets")].toArray();
-        for (const QJsonValue &av : assets) {
-            const QJsonObject a = av.toObject();
-            const QString name = a[QStringLiteral("name")].toString();
-            if (name.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
-                m_assetName = name;
-                m_assetUrl  = a[QStringLiteral("browser_download_url")].toString();
-                // Asset re-uploads bump updated_at — that's our freshness signal
-                const QString assetStamp =
-                    a[QStringLiteral("updated_at")].toString();
-                if (!assetStamp.isEmpty())
-                    m_stamp = assetStamp;
-                break;
-            }
-        }
-
-        if (m_stamp.isEmpty()) {
-            emit checkFailed(QStringLiteral("No release info on GitHub"));
-            return;
-        }
-
-        QSettings s(QStringLiteral("EBALIA"), QStringLiteral("EBALIA Launcher"));
-        const QString seen = s.value(QStringLiteral("update/seen_stamp")).toString();
-
-        if (seen.isEmpty()) {
-            // First run ever: record baseline silently, don't nag
-            s.setValue(QStringLiteral("update/seen_stamp"), m_stamp);
-            emit upToDate();
-        } else if (seen != m_stamp) {
-            emit updateAvailable(tag.isEmpty() ? QStringLiteral("new build") : tag);
-        } else {
-            emit upToDate();
-        }
-    });
+QString UpdateChecker::releasePage(const QJsonObject &release,bool gitgud){
+ const QUrl url(gitgud?release["_links"].toObject()["self"].toString():release["html_url"].toString());
+ const QString prefix=gitgud?"/castigarse/launcher/-/releases/":"/bolivian12/launcher/releases/tag/";
+ if(url.scheme()!="https"||url.host()!=(gitgud?"gitgud.io":"github.com")||!url.path().startsWith(prefix)||!url.userInfo().isEmpty())return {};
+ return url.toString();
 }
-
-void UpdateChecker::markUpdated()
-{
-    if (m_stamp.isEmpty()) return;
-    QSettings s(QStringLiteral("EBALIA"), QStringLiteral("EBALIA Launcher"));
-    s.setValue(QStringLiteral("update/seen_stamp"), m_stamp);
+void UpdateChecker::check(){if(m_busy||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;m_busy=true;fetch(false);}
+void UpdateChecker::fetch(bool gitgud){
+ QNetworkRequest request{QUrl(gitgud?"https://gitgud.io/api/v4/projects/castigarse%2Flauncher/releases?per_page=20":"https://api.github.com/repos/bolivian12/launcher/releases?per_page=20")};
+ request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/"+QCoreApplication::applicationVersion());
+ auto reply=m_nam.get(request);
+ connect(reply,&QNetworkReply::downloadProgress,reply,[reply](qint64 n,qint64){if(n>2*1024*1024)reply->abort();});
+ connect(reply,&QNetworkReply::finished,this,[this,reply,gitgud]{
+  reply->deleteLater();const auto doc=QJsonDocument::fromJson(reply->readAll());
+  if(reply->error()!=QNetworkReply::NoError||!doc.isArray()){if(!gitgud){fetch(true);return;}m_busy=false;emit checkFailed("No se pudo consultar GitHub ni GitGud.");return;}
+  QString best=QCoreApplication::applicationVersion(),page;
+  for(auto v:doc.array()){auto release=v.toObject();auto tag=release["tag_name"].toString();if(release["draft"].toBool()||release["prerelease"].toBool()||release["upcoming_release"].toBool())continue;auto url=releasePage(release,gitgud);if(url.isEmpty()||!newerStable(tag,best))continue;best=tag;page=url;}
+  if(page.isEmpty()&&!gitgud){fetch(true);return;}
+  m_busy=false;if(page.isEmpty()){emit upToDate();return;}m_releaseUrl=page;emit updateAvailable(best);
+ });
 }

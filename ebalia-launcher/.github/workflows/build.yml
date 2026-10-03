@@ -13,6 +13,7 @@ jobs:
       - run: cmake --build build
       - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - run: cmake --install build --prefix package
+      - run: python3 packaging/verify-icons.py --source . --package package
       - uses: actions/upload-artifact@v4
         with:
           name: ebalia-linux-x64
@@ -45,6 +46,7 @@ jobs:
           cmake --install build --config Release --prefix package
           windeployqt --release --no-translations package/bin/ebalia-launcher.exe
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/*.dll" package/bin
+          python packaging/verify-icons.py --source . --package package
       - uses: actions/upload-artifact@v4
         with:
           name: ebalia-windows-x64-unsigned
@@ -58,6 +60,7 @@ jobs:
       - run: cmake --build build
       - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - run: cmake --install build --prefix package
+      - run: python3 packaging/verify-icons.py --source . --package package
       - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -dmg -always-overwrite'
       - uses: actions/upload-artifact@v4
         with:

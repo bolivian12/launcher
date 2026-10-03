@@ -9,7 +9,7 @@
 using Language::key;
 SkinsPage::SkinsPage(QString root,AccountManager *accounts,McInstanceManager *instances,Work work,QWidget *parent)
     :QWidget(parent),m_root(std::move(root)),m_accounts(accounts),m_instances(instances),m_work(std::move(work)){
-    auto layout=new QHBoxLayout(this);layout->setContentsMargins(0,0,0,0);layout->setSpacing(22);
+    auto outer=new QVBoxLayout(this);outer->setContentsMargins(0,0,0,0);auto row=new Ui::ResponsiveRow(660);outer->addWidget(row);auto layout=row->box();layout->setSpacing(22);
     auto visual=new QVBoxLayout;layout->addLayout(visual,1);m_preview=new QLabel;m_preview->setAlignment(Qt::AlignCenter);m_preview->setMinimumSize(240,320);m_preview->setObjectName("skinPreview");visual->addWidget(m_preview,1);
     auto turn=new QPushButton(key("Front / back"));visual->addWidget(turn);connect(turn,&QPushButton::clicked,this,[this]{m_back=!m_back;showSkin();});
     auto controls=new QVBoxLayout;layout->addLayout(controls,2);m_list=new QListWidget;controls->addWidget(m_list,1);connect(m_list,&QListWidget::currentRowChanged,this,[this]{showSkin();});

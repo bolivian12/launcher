@@ -14,8 +14,9 @@ const QStringList sourceKeys{"custom","import","atlauncher","curseforge","ftb","
 QString describeLocal(const QJsonObject &o){auto loader=loaderTitle(o["loader"].toString());return o["name"].toString()+"\n"+o["source"].toString()+" · Minecraft "+o["mcVersion"].toString()+(loader.isEmpty()?QString():" · "+loader+" "+o["loaderVersion"].toString());}
 }
 CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QList<McVersion> &catalog,const QJsonArray &packs,const McInstance &source,bool copy,QWidget *parent):QDialog(parent),m_manager(manager),m_catalog(catalog){
-    setObjectName("createInstanceDialog");setWindowTitle(t("New instance"));resize(1040,760);setMinimumSize(720,520);setAcceptDrops(true);
-    auto outer=new QVBoxLayout(this);outer->setSpacing(12);
+    setObjectName("createInstanceDialog");setWindowTitle(t("New instance"));resize(1040,760);setMinimumSize(640,480);setAcceptDrops(true);
+    auto windowLayout=new QVBoxLayout(this);windowLayout->setSpacing(12);auto scroll=new QScrollArea;scroll->setObjectName("instanceFormScroll");scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);windowLayout->addWidget(scroll,1);
+    auto content=new QWidget;auto outer=new QVBoxLayout(content);outer->setContentsMargins(0,0,0,0);outer->setSpacing(12);scroll->setWidget(content);
     auto header=new QHBoxLayout;outer->addLayout(header);
     if(copy){try{m_iconKey=ModRepository::read(source.dir+"/instance.json")["icon"].toString(m_iconKey);if(m_iconKey=="custom")m_iconKey="grass";}catch(...){}}
     m_icon=new QToolButton;m_icon->setObjectName("instanceIcon");m_icon->setIconSize(QSize(56,56));m_icon->setFixedSize(78,78);m_icon->setPopupMode(QToolButton::InstantPopup);m_icon->setToolTip(t("Choose an icon"));m_icon->setIcon(InstanceIcons::icon(m_iconKey));
@@ -34,7 +35,7 @@ CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QLis
     auto body=new QHBoxLayout;outer->addLayout(body,1);
     m_sources=new QListWidget;m_sources->setObjectName("instanceSources");m_sources->setFixedWidth(228);m_sources->setIconSize(QSize(28,28));m_sources->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_sources->setTextElideMode(Qt::ElideRight);
     const QStringList labels{t("Custom"),t("Import"),"ATLauncher","CurseForge","FTB","FTB Legacy",t("Import FTB App"),"Modrinth","Technic"};
-    for(int i=0;i<labels.size();++i){auto item=new QListWidgetItem(InstanceIcons::provider(sourceKeys[i]),labels[i],m_sources);item->setSizeHint(QSize(200,42));}
+    for(int i=0;i<labels.size();++i){auto item=new QListWidgetItem(InstanceIcons::provider(sourceKeys[i]),labels[i],m_sources);item->setToolTip(labels[i]);item->setData(Qt::AccessibleTextRole,labels[i]);item->setSizeHint(QSize(200,42));}
     body->addWidget(m_sources);
     m_pages=new QStackedWidget;m_pages->setObjectName("instanceSourcePages");body->addWidget(m_pages,1);
     auto root=QFileInfo(m_manager->mcDir()).absolutePath();
@@ -47,7 +48,7 @@ CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QLis
     auto options=new QHBoxLayout;outer->addLayout(options);options->addWidget(new QLabel(t("Maximum memory")));
     m_memory=new QSpinBox;m_memory->setRange(512,65536);m_memory->setSingleStep(512);m_memory->setValue(copy?source.xmx:4096);m_memory->setSuffix(" MB");options->addWidget(m_memory);options->addStretch();
     auto note=new QLabel(t("Java is detected automatically. If the right version is missing, EBALIA downloads the official one. Each instance keeps its own worlds, mods and settings."));note->setWordWrap(true);note->setObjectName("muted");outer->addWidget(note);
-    m_buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);m_buttons->button(QDialogButtonBox::Ok)->setText(t("Create instance"));m_buttons->button(QDialogButtonBox::Ok)->setProperty("play",true);outer->addWidget(m_buttons);
+    m_buttons=new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);m_buttons->button(QDialogButtonBox::Ok)->setText(t("Create instance"));m_buttons->button(QDialogButtonBox::Ok)->setProperty("play",true);windowLayout->addWidget(m_buttons);
     connect(m_buttons,&QDialogButtonBox::accepted,this,[this]{validate();if(m_buttons->button(QDialogButtonBox::Ok)->isEnabled())accept();});connect(m_buttons,&QDialogButtonBox::rejected,this,&QDialog::reject);
     connect(m_name,&QLineEdit::textChanged,this,[this]{validate();});
     connect(m_sources,&QListWidget::currentRowChanged,this,[this](int row){
@@ -60,6 +61,11 @@ CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QLis
     populateVersions();
     if(copy){for(int i=0;i<m_versions->topLevelItemCount();++i)if(m_versions->topLevelItem(i)->text(0)==source.mcVersion)m_versions->setCurrentItem(m_versions->topLevelItem(i));if(auto radio=findChild<QRadioButton*>(source.loader+"Loader"))radio->click();}
     m_sources->setCurrentRow(Custom);validate();
+}
+void CreateInstanceDialog::resizeEvent(QResizeEvent *event){
+    QDialog::resizeEvent(event);const bool compact=width()<900;m_sources->setFixedWidth(compact?62:228);
+    m_sources->setStyleSheet(compact?"QListWidget#instanceSources {padding:4px;} QListWidget#instanceSources::item {padding:6px 4px;}":QString());
+    for(int i=0;i<m_sources->count();++i){auto item=m_sources->item(i);item->setText(compact?QString():item->toolTip());}
 }
 QWidget *CreateInstanceDialog::customPage(const QJsonArray &packs,bool copy){
     auto page=new QWidget;page->setObjectName("customPage");auto right=new QVBoxLayout(page);right->setContentsMargins(0,0,0,0);

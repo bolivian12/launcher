@@ -39,7 +39,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 private:
     void arrange();
-    QGridLayout *m_cardGrid;QList<QWidget*> m_cards,m_cardIcons;QList<QPair<QPushButton*,QString>> m_actions;bool m_compact=false;
+    QGridLayout *m_cardGrid;QList<QWidget*> m_cards,m_cardIcons;QList<QPair<QPushButton*,QString>> m_actions;bool m_compact=false;int m_cardColumns=0;
     QPixmap m_backdrop,m_scaled;QString m_dir;QLabel *m_icon,*m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
     QList<QLabel*> m_counts;
 };

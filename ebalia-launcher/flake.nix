@@ -13,9 +13,9 @@
       in {
         packages.default = pkgs.stdenv.mkDerivation {
           pname = "ebalia-launcher";
-          version = "4.0.0";
+          version = "1.0.0";
 
-          src = pkgs.lib.cleanSourceWith { src = ./.; filter = path: type: !(builtins.elem (baseNameOf path) [ "build" "legacy" "Bexe16.4" "codigo generacion" "result" "result-v4" "artifacts" ]); };
+          src = pkgs.lib.cleanSourceWith { src = ./.; filter = path: type: !(builtins.elem (baseNameOf path) [ "patreon.json" ".env" ".env.local" ".env.production" ".neon" "node_modules" "private" "__pycache__" "build" "legacy" "Bexe16.4" "codigo generacion" "result" "result-v4" "artifacts" ]); };
 
           nativeBuildInputs = [ pkgs.cmake pkgs.qt6.wrapQtAppsHook pkgs.pkg-config ];
           buildInputs = [ pkgs.qt6.qtbase pkgs.qt6.qttools pkgs.qt6.qtimageformats pkgs.libarchive ];

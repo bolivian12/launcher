@@ -2,8 +2,17 @@
 /build/
 /result
 /result-*
+# Local API key used by CMake
+/curseforge-api-key.txt
+/resources/patreon.json
+**/.env
+**/private/
+**/__pycache__/
 # Test screenshots (EBALIA_TEST_ARTIFACTS)
 /artifacts/
 # Previous Windows launcher binaries and AutoPlay project (kept outside git)
 /Bexe16.4/
 /codigo generacion/
+**/node_modules/
+**/.env.*
+**/.neon

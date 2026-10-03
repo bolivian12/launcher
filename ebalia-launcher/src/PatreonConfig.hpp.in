@@ -1,0 +1,3 @@
+#pragma once
+// Public service address only. OAuth secrets and creator tokens stay on the server.
+#define EBALIA_BUILTIN_PATREON_SERVICE "@EBALIA_PATREON_SERVICE_URL@"

@@ -1,7 +1,37 @@
 #include "Ui.hpp"
 #include <QtWidgets>
+#include <QtConcurrent>
 namespace {
 int windowsOpen=0;
+QString artKey(const QString &path,QSize bounds){return path+QString(":%1x%2").arg(bounds.width()).arg(bounds.height());}
+struct ArtRequest {QPointer<QObject> receiver;std::function<void(const QPixmap &)> ready;};
+class ArtCache:public QObject {
+public:
+    ArtCache():QObject(qApp),small(24*1024),large(64*1024){pool.setMaxThreadCount(2);pool.setExpiryTimeout(10000);}
+    QCache<QString,QPixmap> small,large;
+    QHash<QString,QList<ArtRequest>> pending;
+    QThreadPool pool;
+    QCache<QString,QPixmap> &cache(QSize bounds){return bounds.width()<=768?small:large;}
+};
+ArtCache &artCache(){static QPointer<ArtCache> cache;if(!cache)cache=new ArtCache;return *cache;}
+}
+QPixmap Ui::cachedArt(const QString &resource,QSize bounds){auto p=artCache().cache(bounds).object(artKey(resource,bounds));return p?*p:QPixmap();}
+void Ui::loadArt(const QString &resource,QSize bounds,QObject *receiver,std::function<void(const QPixmap &)> ready){
+    if(!receiver||resource.isEmpty()||bounds.isEmpty())return;
+    auto &cache=artCache();const auto key=artKey(resource,bounds);
+    if(auto p=cache.cache(bounds).object(key)){ready(*p);return;}
+    const bool loading=cache.pending.contains(key);cache.pending[key].append({receiver,std::move(ready)});if(loading)return;
+    auto watcher=new QFutureWatcher<QImage>(&cache);
+    QObject::connect(watcher,&QFutureWatcher<QImage>::finished,&cache,[watcher,key,bounds]{
+        const auto result=watcher->result();watcher->deleteLater();auto pixmap=QPixmap::fromImage(result);auto &cache=artCache();
+        if(!pixmap.isNull())cache.cache(bounds).insert(key,new QPixmap(pixmap),qMax(1,int(result.sizeInBytes()/1024)));
+        const auto requests=cache.pending.take(key);for(const auto &request:requests)if(request.receiver)request.ready(pixmap);
+    });
+    watcher->setFuture(QtConcurrent::run(&cache.pool,[resource,bounds]{
+        QImageReader reader(resource);reader.setAutoTransform(true);const auto original=reader.size();
+        if(!original.isEmpty())reader.setScaledSize(original.scaled(bounds,Qt::KeepAspectRatio).boundedTo(original));
+        return reader.read().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    }));
 }
 QPixmap Ui::pixmap(const QString &name,int size,const QColor &color){
     static QHash<QString,QPixmap> cache;const auto key=name+"|"+QString::number(size)+"|"+color.name(QColor::HexArgb);
@@ -12,6 +42,26 @@ QPixmap Ui::pixmap(const QString &name,int size,const QColor &color){
     auto result=QPixmap::fromImage(tinted.scaled(size,size,Qt::KeepAspectRatio,Qt::SmoothTransformation));cache.insert(key,result);return result;
 }
 QIcon Ui::icon(const QString &name,const QColor &color){QIcon result;for(int size:{16,20,24,32,48})result.addPixmap(pixmap(name,size,color));result.addPixmap(pixmap(name,24,QColor(120,120,128)),QIcon::Disabled);return result;}
+QIcon Ui::navigationIcon(const QString &name){
+    QIcon result;const QPixmap source(":/icons/navigation/"+name+".png");
+    for(int size:{24,28,32,48,64}){auto p=source.scaled(size,size,Qt::KeepAspectRatio,Qt::SmoothTransformation);result.addPixmap(p);result.addPixmap(p,QIcon::Selected);result.addPixmap(p,QIcon::Active);}
+    return result;
+}
+QString Ui::lostArtFor(const QString &id,const QString &category){
+    static const QHash<QString,QString> covers{
+        {"a1.2.6_06","mineshaft"},{"alpha_1.2.7","adventure"},{"alpha_1.2.6_04","village"},
+        {"alpha_herobrine_test","mangroves"},{"minecraft_a1.1.1","bees"},{"alpha_1.0.16.05_20","island"},{"alpha_1.3","ocean"},
+        {"alpha_d3ath_exe","pale-garden"},{"alpha_0.0.0_remastered","warden"},{"ghost","night"},
+        {"minecraft_1_li02","nether"},{"nsss","caves"},{"undef_554e","wild"},
+        {"1.1_patch_1","colors"},{"minecraft_1.7.10","aquatic"}
+    };
+    if(covers.contains(id))return ":/art/backgrounds/"+covers.value(id)+".png";
+    QString name;
+    if(category=="horror")name="pale-garden";
+    else if(category=="release")name="tricky-trials";
+    else {uint hash=0;for(auto c:id)hash=hash*31+c.unicode();name=hash%2?"island":"mineshaft";}
+    return ":/art/backgrounds/"+name+".png";
+}
 QString Ui::artFor(const QString &key){
     static const QStringList banners{":/art/f1_2.jpg",":/art/f1_6.jpg",":/art/f2_2.jpg",":/art/f2_6.jpg",":/art/f2_10.jpg",":/art/f3_6.jpg"};
     return banners[int(qHash(key)%uint(banners.size()))];
@@ -32,6 +82,15 @@ QPixmap Ui::avatar(const QString &name,int size){
     QFont font=QApplication::font();font.setBold(true);font.setPixelSize(size*9/20);p.setFont(font);p.setPen(Qt::white);p.drawText(QRect(0,0,size,size),Qt::AlignCenter,name.left(1).toUpper());return out;
 }
 int Ui::openWindows(){return windowsOpen;}
+Ui::ResponsiveRow::ResponsiveRow(int breakpoint,QWidget *parent):QWidget(parent),m_breakpoint(breakpoint){
+    m_box=new QBoxLayout(QBoxLayout::TopToBottom,this);m_box->setContentsMargins(0,0,0,0);m_box->setSpacing(12);
+    m_box->setSizeConstraint(QLayout::SetNoConstraint);
+}
+QSize Ui::ResponsiveRow::minimumSizeHint() const {return {0,m_box->minimumSize().height()};}
+void Ui::ResponsiveRow::resizeEvent(QResizeEvent *event){
+    QWidget::resizeEvent(event);const auto direction=width()<m_breakpoint?QBoxLayout::TopToBottom:QBoxLayout::LeftToRight;
+    if(m_box->direction()!=direction){m_box->setDirection(direction);updateGeometry();}
+}
 void Ui::fitToScreen(QWidget *window,QSize preferred){
     auto screen=window->screen()?window->screen():QGuiApplication::primaryScreen();if(!screen){window->resize(preferred);return;}
     auto available=screen->availableGeometry().size()*0.92;window->resize(preferred.boundedTo(available));
@@ -87,6 +146,15 @@ QCheckBox::indicator,QRadioButton::indicator{width:15px;height:15px;border:1px s
 QCheckBox::indicator:checked,QRadioButton::indicator:checked{background:#4a9e31;border-color:#6fd15b;}QCheckBox::indicator:hover,QRadioButton::indicator:hover{border-color:#6fd15b;}
 QSplitter::handle{background:transparent;}QSizeGrip{background:transparent;}
 #hero QLabel{background:transparent;color:#ffffff;}#heroTitle{font-size:50px;font-weight:900;letter-spacing:3px;}#heroEdition{font-size:16px;font-weight:800;letter-spacing:6px;color:#e6e6e6;}#heroTagline{font-size:24px;font-weight:800;}
+#hero #heroBadge{background:rgba(16,20,29,155);border:1px solid rgba(255,255,255,45);border-radius:8px;padding:8px 12px;font-size:11px;font-weight:800;letter-spacing:2px;}
+#hero #heroTheme{color:#e6eaf0;font-size:12px;font-weight:700;letter-spacing:1px;}
+#heroControls{background:rgba(15,19,27,190);border:1px solid rgba(255,255,255,35);border-radius:12px;}
+QToolButton[heroControl=true]{background:transparent;border:0;border-radius:6px;padding:0;}QToolButton[heroControl=true]:hover{background:rgba(255,255,255,35);}QToolButton[heroControl=true]:focus{border:1px solid #b9efd2;}
+#heroDot{background:rgba(255,255,255,75);border:0;border-radius:3px;padding:0;margin:8px 2px;}#heroDot:checked{background:#a9e58c;}#heroDot:hover{background:#ffffff;}
+#archiveEyebrow{color:#d0e7df;font-size:10px;font-weight:800;letter-spacing:2px;}#lostCover QLabel{background:transparent;}
+#creatorModCard{background:#202126;border:1px solid #353740;border-radius:14px;}#creatorModCard QLabel{background:transparent;}
+#creatorPatreonCard{background:#30232c;border:1px solid #684354;border-radius:14px;}#creatorPatreonCard QLabel{background:transparent;}
+QPushButton[patreon=true]{background:#ed6957;border:1px solid #f58978;color:#ffffff;font-weight:800;}QPushButton[patreon=true]:hover{background:#ff8874;}
 #playBar{background:#1b1b1e;border-top:1px solid #26262a;}
 #instancePicker{background:#232327;border:1px solid #303036;border-radius:10px;padding:0;text-align:left;}#instancePicker:hover{background:#2a2a2f;border-color:#46464e;}
 #pickerName,#playerName{font-weight:800;font-size:14px;}#pickerSub,#playerType{color:#9a9aa3;font-size:12px;}
