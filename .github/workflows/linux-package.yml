@@ -1,0 +1,26 @@
+name: Linux package validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ebalia-launcher
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev qt6-image-formats-plugins libarchive-dev libgl1-mesa-dev fonts-noto-cjk
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build with bounded parallelism
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+      - run: cmake --install build --prefix package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-linux-x64
+          path: ebalia-launcher/package
