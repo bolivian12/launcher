@@ -42,14 +42,27 @@ jobs:
       - name: Libarchive
         shell: pwsh
         run: '& "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install libarchive:x64-windows'
+      - uses: actions/cache/save@v4
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: vcpkg-windows-2022-libarchive-v1
       - name: Configure
         shell: pwsh
         run: cmake -S . -B build -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
       - run: cmake --build build --config Release --parallel
+      - name: Preserve compiled tests for diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-binaries
+          retention-days: 2
+          path: |
+            ebalia-launcher/build/Release/*.exe
+            ebalia-launcher/build/Release/*.dll
       - name: Test
         shell: pwsh
         run: |
-          $env:QT_QPA_PLATFORM = 'windows'
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $env:QT_QPA_FONTDIR = "$env:SystemRoot/Fonts"
           ctest --test-dir build -C Release --output-on-failure --output-junit test-results.xml
       - name: Preserve Windows test diagnostics
         if: always()
