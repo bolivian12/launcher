@@ -46,7 +46,15 @@ jobs:
         shell: pwsh
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
-          ctest --test-dir build -C Release --output-on-failure
+          ctest --test-dir build -C Release --output-on-failure --output-junit test-results.xml
+      - name: Preserve Windows test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-diagnostics
+          path: |
+            ebalia-launcher/build/test-results.xml
+            ebalia-launcher/build/Testing/Temporary/LastTest.log
       - name: Package without elevation or executable compression
         shell: pwsh
         run: |

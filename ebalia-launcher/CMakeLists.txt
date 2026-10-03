@@ -72,6 +72,7 @@ if(BUILD_TESTING)
   qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
       include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
+  set_target_properties(ebalia-ui-tests PROPERTIES WIN32_EXECUTABLE FALSE)
   target_link_libraries(ebalia-ui-tests PRIVATE ebalia-core Qt6::Test)
   target_include_directories(ebalia-ui-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
   add_test(NAME ui COMMAND ebalia-ui-tests)
