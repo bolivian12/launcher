@@ -39,8 +39,8 @@ const translations = {
     "automatic": "Automático (sistema)",
     "pending": "Paquete en preparación",
     "download": "Descargar {size} MB ↓",
-    "ready": "Versión 1.0.0 · {count} paquetes disponibles",
-    "preparing": "Versión 1.0.0 · Los paquetes se están preparando.",
+    "ready": "Versión {version} · {count} paquetes disponibles",
+    "preparing": "Versión {version} · Los paquetes se están preparando.",
     "unavailable": "Consultá la release para ver las descargas disponibles."
   },
   "en": {
@@ -83,8 +83,8 @@ const translations = {
     "automatic": "Automatic (system)",
     "pending": "Package in preparation",
     "download": "Download {size} MB ↓",
-    "ready": "Version 1.0.0 · {count} packages available",
-    "preparing": "Version 1.0.0 · Packages are being prepared.",
+    "ready": "Version {version} · {count} packages available",
+    "preparing": "Version {version} · Packages are being prepared.",
     "unavailable": "Check the release for available downloads."
   },
   "pt": {
@@ -127,8 +127,8 @@ const translations = {
     "automatic": "Automático (sistema)",
     "pending": "Pacote em preparação",
     "download": "Baixar {size} MB ↓",
-    "ready": "Versão 1.0.0 · {count} pacotes disponíveis",
-    "preparing": "Versão 1.0.0 · Os pacotes estão sendo preparados.",
+    "ready": "Versão {version} · {count} pacotes disponíveis",
+    "preparing": "Versão {version} · Os pacotes estão sendo preparados.",
     "unavailable": "Consulte a versão para ver os downloads disponíveis."
   },
   "fr": {
@@ -171,8 +171,8 @@ const translations = {
     "automatic": "Automatique (système)",
     "pending": "Paquet en préparation",
     "download": "Télécharger {size} Mo ↓",
-    "ready": "Version 1.0.0 · {count} paquets disponibles",
-    "preparing": "Version 1.0.0 · Les paquets sont en préparation.",
+    "ready": "Version {version} · {count} paquets disponibles",
+    "preparing": "Version {version} · Les paquets sont en préparation.",
     "unavailable": "Consultez la version pour voir les téléchargements disponibles."
   },
   "de": {
@@ -215,8 +215,8 @@ const translations = {
     "automatic": "Automatisch (System)",
     "pending": "Paket wird vorbereitet",
     "download": "{size} MB herunterladen ↓",
-    "ready": "Version 1.0.0 · {count} Pakete verfügbar",
-    "preparing": "Version 1.0.0 · Die Pakete werden vorbereitet.",
+    "ready": "Version {version} · {count} Pakete verfügbar",
+    "preparing": "Version {version} · Die Pakete werden vorbereitet.",
     "unavailable": "Verfügbare Downloads findest du auf der Veröffentlichungsseite."
   }
 };
