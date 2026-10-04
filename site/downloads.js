@@ -14,7 +14,7 @@
     try {
       const u = new URL(raw);
       if(u.protocol !== 'https:' || u.username || u.password) return false;
-      if(source === 'github') return u.hostname === 'github.com' && u.pathname.startsWith('/bolivian12/launcher/releases/' + (download ? 'download/' : 'tag/'));
+      if(source === 'github') return u.hostname === 'github.com' && ['/ebalia-real/launcher/releases/', '/bolivian12/launcher/releases/'].some(prefix => u.pathname.startsWith(prefix + (download ? 'download/' : 'tag/')));
       return u.hostname === 'gitgud.io' && (u.pathname.startsWith('/castigarse/launcher/-/') || (download && u.pathname.startsWith('/api/v4/projects/51367/packages/')));
     } catch { return false; }
   }
@@ -38,7 +38,7 @@
     } else file.removeAttribute('href');
   }
   async function releases(source) {
-    const endpoint = source === 'github' ? 'https://api.github.com/repos/bolivian12/launcher/releases?per_page=30' : 'https://gitgud.io/api/v4/projects/51367/releases?per_page=30';
+    const endpoint = source === 'github' ? 'https://api.github.com/repos/ebalia-real/launcher/releases?per_page=30' : 'https://gitgud.io/api/v4/projects/51367/releases?per_page=30';
     const response=await fetch(endpoint,{cache:'no-store',signal:AbortSignal.timeout(12000)});
     if(!response.ok) throw new Error('Release service unavailable');
     const data=await response.json();if(!Array.isArray(data))throw new Error('Invalid release response');
