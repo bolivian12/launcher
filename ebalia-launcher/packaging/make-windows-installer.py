@@ -11,9 +11,11 @@ files=sorted(f for f in root.rglob('*') if f.is_file());dirs=sorted({str(f.paren
 icon=pathlib.Path(__file__).resolve().parents[1]/'resources/ebalia.ico'
 script=f'''Unicode True
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
 Name "EBALIA Launcher"
 OutFile "{q(out)}"
 InstallDir "$LOCALAPPDATA\\Programs\\EBALIA Launcher"
+InstallDirRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor zlib
 Icon "{q(icon)}"
@@ -31,15 +33,32 @@ VIAddVersionKey /LANG=1033 "LegalCopyright" "EBALIA"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Spanish"
+Function .onInit
+  ReadRegStr $0 HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "InstallLocation"
+  StrCmp $0 "" legacy
+  StrCpy $INSTDIR $0
+  Goto done
+legacy:
+  ReadRegStr $0 HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "UninstallString"
+  StrCmp $0 "" done
+  StrCpy $1 $0 1
+  StrCmp $1 '$\\"' 0 unquoted
+  StrCpy $0 $0 -1 1
+unquoted:
+  ${{GetParent}} $0 $INSTDIR
+done:
+FunctionEnd
 Section "EBALIA Launcher"
 SetShellVarContext current
 SetOverwrite on
+ClearErrors
 '''
 for f in files:
  rel=f.relative_to(root);parent=str(rel.parent).replace('/','\\');dest='$INSTDIR'+('\\'+q(parent) if parent!='.' else '')
  script+=f'SetOutPath "{dest}"\nFile "{q(f)}"\n'
 script+='''SetOutPath "$INSTDIR"
 WriteUninstaller "$INSTDIR\\Uninstall.exe"
+WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "InstallLocation" "$INSTDIR"
 CreateDirectory "$SMPROGRAMS\\EBALIA Launcher"
 CreateShortcut "$SMPROGRAMS\\EBALIA Launcher\\EBALIA Launcher.lnk" "$INSTDIR\\ebalia-launcher.exe"
 CreateShortcut "$DESKTOP\\EBALIA Launcher.lnk" "$INSTDIR\\ebalia-launcher.exe"

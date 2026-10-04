@@ -1,5 +1,6 @@
 #include <QStatusBar>
 #include "MainWindow.hpp"
+#include "GuidedTour.hpp"
 #include "CommunityPage.hpp"
 #include "BedrockPage.hpp"
 #include "PatreonAuth.hpp"
@@ -175,12 +176,12 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_java,&JavaRunner::processFinished,this,[this]{lostSelection();m_status->setText(text("Todo listo","Ready","Tudo pronto"));});
 
     if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){m_mc->fetchManifest();refreshNews();m_patreon->refreshNews();auto timer=new QTimer(this);connect(timer,&QTimer::timeout,this,[this]{m_mc->fetchManifest();refreshNews();});timer->start(30*60*1000);}
-    if(!QSettings().value("ui/tutorialSeen",false).toBool()){showPage(Guide);QSettings().setValue("ui/tutorialSeen",true);}
+    if(!QSettings().value("ui/tutorialSeen",false).toBool())QTimer::singleShot(400,this,[this]{startTour();});
     if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")&&!QSettings().value("ui/patreonInviteSeen",false).toBool()&&!QSettings().value("ui/hidePatreonInvite",false).toBool()){
         auto invite=new QTimer(this);invite->setInterval(15000);
         connect(invite,&QTimer::timeout,this,[this,invite]{
             if(m_patreon->verified()||QSettings().value("ui/hidePatreonInvite",false).toBool()){invite->stop();return;}
-            if(!isActiveWindow()||m_pages->currentIndex()!=Home||Ui::openWindows()||m_jobs)return;
+            if(!isActiveWindow()||m_pages->currentIndex()!=Home||Ui::openWindows()||m_jobs||findChild<QWidget*>("interactiveTour"))return;
             invite->stop();QSettings().setValue("ui/patreonInviteSeen",true);openCreatorDialog(true);
         });invite->start();
     }
@@ -371,8 +372,14 @@ QWidget *MainWindow::buildCommunity() {
     for(int n=0;n<sections.size();++n)tabs->addTab(new CommunityPage(n,m_root,m_patreon),Ui::icon(sections[n].first),sections[n].second);
     return s.widget;
 }
+void MainWindow::startTour() {
+    if(auto tour=findChild<QWidget*>("interactiveTour")){tour->raise();return;}
+    if(property("launcherUpdating").toBool())return;
+    new GuidedTour(this,[this](int page){showPage(page);});
+}
 QWidget *MainWindow::buildGuide() {
     auto s=section(k("Guide & tutorial"),text("Esta guía siempre está disponible en la barra lateral.","This guide is always available in the sidebar.","Este guia está sempre disponível na barra lateral."));auto l=s.layout;
+    auto tourRow=new QHBoxLayout;l->addLayout(tourRow);button(text("Iniciar guía interactiva","Start interactive tour","Iniciar guia interativo"),tourRow,[this]{startTour();},this,true,"compass")->setObjectName("startInteractiveTour");tourRow->addStretch();
     auto guide=new QTextBrowser;guide->setObjectName("guide");guide->setOpenExternalLinks(false);guide->setHtml(text(
         "<h2>1. Elegí tu modo</h2><p><b>Mis instancias</b> es el cliente normal de Minecraft. <b>Versiones perdidas</b> abre el archivo de EBALIA.</p><h2>2. Creá una instancia</h2><p>Elegí un nombre, una versión y un cargador. Vanilla es el juego original; Fabric, Quilt, Forge o NeoForge permiten mods. Los mundos y ajustes quedan separados. El catálogo se actualiza al abrir y cada 30 minutos. Las instancias existentes conservan su versión para cuidar tus mundos.</p><h2>3. Agregá mods</h2><p>En <b>Explorar mods</b>, seleccioná tu instancia y buscá Sodium, luces dinámicas, FallingTree o Veinminer. Revisá las dependencias y confirmá la instalación. La compatibilidad publicada no garantiza que todos los mods funcionen juntos.</p><h2>4. Guardá tus favoritos como pack</h2><p>En tu instancia, usá <b>Guardar mods como pack</b>. Luego aplicalo desde <b>Mis packs</b> a otra instancia. Buscamos una edición para su versión y cargador; si no existe, te lo mostramos antes de descargar. No copiamos un JAR incompatible. Los mods locales deben poder identificarse en Modrinth; los desactivados no se incluyen.</p><h2>5. Jugá</h2><p>Agregá una cuenta, instalá Java y pulsá <b>Jugar / Instalar</b>. Una vez terminada la instalación, pulsá Jugar. Si falta Java, el launcher indica qué versión requiere el juego. Podés elegir su ruta y memoria en los ajustes de instancia.</p><h2>Si algo falla</h2><p>Abrí <b>Ajustes de instancia → Registro</b>. Reparar vuelve a comprobar las descargas del juego. Quitar una instancia la mueve a la papelera local con sus mundos. Forge y NeoForge se instalan con sus instaladores oficiales y necesitan Java antes de comenzar. Las versiones perdidas pueden requerir Wine, Java antiguo o paquetes originales que ya no estén disponibles.</p>",
         "<h2>1. Choose your mode</h2><p><b>My instances</b> is the regular Minecraft client. <b>Lost versions</b> opens the EBALIA archive.</p><h2>2. Create an instance</h2><p>Choose a name, game version and loader. Vanilla is the original game; Fabric, Quilt, Forge or NeoForge support mods. Worlds and settings stay separate. The catalog refreshes at startup and every 30 minutes. Existing instances keep their game version to protect your worlds.</p><h2>3. Add mods</h2><p>In <b>Discover mods</b>, choose your instance and search for Sodium, dynamic lights, FallingTree or Veinminer. Review dependencies and confirm installation. Published compatibility does not guarantee that all mods work together.</p><h2>4. Save your favorites as a pack</h2><p>Use <b>Save mods as a pack</b> on your instance. Apply it to another instance from <b>My packs</b>. We look up builds for its game version and loader; unavailable mods are listed before downloading. Incompatible JARs are never copied. Local mods must be identifiable on Modrinth; disabled mods are excluded.</p><h2>5. Play</h2><p>Add an account, install Java and press <b>Play / Install</b>. After installation finishes, press Play. If Java is missing, the launcher tells you which version the game requires. Choose its path and memory in instance settings.</p><h2>Troubleshooting</h2><p>Open <b>Instance settings → Log</b>. Repair verifies game downloads again. Removing an instance moves it to local trash with its worlds. Forge and NeoForge use their official installers and require Java before installation. Lost versions may require Wine, older Java or original packages that are no longer available.</p>",
@@ -788,7 +795,15 @@ void MainWindow::lostAction(bool launch){
         LostInstaller::install(v,dest);return QJsonObject{};
     },[this](QJsonObject){refreshLost();m_status->setText(text("Versión perdida instalada","Lost version installed","Versão perdida instalada"));});
 }
+bool MainWindow::canUpdate() const {
+    if(m_jobs||!m_installing.isEmpty()||m_java->isRunning()||Ui::openWindows()>0||findChild<QWidget*>("interactiveTour"))return false;
+    for(auto page:findChildren<QWidget*>("bedrockLabPage"))if(page->property("bedrockInstalling").toBool())return false;
+    for(const auto &instance:m_mc->instances())if(m_mc->isInstalling(instance.dir)||m_mc->isRunning(instance.dir))return false;
+    return true;
+}
 void MainWindow::closeEvent(QCloseEvent *event){
+    if(property("launcherUpdating").toBool()){event->ignore();return;}
+    if(m_java->isRunning()){event->ignore();error(k("Close running instances before exiting."));return;}
     for(auto page:findChildren<QWidget*>("bedrockLabPage"))
         if(page->property("bedrockInstalling").toBool()) {
             event->ignore();error(text("Esperá a que termine la instalación de Bedrock.","Wait for Bedrock setup to finish.","Aguarde a instalação do Bedrock terminar."));return;

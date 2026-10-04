@@ -29,7 +29,7 @@ if(NOT EBALIA_PATREON_SERVICE_URL STREQUAL "" AND NOT EBALIA_PATREON_SERVICE_URL
   message(FATAL_ERROR "EBALIA_PATREON_SERVICE_URL must be a public HTTPS base URL")
 endif()
 configure_file(src/PatreonConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/PatreonConfig.hpp" @ONLY)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/GuidedTour.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
   include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
@@ -69,12 +69,17 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/GuidedTour.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp src/LauncherUpdater.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
       include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   set_target_properties(ebalia-ui-tests PROPERTIES WIN32_EXECUTABLE FALSE)
   target_link_libraries(ebalia-ui-tests PRIVATE ebalia-core Qt6::Test)
   target_include_directories(ebalia-ui-tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+  add_executable(ebalia-update-helper tests/UpdateHelper.cpp)
+  target_link_libraries(ebalia-update-helper PRIVATE Qt6::Core)
+  set_target_properties(ebalia-update-helper PROPERTIES WIN32_EXECUTABLE FALSE)
+  add_dependencies(ebalia-ui-tests ebalia-update-helper)
+  target_compile_definitions(ebalia-ui-tests PRIVATE EBALIA_UPDATE_HELPER="$<TARGET_FILE:ebalia-update-helper>")
   add_test(NAME ui COMMAND ebalia-ui-tests -o ui-test-results.txt,txt -o -,txt)
   if(WIN32)
     set_tests_properties(ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QPA_FONTDIR=$ENV{SystemRoot}/Fonts")

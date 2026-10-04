@@ -45,7 +45,7 @@ const translations = {
     "releaseEyebrow": "Novedades de la versión 1.1.0",
     "releaseHeading": "Bedrock experimental y mejoras al instalar",
     "releaseBedrock": "Gestor externo de Bedrock: Windows requiere Minecraft para Windows; Linux y macOS requieren la edición Android de Google Play. La compra de Windows no habilita Android. Las partidas aún no están verificadas en todos los sistemas.",
-    "releaseFixes": "Windows incluye las bibliotecas de Visual C++ y crea un acceso directo en el escritorio. Lost Versions permite desinstalar; las tareas muestran su progreso en la barra inferior."
+    "releaseFixes": "Guía interactiva en la primera apertura y botón Actualizar y reiniciar dentro del launcher. La actualización conserva instancias, Lost Versions y descargas, y elimina los archivos anteriores del programa al terminar. Windows incluye las DLL necesarias y detecta instalaciones existentes. Si usás 1.0.0, instalá 1.1.0 una vez para habilitar las próximas actualizaciones internas."
   },
   "en": {
     "navDownload": "Download",
@@ -93,7 +93,7 @@ const translations = {
     "releaseEyebrow": "New in version 1.1.0",
     "releaseHeading": "Experimental Bedrock and installation improvements",
     "releaseBedrock": "External Bedrock manager: Windows requires Minecraft for Windows; Linux and macOS require the Android edition from Google Play. A Windows purchase does not unlock Android. Game sessions have not been verified on all platforms.",
-    "releaseFixes": "Windows bundles the Visual C++ libraries and creates a desktop shortcut. Lost Versions can be uninstalled; tasks display progress in the bottom bar."
+    "releaseFixes": "Interactive first-run tour and an in-app Update and restart button. Updates preserve instances, Lost Versions and downloads, then remove the previous program files after successful startup. Windows includes the required DLLs and detects existing installations. If you use 1.0.0, install 1.1.0 once to enable future in-app updates."
   },
   "pt": {
     "navDownload": "Baixar",
@@ -141,7 +141,7 @@ const translations = {
     "releaseEyebrow": "Novidades da versão 1.1.0",
     "releaseHeading": "Bedrock experimental e melhorias na instalação",
     "releaseBedrock": "Gestor externo de Bedrock: Windows exige Minecraft para Windows; Linux e macOS exigem a edição Android do Google Play. A compra para Windows não libera Android. As partidas ainda não foram verificadas em todos os sistemas.",
-    "releaseFixes": "Windows inclui as bibliotecas Visual C++ e cria um atalho na área de trabalho. Lost Versions permite desinstalar; as tarefas exibem o progresso na barra inferior."
+    "releaseFixes": "Guia interativo na primeira abertura e botão Atualizar e reiniciar no launcher. A atualização preserva instâncias, Lost Versions e downloads e remove os arquivos anteriores do programa após iniciar corretamente. Windows inclui as DLLs necessárias e detecta instalações existentes. Se você usa 1.0.0, instale 1.1.0 uma vez para ativar as próximas atualizações internas."
   },
   "fr": {
     "navDownload": "Télécharger",
@@ -189,7 +189,7 @@ const translations = {
     "releaseEyebrow": "Nouveautés de la version 1.1.0",
     "releaseHeading": "Bedrock expérimental et installation améliorée",
     "releaseBedrock": "Gestionnaire Bedrock externe : Windows nécessite Minecraft pour Windows ; Linux et macOS nécessitent l’édition Android de Google Play. L’achat Windows ne donne pas accès à Android. Les parties ne sont pas encore vérifiées sur tous les systèmes.",
-    "releaseFixes": "Windows inclut les bibliothèques Visual C++ et crée un raccourci sur le bureau. Les Lost Versions peuvent être désinstallées ; la progression des tâches apparaît dans la barre inférieure."
+    "releaseFixes": "Guide interactif au premier lancement et bouton Mettre à jour et redémarrer dans le launcher. Les mises à jour conservent les instances, Lost Versions et téléchargements, puis suppriment les anciens fichiers du programme après un démarrage réussi. Windows inclut les DLL nécessaires et détecte les installations existantes. Installez 1.1.0 une fois depuis 1.0.0 pour activer les futures mises à jour intégrées."
   },
   "de": {
     "navDownload": "Herunterladen",
@@ -237,7 +237,7 @@ const translations = {
     "releaseEyebrow": "Neu in Version 1.1.0",
     "releaseHeading": "Experimentelles Bedrock und verbesserte Installation",
     "releaseBedrock": "Externer Bedrock-Manager: Windows benötigt Minecraft für Windows; Linux und macOS benötigen die Android-Version von Google Play. Ein Windows-Kauf schaltet Android nicht frei. Spielsitzungen wurden noch nicht auf allen Systemen überprüft.",
-    "releaseFixes": "Windows enthält die Visual-C++-Bibliotheken und erstellt eine Desktopverknüpfung. Lost Versions lassen sich deinstallieren; Aufgaben zeigen ihren Fortschritt in der unteren Leiste."
+    "releaseFixes": "Interaktive Einführung beim ersten Start und eine Schaltfläche zum Aktualisieren und Neustarten im Launcher. Updates behalten Instanzen, Lost Versions und Downloads und entfernen nach erfolgreichem Start die alten Programmdateien. Windows enthält die benötigten DLLs und erkennt bestehende Installationen. Installiere 1.1.0 einmal über 1.0.0, um zukünftige integrierte Updates zu aktivieren."
   }
 };
 Object.entries({

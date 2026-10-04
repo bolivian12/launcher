@@ -32,24 +32,24 @@ void UpdateChecker::fetch(bool gitgud){
  connect(reply,&QNetworkReply::finished,this,[this,reply,gitgud]{
   reply->deleteLater();const auto doc=QJsonDocument::fromJson(reply->readAll());
   if(reply->error()!=QNetworkReply::NoError||!doc.isArray()){if(!gitgud){fetch(true);return;}m_busy=false;emit checkFailed("No se pudo consultar GitHub ni GitGud.");return;}
-  QString best=QCoreApplication::applicationVersion(),page;
-  for(auto v:doc.array()){auto release=v.toObject();auto tag=release["tag_name"].toString();if(release["draft"].toBool()||release["prerelease"].toBool()||release["upcoming_release"].toBool())continue;auto url=releasePage(release,gitgud);if(url.isEmpty()||!newerStable(tag,best))continue;best=tag;page=url;}
+  QString best=QCoreApplication::applicationVersion(),page;QJsonObject selected;
+  for(auto v:doc.array()){auto release=v.toObject();auto tag=release["tag_name"].toString();if(release["draft"].toBool()||release["prerelease"].toBool()||release["upcoming_release"].toBool())continue;auto url=releasePage(release,gitgud);if(url.isEmpty()||!newerStable(tag,best))continue;best=tag;page=url;selected=release;}
   if(page.isEmpty()&&!gitgud){fetch(true);return;}
-  m_busy=false;if(page.isEmpty()){emit upToDate();return;}m_releaseUrl=page;emit updateAvailable(best);
+  m_busy=false;if(page.isEmpty()){emit upToDate();return;}m_releaseUrl=page;m_release=selected;emit updateAvailable(best);
  });
 }
 
-QMessageBox *UpdateChecker::showUpdatePrompt(QWidget *parent,const QString &version) {
+QMessageBox *UpdateChecker::showUpdatePrompt(QWidget *parent,const QString &version,std::function<void()> install) {
  const bool es=Language::current=="es";
  auto box=new QMessageBox(QMessageBox::Information,es?"Actualización disponible":"Update available",
      es?QString("EBALIA Launcher %1 está disponible.").arg(version):QString("EBALIA Launcher %1 is available.").arg(version),QMessageBox::NoButton,parent);
  box->setObjectName("launcherUpdatePrompt");box->setAttribute(Qt::WA_DeleteOnClose);box->setTextFormat(Qt::PlainText);
- box->setInformativeText(es?"Descargá el paquete de tu sistema desde nuestra página e instalalo para actualizar. Tus instancias se conservan.":"Download your system’s package from our website and install it to update. Your instances are preserved.");
- auto download=box->addButton(es?"Descargar actualización":"Download update",QMessageBox::AcceptRole);
+ box->setInformativeText(es?"El launcher descargará y verificará la nueva versión, se reiniciará y eliminará los archivos de la versión anterior. Tus mundos, mods y ajustes se conservan.":"The launcher will download and verify the new version, restart, and remove the previous launcher files. Your worlds, mods and settings are preserved.");
+ auto download=box->addButton(es?"Actualizar y reiniciar":"Update and restart",QMessageBox::AcceptRole);
  auto later=box->addButton(es?"Más tarde":"Later",QMessageBox::RejectRole);
  box->setDefaultButton(later);box->setEscapeButton(later);box->setModal(false);
- QObject::connect(box,&QMessageBox::buttonClicked,box,[download](QAbstractButton *clicked){
-     if(clicked==download)QDesktopServices::openUrl(QUrl("https://ebalia-launcher.gitgud.site/#descargas"));
+ QObject::connect(box,&QMessageBox::buttonClicked,box,[download,install](QAbstractButton *clicked){
+     if(clicked==download&&install)QTimer::singleShot(0,qApp,install);
  });
  box->show();return box;
 }

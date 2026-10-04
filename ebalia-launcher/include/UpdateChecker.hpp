@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QNetworkAccessManager>
 #include <QJsonObject>
+#include <functional>
 class QWidget;
 class QMessageBox;
 class UpdateChecker:public QObject {
@@ -10,7 +11,8 @@ public:
  explicit UpdateChecker(QObject *parent=nullptr);
  void check();
  QString releaseUrl() const{return m_releaseUrl;}
- static QMessageBox *showUpdatePrompt(QWidget *parent,const QString &version);
+ QJsonObject release() const{return m_release;}
+ static QMessageBox *showUpdatePrompt(QWidget *parent,const QString &version, std::function<void()> install = {});
  static bool newerStable(QString tag,const QString &current);
  static QString releasePage(const QJsonObject &release,bool gitgud);
 signals:
@@ -21,5 +23,6 @@ private:
  void fetch(bool gitgud);
  QNetworkAccessManager m_nam;
  QString m_releaseUrl;
+ QJsonObject m_release;
  bool m_busy=false;
 };

@@ -29,6 +29,8 @@ public:
     enum Page{Home,Instances,Explore,Lost,Packs,Skins,News,Community,Guide,Bedrock,Settings};
     explicit MainWindow(QWidget *parent=nullptr);
     void showPage(int index);
+    bool canUpdate() const;
+    void startTour();
 protected:
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

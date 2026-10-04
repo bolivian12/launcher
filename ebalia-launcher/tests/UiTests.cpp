@@ -15,6 +15,7 @@
 #include "PatreonNewsPage.hpp"
 #include "Ui.hpp"
 #include "BedrockPage.hpp"
+#include "LauncherUpdater.hpp"
 class UiTests:public QObject {
     Q_OBJECT
 public:
@@ -22,7 +23,7 @@ public:
 private:
     QUrl lastUrl;
 private slots:
-    void initTestCase(){QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");qputenv("EBALIA_NO_NETWORK","1");}
+    void initTestCase(){QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
 
     void bedrockCommandValidation() {
         QTemporaryDir dir;
@@ -126,6 +127,87 @@ printf started > launched-marker
             QVERIFY(label->text().contains(name));QVERIFY(page.findChild<QLabel*>("patreonMembership")->text().contains(name));QCOMPARE(auth.tierIds().size(),1);
         }
         auth.m_paid=false;emit auth.changed();QVERIFY(auth.tierIds().isEmpty());
+    }
+    void firstRunTourAndReplay(){
+        QSettings().setValue("ui/tutorialSeen",false);QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());
+        MainWindow window;window.resize(640,480);window.show();
+        QTRY_VERIFY(window.findChild<QWidget*>("interactiveTour"));
+        auto tour=window.findChild<QWidget*>("interactiveTour");auto next=tour->findChild<QPushButton*>("tourNext");
+        QVERIFY(next);QVERIFY(!tour->findChild<QPushButton*>("tourBack")->isEnabled());
+        for(int i=0;i<13;++i){next->click();QTest::qWait(10);QVERIFY(tour->rect().contains(tour->findChild<QFrame*>("tourCard")->geometry()));}
+        next->click();QTRY_VERIFY(!window.findChild<QWidget*>("interactiveTour"));QVERIFY(QSettings().value("ui/tutorialSeen").toBool());
+        window.showPage(MainWindow::Guide);window.findChild<QPushButton*>("startInteractiveTour")->click();
+        QTRY_VERIFY(window.findChild<QWidget*>("interactiveTour"));window.findChild<QPushButton*>("tourSkip")->click();
+        QTRY_VERIFY(!window.findChild<QWidget*>("interactiveTour"));window.close();
+        MainWindow second;second.show();QTest::qWait(450);QVERIFY(!second.findChild<QWidget*>("interactiveTour"));
+    }
+    void updatePackageValidation(){
+        QVERIFY(LauncherUpdater::trustedAsset("https://github.com/ebalia-real/launcher/releases/download/v1.2.0/ebalia-windows-x64.zip","v1.2.0"));
+        for(const QString &url:{QString("https://evil.test/ebalia-real/launcher/releases/download/v1.2.0/x.zip"),QString("https://github.com/other/launcher/releases/download/v1.2.0/x.zip"),QString("https://github.com/ebalia-real/launcher/releases/download/v1.1.0/x.zip"),QString("https://github.com/ebalia-real/launcher/releases/download/v1.2.0/../x.zip")})QVERIFY(!LauncherUpdater::trustedAsset(url,"v1.2.0"));
+        const auto hash=QByteArray(64,'a');
+        QCOMPARE(LauncherUpdater::checksum(hash+"  file.zip\n","file.zip"),hash);
+        QVERIFY_EXCEPTION_THROWN(LauncherUpdater::checksum(hash+"  wrong.zip\n","file.zip"),std::runtime_error);
+        QVERIFY_EXCEPTION_THROWN(LauncherUpdater::checksum(hash+"  file.zip\n"+hash+"  file.zip\n","file.zip"),std::runtime_error);
+        QCOMPARE(LauncherUpdater::assetName("linux","x86_64"),QString("ebalia-linux-x64-update.zip"));
+        QVERIFY(LauncherUpdater::assetName("windows","arm64").isEmpty());
+    }
+    void updateReplacementAndCleanup(){
+#ifdef Q_OS_MACOS
+        QSKIP("The macOS updater replaces complete app bundles; this fixture covers file-manifest packages.");
+#else
+        QTemporaryDir temp;const auto root=temp.path()+"/data",destination=temp.path()+"/installed";
+        const auto stage=root+"/updates/1.2.0-11111111-1111-1111-1111-111111111111";
+#ifdef Q_OS_WIN
+        const QString relative="ebalia-launcher.exe";
+#else
+        const QString relative="bin/ebalia-launcher";
+#endif
+        auto write=[](const QString &path,const QByteArray &bytes){QDir().mkpath(QFileInfo(path).absolutePath());QFile file(path);if(!file.open(QIODevice::WriteOnly))return false;return file.write(bytes)==bytes.size();};
+        auto manifest=[](const QStringList &files){return QJsonDocument(QJsonObject{{"format",1},{"files",QJsonArray::fromStringList(files)}}).toJson();};
+        QVERIFY(write(destination+"/"+relative,"old binary"));
+        QVERIFY(write(destination+"/old-library.dll","old library"));
+        QVERIFY(write(destination+"/worlds/keep.txt","my world"));
+        QVERIFY(write(destination+"/update-files.json",manifest({relative,"old-library.dll","update-files.json"})));
+        const auto source=stage+"/app";QDir().mkpath(QFileInfo(source+"/"+relative).absolutePath());
+        QVERIFY(QFile::copy(QString::fromUtf8(EBALIA_UPDATE_HELPER),source+"/"+relative));
+        QVERIFY(write(source+"/update-files.json",manifest({relative,"update-files.json"})));
+        QJsonObject prepared{{"version","1.2.0"},{"stage",stage},{"destination",destination},{"executable",source+"/"+relative},{"nix",false}};
+        QVERIFY(LauncherUpdater::applyPrepared(prepared,root));
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(root+"/update-child-started"),5000);
+        QVERIFY(!QFileInfo::exists(destination+"/old-library.dll"));
+        QFile world(destination+"/worlds/keep.txt");QVERIFY(world.open(QIODevice::ReadOnly));QCOMPARE(world.readAll(),QByteArray("my world"));
+        QVERIFY(QFileInfo::exists(stage+"/previous/old-library.dll"));
+        QVERIFY(write(root+"/updates/cleanup.json",QJsonDocument(QJsonObject{{"version",QCoreApplication::applicationVersion()},{"folders",QJsonArray{QFileInfo(stage).fileName()}}}).toJson()));
+        LauncherUpdater::cleanupInstalled(root);
+        QVERIFY(!QFileInfo::exists(stage));QVERIFY(QFileInfo::exists(destination+"/"+relative));QVERIFY(QFileInfo::exists(destination+"/worlds/keep.txt"));
+#endif
+    }
+    void updateFailureRestoresPreviousFiles(){
+#ifdef Q_OS_MACOS
+        QSKIP("Manifest replacement fixture applies to Linux and Windows.");
+#else
+        QTemporaryDir temp;const auto root=temp.path()+"/data",destination=temp.path()+"/installed";
+        const auto stage=root+"/updates/1.2.0-22222222-2222-2222-2222-222222222222";
+#ifdef Q_OS_WIN
+        const QString relative="ebalia-launcher.exe";
+#else
+        const QString relative="bin/ebalia-launcher";
+#endif
+        auto write=[](const QString &path,const QByteArray &bytes){QDir().mkpath(QFileInfo(path).absolutePath());QFile file(path);if(!file.open(QIODevice::WriteOnly))return false;return file.write(bytes)==bytes.size();};
+        auto manifest=[](const QStringList &files){return QJsonDocument(QJsonObject{{"format",1},{"files",QJsonArray::fromStringList(files)}}).toJson();};
+        QVERIFY(write(destination+"/"+relative,"old binary"));
+        QVERIFY(write(destination+"/update-files.json",manifest({relative,"update-files.json"})));
+        QVERIFY(write(stage+"/app/update-files.json",manifest({relative,"update-files.json"})));
+        QJsonObject prepared{{"version","1.2.0"},{"stage",stage},{"destination",destination},{"executable",stage+"/app/"+relative},{"nix",false}};
+        QVERIFY_EXCEPTION_THROWN(LauncherUpdater::applyPrepared(prepared,root),std::runtime_error);
+        QFile old(destination+"/"+relative);QVERIFY(old.open(QIODevice::ReadOnly));QCOMPARE(old.readAll(),QByteArray("old binary"));
+        QVERIFY(QFileInfo::exists(destination+"/update-files.json"));old.close();
+        QDir().mkpath(QFileInfo(stage+"/app/"+relative).absolutePath());
+        QVERIFY(QFile::copy(QString::fromUtf8(EBALIA_UPDATE_HELPER),stage+"/app/"+relative));
+        prepared["version"]="1.3.0"; // helper reports 1.2.0: startup verification must roll back.
+        QVERIFY_EXCEPTION_THROWN(LauncherUpdater::applyPrepared(prepared,root),std::runtime_error);
+        QVERIFY(old.open(QIODevice::ReadOnly));QCOMPARE(old.readAll(),QByteArray("old binary"));
+#endif
     }
     void updatePromptCanBeDeferred(){
         QWidget parent;
