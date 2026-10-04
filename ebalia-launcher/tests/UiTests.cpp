@@ -127,7 +127,16 @@ printf started > launched-marker
         }
         auth.m_paid=false;emit auth.changed();QVERIFY(auth.tierIds().isEmpty());
     }
+    void updatePromptCanBeDeferred(){
+        QWidget parent;
+        auto prompt=UpdateChecker::showUpdatePrompt(&parent,"1.2.0");
+        QVERIFY(prompt->isVisible());QVERIFY(!prompt->isModal());QVERIFY(prompt->text().contains("1.2.0"));
+        QVERIFY(prompt->escapeButton());QTest::mouseClick(prompt->escapeButton(),Qt::LeftButton);
+        QVERIFY(!prompt->isVisible());
+    }
     void releaseDetection(){
+        QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
+        QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::newerStable("v4.0.1","4.0.0"));QVERIFY(!UpdateChecker::newerStable("v4.0.1","v4.1.0"));QVERIFY(UpdateChecker::newerStable("4.10.0","4.9.0"));
         for(const QString &tag:{QString("v4.0.0"),QString("3.9.0"),QString("v5.0.0-beta"),QString("latest")})QVERIFY(!UpdateChecker::newerStable(tag,"4.0.0"));
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/bolivian12/launcher/releases/tag/v4.1.0"}},false).isEmpty());

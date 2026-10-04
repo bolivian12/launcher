@@ -65,8 +65,9 @@ int main(int argc,char **argv){
     QObject::connect(&updateTimer,&QTimer::timeout,&updater,&UpdateChecker::check);updateTimer.start();
     auto updateButton=new QPushButton(&window);updateButton->setObjectName("launcherUpdateAvailable");updateButton->hide();
     window.statusBar()->addPermanentWidget(updateButton);
-    QObject::connect(&updater,&UpdateChecker::updateAvailable,&window,[&](const QString &version){updateButton->setText("Nueva versión "+version+" · Descargar ↗");updateButton->show();});
-    QObject::connect(updateButton,&QPushButton::clicked,&window,[&]{QDesktopServices::openUrl(QUrl(updater.releaseUrl()));});
+    QString promptedVersion;
+    QObject::connect(&updater,&UpdateChecker::updateAvailable,&window,[&](const QString &version){updateButton->setText("Nueva versión "+version+" · Descargar ↗");updateButton->show();if(promptedVersion!=version){promptedVersion=version;UpdateChecker::showUpdatePrompt(&window,version);}});
+    QObject::connect(updateButton,&QPushButton::clicked,&window,[&]{QDesktopServices::openUrl(QUrl("https://ebalia-launcher.gitgud.site/#descargas"));});
     QTimer::singleShot(5000,&updater,&UpdateChecker::check);
     auto args=app.arguments();int test=args.indexOf("--selftest");
     if(test>=0){if(test+1<args.size())window.showPage(args[test+1].toInt());QTimer::singleShot(700,&window,[&]{auto path=qEnvironmentVariable("EBALIA_SCREENSHOT","/tmp/ebalia-main.png");window.grab().save(path);app.quit();});}
