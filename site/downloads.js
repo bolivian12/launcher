@@ -61,7 +61,7 @@
       for(const release of candidates.filter(r=>compare(r.version,latest.version)===0)) {
         for(const platform of Object.keys(names)) {
           if(next.has(platform))continue;
-          const candidates=release.files.filter(a=>typeof a.name==='string'&&a.name.toLowerCase().includes(platform)&&/\.(exe|zip|dmg|tar\.gz|appimage)$/i.test(a.name));
+          const candidates=release.files.filter(a=>typeof a.name==='string'&&a.name.toLowerCase().includes(platform)&&!a.name.endsWith('-update.zip')&&/\.(exe|zip|dmg|tar\.gz|appimage)$/i.test(a.name));
           const asset=(platform==='windows'?candidates.find(a=>/\.exe$/i.test(a.name)):null)||candidates[0];
           if(!asset)continue;
           const url=asset.browser_download_url||asset.direct_asset_url||asset.url;
