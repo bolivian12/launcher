@@ -83,6 +83,16 @@ jobs:
         with:
           name: ebalia-windows-x64-unsigned
           path: ebalia-launcher/package/bin
+      - name: Build per-user Windows installer
+        shell: pwsh
+        run: |
+          choco install nsis --yes --no-progress
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(EBALIA_Launcher VERSION ([0-9.]+)').Matches.Groups[1].Value
+          python packaging/make-windows-installer.py --package package/bin --output package/ebalia-windows-x64-setup.exe --version $version --makensis "${env:ProgramFiles(x86)}/NSIS/makensis.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-windows-installer
+          path: ebalia-launcher/package/ebalia-windows-x64-setup.exe
   macos:
     runs-on: macos-14
     steps:
