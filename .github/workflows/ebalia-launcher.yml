@@ -77,8 +77,17 @@ jobs:
         shell: pwsh
         run: |
           cmake --install build --config Release --prefix package
-          windeployqt --release --no-translations package/bin/ebalia-launcher.exe
+          windeployqt --release --compiler-runtime --no-translations package/bin/ebalia-launcher.exe
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/*.dll" package/bin
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $redist = Get-ChildItem "$vs/VC/Redist/MSVC/*/x64/Microsoft.VC*.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$redist) { throw "Visual C++ x64 redistributable directory not found" }
+          Copy-Item "$($redist.FullName)/*.dll" package/bin
+          foreach ($dll in @('msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll','vcruntime140.dll','vcruntime140_1.dll')) {
+            if (!(Test-Path "package/bin/$dll")) { throw "Missing runtime: $dll" }
+          }
+
       - uses: actions/upload-artifact@v4
         with:
           name: ebalia-windows-x64-unsigned

@@ -4,8 +4,8 @@ p=argparse.ArgumentParser();p.add_argument('--package',required=True);p.add_argu
 import re
 if not re.fullmatch(r'\d+\.\d+\.\d+',a.version):p.error('Expected a stable numeric version')
 root=pathlib.Path(a.package).resolve();out=pathlib.Path(a.output).resolve();out.parent.mkdir(parents=True,exist_ok=True)
-for f in ['ebalia-launcher.exe','Qt6Core.dll','platforms/qwindows.dll','archive.dll']:
- if not (root/f).is_file():p.error('Missing package file: '+f)
+for f in ['ebalia-launcher.exe','Qt6Core.dll','platforms/qwindows.dll','archive.dll','msvcp140.dll','msvcp140_1.dll','msvcp140_2.dll','vcruntime140.dll','vcruntime140_1.dll']:
+ if not any(x.name.lower()==pathlib.Path(f).name.lower() and x.parent==root/pathlib.Path(f).parent for x in root.rglob('*') if x.is_file()):p.error('Missing package file: '+f)
 def q(s):return str(s).replace('$','$$').replace('"','$\\"')
 files=sorted(f for f in root.rglob('*') if f.is_file());dirs=sorted({str(f.parent.relative_to(root)).replace('/','\\') for f in files if f.parent!=root},key=lambda s:len(s),reverse=True)
 icon=pathlib.Path(__file__).resolve().parents[1]/'resources/ebalia.ico'
@@ -42,6 +42,7 @@ script+='''SetOutPath "$INSTDIR"
 WriteUninstaller "$INSTDIR\\Uninstall.exe"
 CreateDirectory "$SMPROGRAMS\\EBALIA Launcher"
 CreateShortcut "$SMPROGRAMS\\EBALIA Launcher\\EBALIA Launcher.lnk" "$INSTDIR\\ebalia-launcher.exe"
+CreateShortcut "$DESKTOP\\EBALIA Launcher.lnk" "$INSTDIR\\ebalia-launcher.exe"
 WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "DisplayName" "EBALIA Launcher"
 WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
 WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher" "DisplayIcon" "$INSTDIR\\ebalia-launcher.exe"
@@ -59,6 +60,7 @@ for d in dirs:script+='RMDir "$INSTDIR\\'+q(d)+'"\n'
 script+='''Delete "$INSTDIR\\Uninstall.exe"
 RMDir "$INSTDIR"
 Delete "$SMPROGRAMS\\EBALIA Launcher\\EBALIA Launcher.lnk"
+Delete "$DESKTOP\\EBALIA Launcher.lnk"
 RMDir "$SMPROGRAMS\\EBALIA Launcher"
 DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\EBALIA Launcher"
 SectionEnd
