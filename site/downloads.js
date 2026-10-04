@@ -29,6 +29,7 @@
     if(current) notes.href=current.url;
     if (!selected) return;
     const asset = assets.get(selected);
+    window.renderLinuxGuide?.(selected, version, current?.tag || 'v1.0.0');
     document.querySelector('#download-title').textContent = names[selected];
     document.querySelector('#download-message').textContent = t(asset ? 'panelReady' : busy ? 'checking' : state === 'unavailable' ? 'panelError' : 'panelPending');
     file.hidden = !asset;
