@@ -27,7 +27,18 @@
 
 
           doCheck = true;
-          checkPhase = "QT_QPA_PLATFORM=offscreen ctest --output-on-failure";
+          # Qt settings and font caches must be writable inside the Nix sandbox.
+          checkPhase = ''
+            runHook preCheck
+            export HOME="$TMPDIR/ebalia-test-home"
+            export XDG_CONFIG_HOME="$HOME/.config"
+            export XDG_CACHE_HOME="$HOME/.cache"
+            export XDG_DATA_HOME="$HOME/.local/share"
+            mkdir -p "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME"
+            export QT_QPA_PLATFORM=offscreen
+            ctest --output-on-failure
+            runHook postCheck
+          '';
           qtWrapperArgs = [ "--set" "EBALIA_JAVA_PATHS" "${pkgs.jdk8}/bin/java:${pkgs.jdk17}/bin/java:${pkgs.jdk21}/bin/java:${pkgs.jdk25}/bin/java"
             "--prefix" "LD_LIBRARY_PATH" ":" "/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [ pkgs.libglvnd pkgs.alsa-lib pkgs.libpulseaudio pkgs.libx11 pkgs.libxcursor pkgs.libxext pkgs.libxrandr pkgs.libxrender pkgs.libxxf86vm pkgs.stdenv.cc.cc.lib ]}"
           ];
