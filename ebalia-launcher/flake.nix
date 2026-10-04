@@ -13,7 +13,7 @@
       in {
         packages.default = pkgs.stdenv.mkDerivation {
           pname = "ebalia-launcher";
-          version = "1.0.0";
+          version = "1.1.0";
 
           src = pkgs.lib.cleanSourceWith { src = ./.; filter = path: type: !(builtins.elem (baseNameOf path) [ "patreon.json" ".env" ".env.local" ".env.production" ".neon" "node_modules" "private" "__pycache__" "build" "legacy" "Bexe16.4" "codigo generacion" "result" "result-v4" "artifacts" ]); };
 

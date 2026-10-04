@@ -1,6 +1,7 @@
 #include <QtTest>
 #include <QtWidgets>
 #include "MainWindow.hpp"
+#include "VersionManager.hpp"
 #include "Language.hpp"
 #include "McInstanceManager.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -13,6 +14,7 @@
 #include "UpdateChecker.hpp"
 #include "PatreonNewsPage.hpp"
 #include "Ui.hpp"
+#include "BedrockPage.hpp"
 class UiTests:public QObject {
     Q_OBJECT
 public:
@@ -21,6 +23,70 @@ private:
     QUrl lastUrl;
 private slots:
     void initTestCase(){QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");qputenv("EBALIA_NO_NETWORK","1");}
+
+    void bedrockCommandValidation() {
+        QTemporaryDir dir;
+        QVERIFY(!Bedrock::localCommand("relative.exe",Bedrock::Platform::Windows).valid());
+        QVERIFY(!Bedrock::localCommand(dir.path()+"/missing.exe",Bedrock::Platform::Windows).valid());
+        const auto exe=dir.path()+"/manager name; literal.exe";
+        QFile file(exe);QVERIFY(file.open(QIODevice::WriteOnly));file.write("test");file.close();
+        auto windows=Bedrock::localCommand(exe,Bedrock::Platform::Windows);
+        QCOMPARE(windows.program,exe);QVERIFY(windows.arguments.isEmpty());
+        QVERIFY(!Bedrock::localCommand(exe,Bedrock::Platform::Unsupported).valid());
+#ifndef Q_OS_WIN
+        QVERIFY(!Bedrock::localCommand(exe,Bedrock::Platform::Linux).valid());
+        QVERIFY(file.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
+        QCOMPARE(Bedrock::localCommand(exe,Bedrock::Platform::Linux).program,exe);
+#endif
+        const auto bundle=dir.path()+"/Bedrock Test.app";QVERIFY(QDir().mkpath(bundle));
+        auto mac=Bedrock::localCommand(bundle,Bedrock::Platform::MacOS);
+        QCOMPARE(mac.program,QString("/usr/bin/open"));QCOMPARE(mac.arguments,QStringList({"-a",bundle}));
+        QVERIFY(!Bedrock::localCommand(bundle,Bedrock::Platform::Linux).valid());
+    }
+    void bedrockMissingProviderNeverEnablesLaunch() {
+        QTemporaryDir dir;
+        QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
+        settings.setValue("provider/path",dir.path()+"/nonexistent");settings.sync();
+        BedrockPage page(dir.path());page.resize(600,650);page.show();
+        auto launch=page.findChild<QPushButton*>("bedrockOpenManager");QVERIFY(launch);
+        QTest::qWait(50);QVERIFY(!launch->isEnabled());
+        QVERIFY(!page.findChild<QLabel*>("bedrockProviderStatus")->text().isEmpty());
+    }
+    void bedrockLaunchPreservesLiteralPath() {
+#ifndef Q_OS_UNIX
+        QSKIP("Uses a POSIX test helper; Windows argv is covered by command validation.");
+#else
+        QTemporaryDir dir;
+        const auto exe=dir.path()+"/bedrock helper; literal";
+        QFile helper(exe);QVERIFY(helper.open(QIODevice::WriteOnly));
+        helper.write(R"SCRIPT(#!/bin/sh
+printf started > launched-marker
+)SCRIPT");helper.close();
+        QVERIFY(helper.setPermissions(QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner));
+        QSettings settings(dir.path()+"/bedrock-lab.ini",QSettings::IniFormat);
+        settings.setValue("provider/path",exe);settings.sync();
+        BedrockPage page(dir.path());page.show();
+        auto launch=page.findChild<QPushButton*>("bedrockOpenManager");
+        QTRY_VERIFY(launch->isEnabled());launch->click();
+        QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(dir.path()+"/launched-marker"),3000);
+        auto path=page.findChild<QLineEdit*>("bedrockProviderPath");
+        path->setFocus();QTest::keyClicks(path,"invalid");QVERIFY(!launch->isEnabled());
+#endif
+    }
+    void lostUninstallCancelPreservesFiles() {
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());
+        VersionManager versions;versions.loadVersions();QVERIFY(!versions.getVersions().isEmpty());
+        for(const auto &v:versions.getVersions()) {
+            auto dir=versions.getInstallPath(v);QDir().mkpath(dir);
+            QFile marker(dir+"/.installed.json");QVERIFY(marker.open(QIODevice::WriteOnly));marker.write("{}");marker.close();
+        }
+        MainWindow window;window.show();window.showPage(MainWindow::Lost);
+        auto uninstall=window.findChild<QPushButton*>("lostUninstall");QVERIFY(uninstall);QVERIFY(uninstall->isVisible());QVERIFY(uninstall->isEnabled());
+        QTimer::singleShot(0,[] {if(auto box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget()))box->done(QMessageBox::No);});
+        uninstall->click();
+        for(const auto &v:versions.getVersions())QVERIFY(versions.isVersionInstalled(v));
+        QVERIFY(!window.findChild<QWidget*>("backgroundTaskProgress"));
+    }
     void asynchronousArtwork(){
         const QString path=":/art/backgrounds/village.png";const QSize bounds(137,137);QObject receiver;auto removed=new QObject;
         int delivered=0;QPixmap first,second;bool stale=false;

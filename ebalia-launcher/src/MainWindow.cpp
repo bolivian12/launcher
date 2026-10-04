@@ -1,5 +1,7 @@
+#include <QStatusBar>
 #include "MainWindow.hpp"
 #include "CommunityPage.hpp"
+#include "BedrockPage.hpp"
 #include "PatreonAuth.hpp"
 #include "ModRepository.hpp"
 #include "Language.hpp"
@@ -184,6 +186,9 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     }
 }
 void MainWindow::build() {
+    for(auto page:findChildren<QWidget*>("bedrockLabPage"))
+        if(page->property("bedrockInstalling").toBool())return;
+
     const int current=m_pages?m_pages->currentIndex():int(Home);
     auto old=takeCentralWidget();if(old)old->deleteLater();
     auto root=new QWidget;root->setObjectName("content");setCentralWidget(root);
@@ -191,7 +196,7 @@ void MainWindow::build() {
     auto right=new QVBoxLayout;right->setContentsMargins(0,0,0,0);right->setSpacing(0);outer->addLayout(right,1);
     m_pages=new QStackedWidget;right->addWidget(m_pages,1);
     // Same order as Page and the sidebar.
-    for(auto page:{buildHome(),buildInstances(),buildExplore(),buildLost(),buildPacks(),buildSkins(),buildNews(),buildCommunity(),buildGuide(),buildSettings()}){
+    for(auto page:{buildHome(),buildInstances(),buildExplore(),buildLost(),buildPacks(),buildSkins(),buildNews(),buildCommunity(),buildGuide(),static_cast<QWidget*>(new BedrockPage(m_root)),buildSettings()}){
         auto scroll=new QScrollArea;scroll->setObjectName("pageScroll");scroll->setFrameShape(QFrame::NoFrame);scroll->setWidgetResizable(true);scroll->setWidget(page);
         if(page->layout())page->layout()->setSizeConstraint(QLayout::SetMinimumSize);m_pages->addWidget(scroll);
     }
@@ -212,7 +217,7 @@ QWidget *MainWindow::buildSidebar() {
     for(QWidget *w:{static_cast<QWidget*>(m_accountAvatar),static_cast<QWidget*>(m_accountName),static_cast<QWidget*>(m_accountType),static_cast<QWidget*>(chevron)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
     connect(m_accountButton,&QPushButton::clicked,this,[this]{accountMenu();});l->addWidget(m_accountButton);
     m_nav=new QListWidget;m_nav->setObjectName("navigation");m_nav->setIconSize(QSize(28,28));m_nav->setFocusPolicy(Qt::NoFocus);m_nav->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_nav->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);m_nav->setFrameShape(QFrame::NoFrame);
-    const QList<QPair<QString,QString>> items{{"house",k("Home")},{"layout-grid",k("Instances")},{"compass",k("Discover mods")},{"ghost",k("Lost versions")},{"package",k("My packs")},{"shirt",k("Skins")},{"newspaper",k("News")},{"users",k("Community")},{"book-open",k("Guide & tutorial")}};
+    const QList<QPair<QString,QString>> items{{"house",k("Home")},{"layout-grid",k("Instances")},{"compass",k("Discover mods")},{"ghost",k("Lost versions")},{"package",k("My packs")},{"shirt",k("Skins")},{"newspaper",k("News")},{"users",k("Community")},{"book-open",k("Guide & tutorial")},{"package","Bedrock · Beta"}};
     for(const auto &item:items){
         auto entry=new QListWidgetItem(Ui::navigationIcon(item.first),"  "+item.second,m_nav);entry->setSizeHint(QSize(0,42));entry->setToolTip(item.second);
     }
@@ -309,6 +314,28 @@ QWidget *MainWindow::buildLost() {
     auto folder=new QToolButton;folder->setIcon(Ui::icon("folder"));folder->setIconSize(QSize(20,20));folder->setToolTip(k("Open instance folder"));folder->setAccessibleName(folder->toolTip());folder->setCursor(Qt::PointingHandCursor);actions->addWidget(folder);
     connect(folder,&QToolButton::clicked,this,[this]{auto id=filename(m_lost);for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v))QDesktopServices::openUrl(QUrl::fromLocalFile(m_versions->getInstallPath(v)));});
     actions->addStretch();
+    auto maintenance=new QHBoxLayout;maintenance->setContentsMargins(16,0,16,12);dl->addLayout(maintenance);
+    m_lostUninstall=button(text("Desinstalar","Uninstall","Desinstalar"),maintenance,[this] {
+        if(m_jobs||m_java->isRunning())return;
+        const auto id=filename(m_lost);
+        for(const auto &v:m_versions->getVersions())if(v.id==id&&m_versions->isVersionInstalled(v)) {
+            const auto dest=m_versions->getInstallPath(v);
+            const QFileInfo target(dest);
+            const auto base=QFileInfo(m_versions->getVersionsDir()).canonicalFilePath();
+            if(base.isEmpty()||target.isSymLink()||target.canonicalFilePath()!=base+"/"+v.id||v.id.contains('/')||v.id.contains('\\')) {
+                error(text("Ruta de instalación inválida.","Invalid installation path.","Caminho de instalação inválido."));return;
+            }
+            const auto message=text("Se moverá a la papelera la carpeta completa de %1, incluidos sus mundos y ajustes. ¿Continuar?",
+                "Move the entire %1 folder to the trash, including its worlds and settings?",
+                "Mover a pasta completa de %1 para a lixeira, incluindo mundos e configurações?").arg(v.name);
+            if(QMessageBox::question(this,text("Desinstalar versión","Uninstall version","Desinstalar versão"),message,QMessageBox::Yes|QMessageBox::No,QMessageBox::No)!=QMessageBox::Yes)return;
+            work(text("Desinstalando…","Uninstalling…","Desinstalando…"),[dest] {
+                if(!QFile::moveToTrash(dest))throw std::runtime_error("No se pudo mover la instalación a la papelera. No se borró permanentemente.");
+                return QJsonObject{};
+            },[this](QJsonObject){refreshLost();m_status->setText(text("Versión desinstalada · archivos en la papelera","Version uninstalled · files in trash","Versão desinstalada · arquivos na lixeira"));});
+            return;
+        }
+    },this,false,"trash-2");m_lostUninstall->setObjectName("lostUninstall");maintenance->addStretch();
     connect(m_lost,&QListWidget::currentRowChanged,this,[this]{lostSelection();});
     label(text("Los paquetes de Windows necesitan Windows o Wine. La disponibilidad depende del archivo original.","Windows packages require Windows or Wine. Availability depends on the original archive.","Pacotes do Windows precisam de Windows ou Wine. A disponibilidade depende do arquivo original."),l,"muted");
     return s.widget;
@@ -498,6 +525,7 @@ void MainWindow::lostSelection(){
     auto id=filename(m_lost);VersionInfo v;for(const auto &entry:m_versions->getVersions())if(entry.id==id)v=entry;
     auto cover=static_cast<Cover*>(m_lostImage);cover->setArtwork(Ui::lostArtFor(v.id,v.category));
     const bool running=m_java->isRunning();
+    m_lostUninstall->setVisible(!v.id.isEmpty()&&m_versions->isVersionInstalled(v));m_lostUninstall->setEnabled(!running&&!m_jobs);
     m_lostPlay->setText("  "+(running?k("Stop"):k("Play")).toUpper());m_lostPlay->setIcon(Ui::icon(running?"square":"play",Qt::white));m_lostPlay->setProperty("danger",running);m_lostPlay->setProperty("play",!running);m_lostPlay->style()->unpolish(m_lostPlay);m_lostPlay->style()->polish(m_lostPlay);
     m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
     const bool installed=m_versions->isVersionInstalled(v);m_lostTitle->setText(v.name);
@@ -508,8 +536,13 @@ void MainWindow::lostSelection(){
     m_lostInfo->setText(info.join("\n\n"));m_lostInstall->setText("  "+(installed?Language::key("Reinstall"):text("Instalar","Install","Instalar")).toUpper());m_lostPlay->setEnabled(installed||running);
 }
 void MainWindow::work(const QString &title,std::function<QJsonObject()> job,std::function<void(QJsonObject)> done){
-    if(m_jobs)return;++m_jobs;auto dialog=new QProgressDialog(title,QString(),0,0,this);dialog->setCancelButton(nullptr);dialog->setWindowModality(Qt::ApplicationModal);dialog->setMinimumDuration(0);dialog->setMinimumWidth(380);dialog->show();
-    auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,dialog,watcher,done]{auto result=watcher->result();watcher->deleteLater();dialog->close();dialog->deleteLater();--m_jobs;if(result.contains("_error"))error(result["_error"].toString());else done(result);});
+    if(m_jobs)return;++m_jobs;lostSelection();
+    auto task=new QWidget(this);task->setObjectName("backgroundTaskProgress");task->setMaximumWidth(300);
+    auto layout=new QVBoxLayout(task);layout->setContentsMargins(8,4,8,4);layout->setSpacing(4);
+    auto caption=new QLabel(title,task);caption->setWordWrap(true);caption->setTextFormat(Qt::PlainText);caption->setToolTip(title);layout->addWidget(caption);
+    auto progress=new QProgressBar(task);progress->setObjectName("backgroundTaskBar");progress->setRange(0,0);progress->setTextVisible(false);progress->setFixedHeight(8);layout->addWidget(progress);
+    statusBar()->addPermanentWidget(task);task->show();
+    auto watcher=new QFutureWatcher<QJsonObject>(this);connect(watcher,&QFutureWatcher<QJsonObject>::finished,this,[this,task,watcher,done]{auto result=watcher->result();watcher->deleteLater();statusBar()->removeWidget(task);task->deleteLater();--m_jobs;lostSelection();if(result.contains("_error"))error(result["_error"].toString());else done(result);});
     watcher->setFuture(QtConcurrent::run([job]{try{return job();}catch(...){return QJsonObject{{"_error",exception()}};}}));
 }
 void MainWindow::createInstance(bool copy,int page){
@@ -756,6 +789,11 @@ void MainWindow::lostAction(bool launch){
     },[this](QJsonObject){refreshLost();m_status->setText(text("Versión perdida instalada","Lost version installed","Versão perdida instalada"));});
 }
 void MainWindow::closeEvent(QCloseEvent *event){
+    for(auto page:findChildren<QWidget*>("bedrockLabPage"))
+        if(page->property("bedrockInstalling").toBool()) {
+            event->ignore();error(text("Esperá a que termine la instalación de Bedrock.","Wait for Bedrock setup to finish.","Aguarde a instalação do Bedrock terminar."));return;
+        }
+
     if(Ui::openWindows()>0){event->ignore();error(k("Close the open windows first."));return;}
     const auto all=m_mc->instances();
     if(m_jobs||!m_installing.isEmpty()||std::any_of(all.begin(),all.end(),[this](const McInstance &i){return m_mc->isInstalling(i.dir);})){error(text("Esperá a que terminen las operaciones antes de cerrar.","Wait for operations to finish before closing.","Aguarde as operações terminarem antes de fechar."));event->ignore();return;}

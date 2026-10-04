@@ -26,7 +26,7 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     // Sidebar order, like the Minecraft Launcher: sections on top, Settings at the bottom.
-    enum Page{Home,Instances,Explore,Lost,Packs,Skins,News,Community,Guide,Settings};
+    enum Page{Home,Instances,Explore,Lost,Packs,Skins,News,Community,Guide,Bedrock,Settings};
     explicit MainWindow(QWidget *parent=nullptr);
     void showPage(int index);
 protected:
@@ -98,7 +98,7 @@ private:
     QComboBox *m_target=nullptr,*m_modProvider=nullptr;
     QLineEdit *m_query=nullptr,*m_lostFilter=nullptr;
     QStackedWidget *m_library=nullptr;InstanceGrid *m_grid=nullptr;InstanceDetail *m_detail=nullptr;QString m_selectedDir;
-    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr;
+    QPushButton *m_playButton=nullptr,*m_lostPlay=nullptr,*m_lostInstall=nullptr,*m_lostUninstall=nullptr;
     QLabel *m_lostTitle=nullptr,*m_lostInfo=nullptr;QWidget *m_lostImage=nullptr;
     QHBoxLayout *m_homeNews=nullptr;
     QJsonArray m_packData,m_hits;

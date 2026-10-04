@@ -41,7 +41,11 @@ const translations = {
     "download": "Descargar {size} MB ↓",
     "ready": "Versión {version} · {count} paquetes disponibles",
     "preparing": "Versión {version} · Los paquetes se están preparando.",
-    "unavailable": "Consultá la release para ver las descargas disponibles."
+    "unavailable": "Consultá la release para ver las descargas disponibles.",
+    "releaseEyebrow": "Novedades de la versión 1.1.0",
+    "releaseHeading": "Bedrock experimental y mejoras al instalar",
+    "releaseBedrock": "Gestor externo de Bedrock: Windows requiere Minecraft para Windows; Linux y macOS requieren la edición Android de Google Play. La compra de Windows no habilita Android. Las partidas aún no están verificadas en todos los sistemas.",
+    "releaseFixes": "Windows incluye las bibliotecas de Visual C++ y crea un acceso directo en el escritorio. Lost Versions permite desinstalar; las tareas muestran su progreso en la barra inferior."
   },
   "en": {
     "navDownload": "Download",
@@ -85,7 +89,11 @@ const translations = {
     "download": "Download {size} MB ↓",
     "ready": "Version {version} · {count} packages available",
     "preparing": "Version {version} · Packages are being prepared.",
-    "unavailable": "Check the release for available downloads."
+    "unavailable": "Check the release for available downloads.",
+    "releaseEyebrow": "New in version 1.1.0",
+    "releaseHeading": "Experimental Bedrock and installation improvements",
+    "releaseBedrock": "External Bedrock manager: Windows requires Minecraft for Windows; Linux and macOS require the Android edition from Google Play. A Windows purchase does not unlock Android. Game sessions have not been verified on all platforms.",
+    "releaseFixes": "Windows bundles the Visual C++ libraries and creates a desktop shortcut. Lost Versions can be uninstalled; tasks display progress in the bottom bar."
   },
   "pt": {
     "navDownload": "Baixar",
@@ -129,7 +137,11 @@ const translations = {
     "download": "Baixar {size} MB ↓",
     "ready": "Versão {version} · {count} pacotes disponíveis",
     "preparing": "Versão {version} · Os pacotes estão sendo preparados.",
-    "unavailable": "Consulte a versão para ver os downloads disponíveis."
+    "unavailable": "Consulte a versão para ver os downloads disponíveis.",
+    "releaseEyebrow": "Novidades da versão 1.1.0",
+    "releaseHeading": "Bedrock experimental e melhorias na instalação",
+    "releaseBedrock": "Gestor externo de Bedrock: Windows exige Minecraft para Windows; Linux e macOS exigem a edição Android do Google Play. A compra para Windows não libera Android. As partidas ainda não foram verificadas em todos os sistemas.",
+    "releaseFixes": "Windows inclui as bibliotecas Visual C++ e cria um atalho na área de trabalho. Lost Versions permite desinstalar; as tarefas exibem o progresso na barra inferior."
   },
   "fr": {
     "navDownload": "Télécharger",
@@ -173,7 +185,11 @@ const translations = {
     "download": "Télécharger {size} Mo ↓",
     "ready": "Version {version} · {count} paquets disponibles",
     "preparing": "Version {version} · Les paquets sont en préparation.",
-    "unavailable": "Consultez la version pour voir les téléchargements disponibles."
+    "unavailable": "Consultez la version pour voir les téléchargements disponibles.",
+    "releaseEyebrow": "Nouveautés de la version 1.1.0",
+    "releaseHeading": "Bedrock expérimental et installation améliorée",
+    "releaseBedrock": "Gestionnaire Bedrock externe : Windows nécessite Minecraft pour Windows ; Linux et macOS nécessitent l’édition Android de Google Play. L’achat Windows ne donne pas accès à Android. Les parties ne sont pas encore vérifiées sur tous les systèmes.",
+    "releaseFixes": "Windows inclut les bibliothèques Visual C++ et crée un raccourci sur le bureau. Les Lost Versions peuvent être désinstallées ; la progression des tâches apparaît dans la barre inférieure."
   },
   "de": {
     "navDownload": "Herunterladen",
@@ -217,7 +233,11 @@ const translations = {
     "download": "{size} MB herunterladen ↓",
     "ready": "Version {version} · {count} Pakete verfügbar",
     "preparing": "Version {version} · Die Pakete werden vorbereitet.",
-    "unavailable": "Verfügbare Downloads findest du auf der Veröffentlichungsseite."
+    "unavailable": "Verfügbare Downloads findest du auf der Veröffentlichungsseite.",
+    "releaseEyebrow": "Neu in Version 1.1.0",
+    "releaseHeading": "Experimentelles Bedrock und verbesserte Installation",
+    "releaseBedrock": "Externer Bedrock-Manager: Windows benötigt Minecraft für Windows; Linux und macOS benötigen die Android-Version von Google Play. Ein Windows-Kauf schaltet Android nicht frei. Spielsitzungen wurden noch nicht auf allen Systemen überprüft.",
+    "releaseFixes": "Windows enthält die Visual-C++-Bibliotheken und erstellt eine Desktopverknüpfung. Lost Versions lassen sich deinstallieren; Aufgaben zeigen ihren Fortschritt in der unteren Leiste."
   }
 };
 Object.entries({

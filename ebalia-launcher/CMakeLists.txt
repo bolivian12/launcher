@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(EBALIA_Launcher VERSION 1.0.0 LANGUAGES CXX)
+project(EBALIA_Launcher VERSION 1.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -29,7 +29,7 @@ if(NOT EBALIA_PATREON_SERVICE_URL STREQUAL "" AND NOT EBALIA_PATREON_SERVICE_URL
   message(FATAL_ERROR "EBALIA_PATREON_SERVICE_URL must be a public HTTPS base URL")
 endif()
 configure_file(src/PatreonConfig.hpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/PatreonConfig.hpp" @ONLY)
-qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+qt_add_executable(ebalia-launcher src/main.cpp src/MainWindow.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
   include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
   resources/launcher.qrc)
 target_link_libraries(ebalia-launcher PRIVATE ebalia-core)
@@ -49,7 +49,7 @@ elseif(APPLE)
   set_target_properties(ebalia-launcher PROPERTIES MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_ICON_FILE "ebalia.icns"
     MACOSX_BUNDLE_BUNDLE_NAME "EBALIA Launcher" MACOSX_BUNDLE_GUI_IDENTIFIER "com.ebalia.launcher"
-    MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0" MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0.0")
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}" MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
 endif()
 include(GNUInstallDirs)
 install(TARGETS ebalia-launcher BUNDLE DESTINATION . RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -69,7 +69,7 @@ if(BUILD_TESTING)
   find_package(Qt6 REQUIRED COMPONENTS Test)
   qt_add_executable(ebalia-tests tests/CoreTests.cpp resources/launcher.qrc)
   target_link_libraries(ebalia-tests PRIVATE ebalia-core Qt6::Test)
-  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
+  qt_add_executable(ebalia-ui-tests tests/UiTests.cpp src/MainWindow.cpp src/BedrockPage.cpp src/BedrockInstaller.cpp src/CreatorDialog.cpp src/HomeBanner.cpp include/HomeBanner.hpp src/SkinsPage.cpp src/SetupDialog.cpp src/PackBrowser.cpp src/CreateInstanceDialog.cpp src/InstanceViews.cpp src/InstanceIcons.cpp src/Icons.cpp src/Ui.cpp src/CommunityPage.cpp src/PatreonAuth.cpp src/PatreonNewsPage.cpp src/UpdateChecker.cpp include/UpdateChecker.hpp src/AccountManager.cpp src/MsAuth.cpp
       include/MainWindow.hpp include/Ui.hpp include/PatreonAuth.hpp include/AccountManager.hpp include/MsAuth.hpp
     resources/launcher.qrc)
   set_target_properties(ebalia-ui-tests PROPERTIES WIN32_EXECUTABLE FALSE)

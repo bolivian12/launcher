@@ -6,7 +6,7 @@
   const retry = document.querySelector('#download-retry');
   const close = document.querySelector('#download-close');
   const names = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
-  let state = 'checking', selected = null, busy = false, version = '1.0.0', current = null;
+  let state = 'checking', selected = null, busy = false, version = '1.1.0', current = null;
   let assets = new Map();
   const parse = tag => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag || '')?.slice(1).map(Number);
   const compare = (a,b) => { for(let i=0;i<3;i++) if(a[i]!==b[i]) return a[i]-b[i]; return 0; };
@@ -29,7 +29,7 @@
     if(current) notes.href=current.url;
     if (!selected) return;
     const asset = assets.get(selected);
-    window.renderLinuxGuide?.(selected, version, current?.tag || 'v1.0.0');
+    window.renderLinuxGuide?.(selected, version, current?.tag || 'v1.1.0');
     document.querySelector('#download-title').textContent = names[selected];
     document.querySelector('#download-message').textContent = t(asset ? 'panelReady' : busy ? 'checking' : state === 'unavailable' ? 'panelError' : 'panelPending');
     file.hidden = !asset;
