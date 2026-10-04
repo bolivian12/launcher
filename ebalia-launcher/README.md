@@ -1,4 +1,6 @@
-# EBALIA Launcher 4
+# EBALIA Launcher 1.1.0
+
+[Descargar](https://ebalia-launcher.gitgud.site/#descargas) · [Novedades de 1.1.0](CHANGELOG.md) · [Guía general](../README.md) · [Bedrock · Beta](BEDROCK.md)
 
 Reconstrucción nativa en C++20 / Qt 6. Barra lateral con ilustraciones de colores propias y la cuenta arriba, como el Minecraft Launcher; los controles usan iconos [Lucide](https://lucide.dev) (licencia ISC). **Inicio** tiene fondos que cambian automáticamente, el selector de instancia que se abre hacia arriba, el botón verde **JUGAR** y las novedades con sus imágenes completas. **Instancias** muestra tarjetas agrupadas, como las páginas de perfiles de los launchers modernos, y cada instancia tiene su propia página sobre su imagen, con mods, paquetes de recursos, shaders y mundos. Las ventanas como Nueva instancia, Ajustes de instancia, Mods o Registro son ventanas normales: se mueven y redimensionan por separado (GNOME pega las ventanas modales a la principal) y mientras están abiertas la principal queda en pausa.
 
@@ -8,7 +10,7 @@ La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lat
 
 ## Incluido
 
-- Dos modos: cliente Minecraft y archivo de versiones perdidas de EBALIA.
+- Cliente Java, archivo de versiones perdidas de EBALIA e integración experimental con gestores externos de Bedrock.
 - Instancias con directorios UUID independientes, aunque compartan nombre y versión. Mundos, mods, opciones, Java y memoria separados.
 - Catálogo oficial de Minecraft al iniciar y cada 30 minutos; copia local ante fallos de conexión. Snapshots y versiones antiguas son opcionales.
 - Vanilla, Fabric, Quilt, Forge y NeoForge. Versiones del cargador consultables; selección automática o explícita. Forge/NeoForge ejecutan sus instaladores oficiales completos, incluidos los procesadores, en vez de limitarse a mezclar JSON.
@@ -24,7 +26,7 @@ La ventana admite 640×480 y tamaños mayores. Al reducir el ancho, la barra lat
 - **Nueva instancia** con el esquema de Prism Launcher: nombre, grupo e ícono arriba; a la izquierda Personalizado, Importar, ATLauncher, CurseForge, FTB, FTB Legacy, Importar app de FTB, Modrinth y Technic. Cada proveedor se busca dentro de la misma ventana (ícono, descripción y versión; se preselecciona la última estable). El nombre se completa solo con la versión o el nombre del pack.
 - **Importar** acepta archivo, carpeta o enlace https, también arrastrándolo a la ventana: Modrinth (.mrpack), CurseForge (.zip), exportaciones o carpetas de Prism Launcher / PolyMC / MultiMC, Technic y ATLauncher (.zip), carpetas de la app de CurseForge y de FTB, exportaciones de EBALIA y packs de EBALIA (.json). Lista las instancias de Prism, PolyMC, MultiMC, CurseForge y la app de FTB que ya existen en el equipo. Las instancias con LiteLoader o mods dentro de minecraft.jar se rechazan con una explicación.
 - **Java automático**: se buscan Java en PATH, JAVA_HOME, el registro de Windows (Oracle, Temurin/Adoptium, Microsoft, Zulu, Liberica, Corretto, Semeru), Program Files, los runtimes del Minecraft Launcher (incluida la versión de Microsoft Store), CurseForge, FTB App, Technic, ATLauncher, Modrinth App, GDLauncher, Prism/PolyMC/MultiMC (y las Java configuradas en ellos), Gradle, IntelliJ, SDKMAN, asdf, mise, scoop, /usr/lib/jvm, /opt y Nix. Se usa la versión exacta que pide Minecraft o la más cercana más nueva cuando el juego ya requiere Java 16+. Si no hay ninguna, se descarga la Java oficial de Mojang que indica la versión (con verificación SHA-1), igual que el Minecraft Launcher.
-- Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz y tutorial incluidos localmente; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
+- Diez idiomas: español, inglés, portugués, alemán, francés, italiano, ruso, japonés, coreano y chino simplificado. Interfaz principal incluida localmente; la guía interactiva nueva usa español o inglés; no se traduce mediante servicios externos durante el uso. Los mensajes técnicos de Java, proveedores y algunos errores del motor conservan su texto original.
 
 ## Ejecutar en NixOS / Linux de este equipo
 
@@ -50,7 +52,7 @@ ctest --test-dir build -C Release --output-on-failure
 cmake --install build --config Release --prefix package
 ```
 
-En Windows se usa MSVC y libarchive mediante vcpkg. En macOS se usa Qt/libarchive de Homebrew y `macdeployqt`. El workflow `.github/workflows/build.yml` compila, prueba y empaqueta por separado en Ubuntu, Windows y macOS. Este workflow debe ejecutarse en un repositorio de EBALIA; su presencia no equivale a una ejecución exitosa en las tres plataformas. Las builds de CI sin credenciales de firma se identifican explícitamente como unsigned.
+En Windows se usa MSVC y libarchive mediante vcpkg. En macOS se usa Qt/libarchive de Homebrew y `macdeployqt`. El workflow [`.github/workflows/ebalia-launcher.yml`](../.github/workflows/ebalia-launcher.yml) compila, prueba y empaqueta por separado en Ubuntu, Windows y macOS. Este workflow debe ejecutarse en un repositorio de EBALIA; su presencia no equivale a una ejecución exitosa en las tres plataformas. Las builds de CI sin credenciales de firma se identifican explícitamente como unsigned.
 
 Fuera del paquete Nix no hace falta instalar Java a mano: si no se detecta una compatible, la instancia descarga durante la instalación la Java oficial de Mojang (en `mc/java`). En Ajustes de instancia podés elegir otro ejecutable; si no es compatible, el mensaje indica qué versión tiene y cuál pide Minecraft. `EBALIA_JAVA_PATHS` permite pasar varias rutas a ejecutables, separadas con el separador de rutas de la plataforma. En NixOS no se descarga la Java genérica de Mojang (no funciona allí): se usan las del paquete Nix.
 
@@ -90,7 +92,7 @@ La extracción de ZIP rechaza rutas que salen del destino y enlaces simbólicos.
 
 Forge antiguo puede usar un instalador sin modo de cliente por consola; esos instaladores muestran un error y su registro, no una instalación falsamente exitosa. La compatibilidad de un mod se determina por los metadatos publicados en Modrinth, no garantiza que cualquier combinación funcione en el juego. No se distribuyen archivos de mods dentro del JSON de un pack, ni configuraciones o mundos.
 
-El código anterior está respaldado en `legacy/source-v3.tar.gz`. No se modificó el proyecto `PrismLauncher-Cracked-main`; se consultó su organización de componentes como referencia.
+Las compilaciones, las credenciales y los datos privados de prueba no se guardan en el repositorio.
 
 ## Verificación
 
@@ -100,7 +102,7 @@ EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModrinth
 EBALIA_DATA_DIR=/tmp/ebalia-install-test QT_QPA_PLATFORM=offscreen ./build/ebalia-launcher --installtest 1.20.1 fabric
 ```
 
-La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. Las pruebas de UI recorren las diez páginas en los diez idiomas y crean dos instancias homónimas mediante los controles reales. También verifican el carrusel, su pausa, las 15 imágenes distintas y la disposición de las páginas entre 640×480 y 1920×1080.
+La prueba de red busca Sodium, lo descarga/verifica, captura un pack, resuelve otra versión y consulta Forge/NeoForge. Las pruebas sin red cubren aislamiento, papelera, argumentos con espacios, reglas, dependencias, hashes inválidos, errores de descarga, archivos locales, packs, extracción y completitud de los diez catálogos. Las pruebas de UI recorren las páginas del launcher en los diez idiomas y crean dos instancias homónimas mediante los controles reales. También verifican el carrusel, su pausa, las 15 imágenes distintas y la disposición de las páginas entre 640×480 y 1920×1080.
 
 Otras comprobaciones manuales:
 
@@ -112,7 +114,7 @@ EBALIA_TEST_ARTIFACTS=/tmp/shots QT_QPA_PLATFORM=offscreen ./build/ebalia-ui-tes
 EBALIA_LIVE_TESTS=1 QT_QPA_PLATFORM=offscreen ./build/ebalia-tests liveModpackInstall livePackCatalogs
 ```
 
-`EBALIA_TEST_ARTIFACTS` guarda capturas de inicio y guía por idioma. `EBALIA_NO_NETWORK=1` evita consultas de inicio durante pruebas de UI. `--selftest <0..6>` guarda una captura y cierra; `EBALIA_SCREENSHOT` define su destino.
+`EBALIA_TEST_ARTIFACTS` guarda capturas de inicio y guía por idioma. `EBALIA_NO_NETWORK=1` evita consultas de inicio durante pruebas de UI. `--selftest <0..10>` guarda una captura y cierra; `EBALIA_SCREENSHOT` define su destino.
 
 Fuentes de integración: [Modrinth API](https://docs.modrinth.com/api/), [Fabric Meta](https://meta.fabricmc.net/), [instalador oficial de Forge](https://github.com/MinecraftForge/Installer).
 
@@ -126,7 +128,7 @@ En el modo cliente, la pestaña **Skins** permite importar PNG de 64×64 o 64×3
 
 En **Explorar mods**, elegí Modrinth o CurseForge y seleccioná uno o varios resultados. Ambos proveedores usan el mismo flujo de revisión, dependencias y archivos verificados. Los packs pueden conservar referencias de los dos orígenes y recordar los mods que este launcher instaló.
 
-CurseForge exige una clave de API para aplicaciones externas. Para esta prueba local se configuró en `curseforge-api-key.txt` la misma clave presente en `PrismLauncher-Cracked-main`, según lo solicitado. Ese archivo está excluido de Git y CMake lo incorpora al compilar, también en el paquete Nix. Para cambiarla, reemplazá el archivo junto a `CMakeLists.txt` y volvé a configurar y compilar, o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
+CurseForge exige una clave de API para aplicaciones externas. Podés configurar tu clave en `curseforge-api-key.txt`. Ese archivo está excluido de Git y CMake lo incorpora al compilar, también en el paquete Nix. Para cambiarla, reemplazá el archivo junto a `CMakeLists.txt` y volvé a configurar y compilar, o pasá `-DEBALIA_CURSEFORGE_API_KEY=...` a CMake. Sin clave incorporada, la página de CurseForge muestra un campo para pegarla una vez; también sirve **Ajustes → Configuración de proveedores** o `EBALIA_CURSEFORGE_API_KEY`. Si un autor no permite descarga directa, se ofrece el enlace oficial; después podés agregar el JAR desde Administrar mods. No se fabrican enlaces CDN para eludir la restricción. Un JAR importado manualmente que no esté identificado en el registro del launcher ni en Modrinth no se incluye en un pack por suposiciones sobre el nombre.
 
 El adaptador de CurseForge se prueba con respuestas controladas, dependencias y archivos SHA-1 (el registro local conserva además SHA-512). Las pruebas de red usan la clave configurada: buscan y descargan JEI para Forge 1.20.1, verifican su SHA-1 y consultan modpacks y versiones. La prueba de interfaz busca un modpack de CurseForge y comprueba que se pueda seleccionar una versión y crear la instancia. [Documentación oficial de CurseForge](https://docs.curseforge.com/rest-api/).
 
@@ -147,7 +149,7 @@ El servicio está en [services/patreon](services/patreon/README.md), con plantil
 
 La decodificación de portadas trabaja fuera del hilo de la interfaz, con dos tareas como máximo. Las miniaturas tienen una caché separada para que un fondo grande no las expulse durante el scroll. Las solicitudes simultáneas se agrupan y los resultados de widgets cerrados se descartan. En la prueba local de 1920×1080, el scroll del archivo pasó de 716 ms a 3,6 ms de media por actualización; estas mediciones no garantizan la misma cifra en cualquier equipo.
 
-El paquete de Windows incorpora `ebalia.ico` con seis tamaños (16–256 px), macOS incluye `ebalia.icns` dentro del bundle y Linux instala PNGs de 16–512 px en el tema hicolor, junto al archivo `.desktop` y la identidad de ventana. `packaging/verify-icons.py` verifica los contenedores y el paquete nativo; el workflow lo ejecuta después de instalar cada plataforma. Linux se verificó localmente; una ejecución de CI en Windows y macOS sigue siendo necesaria para confirmar sus paquetes.
+El paquete de Windows incorpora `ebalia.ico` con seis tamaños (16–256 px), macOS incluye `ebalia.icns` dentro del bundle y Linux instala PNGs de 16–512 px en el tema hicolor, junto al archivo `.desktop` y la identidad de ventana. `packaging/verify-icons.py` comprueba los recursos de iconos y permite verificar un paquete nativo. El workflow ejecuta las pruebas en Linux, Windows y macOS; una compilación exitosa no sustituye las pruebas de juego en cada sistema.
 
 Para analizar la carpeta final de Windows en un equipo con Microsoft Defender activo:
 
@@ -158,3 +160,14 @@ Para analizar la carpeta final de Windows en un equipo con Microsoft Defender ac
 ```
 
 La comprobación no modifica Defender ni agrega exclusiones. Un resultado sin detecciones corresponde a esos archivos y esa versión de las firmas. No garantiza resultados futuros ni elimina por sí solo avisos de SmartScreen. La firma requiere un certificado real del editor; no se ha firmado ni escaneado un ejecutable Windows desde este equipo Linux. Los falsos positivos se envían al [portal oficial de Microsoft](https://www.microsoft.com/wdsi/filesubmission).
+
+
+## Actualización interna, instalación y guía inicial
+
+Desde 1.1.0, **Actualizar y reiniciar** usa los paquetes de la release y `SHA256SUMS.txt`. La preparación ocurre en segundo plano; se prueba el ejecutable nuevo con `--update-probe` antes del reemplazo. Las partidas y operaciones administradas por el launcher impiden iniciar la actualización. Los detalles para usuarios están en el [README principal](../README.md#actualizaciones-y-archivos-del-usuario).
+
+`packaging/write-update-manifest.py` registra los archivos que pertenecen al programa. El reemplazo no elimina archivos ajenos a ese manifiesto. La prueba de actualización cubre archivos de usuario conservados, rechazo de checksums ausentes, limpieza y restauración tras una verificación fallida. NixOS prepara una derivación nueva y conserva un enlace raíz de Nix; no elimina rutas del almacén que estén referenciadas por otras instalaciones.
+
+El instalador NSIS guarda `InstallLocation` en el registro del usuario y reconoce el `UninstallString` de instaladores anteriores para recuperar su carpeta. No cambia la identidad de datos `EBALIA / EBALIA Launcher` ni borra instancias o Lost Versions. Quienes usan 1.0.0 deben instalar 1.1.0 una vez para incorporar el actualizador.
+
+La guía interactiva se abre si `ui/tutorialSeen` no está marcado. Completarla u omitirla guarda esa preferencia. **Guía y tutorial → Iniciar guía interactiva** permite repetir sus 14 pasos. El recorrido se prueba a 640 × 480 y no realiza instalaciones ni modifica cuentas.
