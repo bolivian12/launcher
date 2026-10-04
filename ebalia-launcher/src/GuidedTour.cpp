@@ -24,7 +24,7 @@ QString words(const char *es,const char *en){return QString::fromUtf8(Language::
 }
 GuidedTour::GuidedTour(QWidget *parent,std::function<void(int)> navigate):QWidget(parent),m_navigate(std::move(navigate)) {
  setObjectName("interactiveTour");setAttribute(Qt::WA_DeleteOnClose);setFocusPolicy(Qt::StrongFocus);
- parent->installEventFilter(this);setGeometry(parent->rect());
+ setGeometry(parent->rect());
  m_card=new QFrame(this);m_card->setObjectName("tourCard");m_card->setStyleSheet("#tourCard{background:#20251f;border:1px solid #9ad56c;border-radius:16px;} QLabel{color:#f4f6f0;} QPushButton{padding:9px 14px;}");
  auto layout=new QVBoxLayout(m_card);layout->setContentsMargins(22,18,22,18);layout->setSpacing(12);
  m_count=new QLabel; m_count->setObjectName("tourStepCount");layout->addWidget(m_count);
@@ -39,9 +39,11 @@ GuidedTour::GuidedTour(QWidget *parent,std::function<void(int)> navigate):QWidge
  connect(m_previous,&QPushButton::clicked,this,[this]{if(m_step>0){--m_step;display();}});
  connect(m_next,&QPushButton::clicked,this,[this]{if(m_step+1==steps.size())finish();else{++m_step;display();}});
  auto escape=new QShortcut(QKeySequence(Qt::Key_Escape),this);escape->setContext(Qt::WidgetWithChildrenShortcut);connect(escape,&QShortcut::activated,this,[this]{finish();});
- display();show();raise();m_next->setFocus();
+ parent->installEventFilter(this);display();show();raise();m_next->setFocus();
 }
+GuidedTour::~GuidedTour(){if(parentWidget())parentWidget()->removeEventFilter(this);}
 void GuidedTour::display() {
+ if(m_finished)return;
  const auto &step=steps[m_step];m_navigate(step.page);
  m_title->setText(words(step.esTitle,step.enTitle));m_body->setText(words(step.esBody,step.enBody));
  m_count->setText(words("DESCUBRÍ EBALIA · %1 de %2","DISCOVER EBALIA · %1 of %2").arg(m_step+1).arg(steps.size()));
@@ -49,9 +51,10 @@ void GuidedTour::display() {
  place();QTimer::singleShot(0,this,[this]{place();});
 }
 void GuidedTour::place() {
+ if(m_finished||!m_card)return;
  setGeometry(parentWidget()->rect());m_highlight={};
  if(auto target=parentWidget()->findChild<QWidget*>(steps[m_step].target);target&&target->isVisible()) {
-  m_highlight=QRect(target->mapTo(this,QPoint(0,0)),target->size()).intersected(rect()).adjusted(-4,-4,4,4);
+  m_highlight=QRect(mapFromGlobal(target->mapToGlobal(QPoint(0,0))),target->size()).intersected(rect()).adjusted(-4,-4,4,4);
  }
  m_card->setFixedWidth(qMin(530,width()-32));m_card->adjustSize();
  int y=height()-m_card->height()-24;
@@ -65,4 +68,4 @@ void GuidedTour::paintEvent(QPaintEvent *) {
  painter.fillPath(shade,QColor(0,0,0,175));
  if(m_highlight.isValid()){painter.setPen(QPen(QColor("#b4ed80"),2));painter.setBrush(Qt::NoBrush);painter.drawRoundedRect(m_highlight,8,8);}
 }
-void GuidedTour::finish(){QSettings().setValue("ui/tutorialSeen",true);m_navigate(MainWindow::Home);close();}
+void GuidedTour::finish(){m_finished=true;parentWidget()->removeEventFilter(this);hide();QSettings().setValue("ui/tutorialSeen",true);m_navigate(MainWindow::Home);close();}

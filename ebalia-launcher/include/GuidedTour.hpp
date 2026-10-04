@@ -8,6 +8,7 @@ class QFrame;
 class GuidedTour:public QWidget {
 public:
  GuidedTour(QWidget *parent,std::function<void(int)> navigate);
+ ~GuidedTour() override;
 protected:
  bool eventFilter(QObject *watched,QEvent *event) override;
  void paintEvent(QPaintEvent *event) override;
@@ -17,7 +18,8 @@ private:
  void finish();
  std::function<void(int)> m_navigate;
  int m_step=0;
- QFrame *m_card;
+ bool m_finished=false;
+ QFrame *m_card=nullptr;
  QLabel *m_title,*m_body,*m_count;
  QPushButton *m_previous,*m_next;
  QProgressBar *m_progress;
