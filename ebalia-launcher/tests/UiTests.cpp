@@ -329,6 +329,17 @@ printf started > launched-marker
         QCOMPARE(QImage(dir+"/instance-icon.png").size(),QSize(128,128));
         const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!out.isEmpty()){QDir().mkpath(out);QTest::qWait(300);QVERIFY(window.grab().save(out+"/instance-detail-extras.png"));}
     }
+    void dialogOpenedFromAPageStaysUsable(){
+        // Regression: the skin import dialog (a child of a page) opened with Save and Cancel disabled.
+        QMainWindow window;auto central=new QWidget;auto layout=new QVBoxLayout(central);auto page=new QWidget;layout->addWidget(page);window.setCentralWidget(central);window.show();
+        QDialog dialog(page);auto form=new QFormLayout(&dialog);auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);
+        connect(buttons,&QDialogButtonBox::accepted,&dialog,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&dialog,&QDialog::reject);
+        QTimer::singleShot(200,&dialog,[&]{
+            QVERIFY(dialog.isEnabled());auto save=buttons->button(QDialogButtonBox::Save);QVERIFY(save->isEnabled());QVERIFY(!central->isEnabled());
+            QTest::mouseClick(save,Qt::LeftButton);
+        });
+        QCOMPARE(Ui::openWindow(dialog),int(QDialog::Accepted));QVERIFY(central->isEnabled());
+    }
     void compactInstanceWizard(){
         QTemporaryDir data;McInstanceManager manager(data.path());Language::current="es";
         CreateInstanceDialog dialog(&manager,{{"1.20.1","release","","2023-06-12"}},{},{},false);dialog.resize(640,480);dialog.show();

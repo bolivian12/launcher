@@ -107,6 +107,8 @@ int Ui::openWindow(QDialog &dialog){
         }
     }
     for(auto &w:blocked)if(w)w->setEnabled(false);
+    // A dialog parented to a page inside the blocked area would be disabled with it; a window can be re-enabled on its own.
+    dialog.setEnabled(true);
     dialog.setWindowModality(Qt::NonModal);dialog.setSizeGripEnabled(true);
     QEventLoop loop;QObject::connect(&dialog,&QDialog::finished,&loop,&QEventLoop::exit);
     ++windowsOpen;dialog.show();dialog.raise();dialog.activateWindow();const int result=loop.exec();--windowsOpen;
