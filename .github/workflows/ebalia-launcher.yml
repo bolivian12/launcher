@@ -138,7 +138,7 @@ jobs:
           cache: true
       - name: Dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build g++-12 libarchive-dev libssl-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 file
-      - run: cmake -S . -B build-appimage -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF -DEBALIA_CURSEFORGE_API_KEY="$EBALIA_CURSEFORGE_API_KEY" -DEBALIA_MS_CLIENT_ID="$EBALIA_MS_CLIENT_ID"
+      - run: cmake -S . -B build-appimage -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-12 "-DCMAKE_EXE_LINKER_FLAGS=-Wl,--as-needed" -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF -DEBALIA_CURSEFORGE_API_KEY="$EBALIA_CURSEFORGE_API_KEY" -DEBALIA_MS_CLIENT_ID="$EBALIA_MS_CLIENT_ID"
         env:
           EBALIA_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           EBALIA_MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
@@ -147,6 +147,8 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
           OUTPUT: ebalia-linux-x86_64.AppImage
+          # offscreen is also what the in-app updater uses to test a downloaded version.
+          EXTRA_PLATFORM_PLUGINS: libqoffscreen.so
         run: |
           DESTDIR="$PWD/AppDir" cmake --install build-appimage
           for tool in linuxdeploy/linuxdeploy-x86_64 linuxdeploy-plugin-qt/linuxdeploy-plugin-qt-x86_64; do
@@ -160,8 +162,19 @@ jobs:
             --library "$ssl/libssl.so.3" --library "$ssl/libcrypto.so.3" --plugin qt
           # HTTPS needs Qt's TLS backend, which is loaded at runtime.
           mkdir -p AppDir/usr/plugins/tls && cp -n "$QT_ROOT_DIR"/plugins/tls/*.so AppDir/usr/plugins/tls/
+          # Kerberos (via Qt Network) and libgcrypt need these; linuxdeploy assumes every
+          # system has them, but minimal installs such as openSUSE do not.
+          cp -n "$ssl/libcom_err.so.2" "$ssl/libgpg-error.so.0" AppDir/usr/lib/
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           test -x ebalia-linux-x86_64.AppImage
+      - name: Only depends on libraries every desktop distribution ships
+        run: |
+          rm -rf check && mkdir check && cd check && APPIMAGE_EXTRACT_AND_RUN=1 ../ebalia-linux-x86_64.AppImage --appimage-extract >/dev/null
+          cd squashfs-root
+          allowed='^(ld-linux-x86-64\.so\.2|lib(c|m|dl|pthread|rt|resolv|gcc_s|stdc\+\+|z|GL|EGL|X11|X11-xcb|xcb|fontconfig|freetype)\.so\.[0-9]+)$'
+          missing=$(for f in usr/bin/ebalia-launcher usr/lib/*.so* usr/plugins/*/*.so; do readelf -d "$f" | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p'; done | sort -u | while read -r lib; do [ -e "usr/lib/$lib" ] || echo "$lib"; done | grep -Ev "$allowed" || true)
+          if [ -n "$missing" ]; then echo "Host libraries the AppImage would need:"; echo "$missing"; exit 1; fi
+          test -f usr/plugins/platforms/libqoffscreen.so && test -f usr/plugins/platforms/libqxcb.so
       - name: Starts outside the build machine's Qt
         run: env -u LD_LIBRARY_PATH QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./ebalia-linux-x86_64.AppImage --update-probe
       - name: Portable bundle
