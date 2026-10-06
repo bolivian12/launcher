@@ -15,6 +15,7 @@
 #include "JavaRuntime.hpp"
 #include "JavaDownloader.hpp"
 #include "PackService.hpp"
+#include "ServerList.hpp"
 #include <stdexcept>
 
 namespace {
@@ -40,6 +41,26 @@ void zip(const QString &path,const QString &name,const QByteArray &data="jar"){
 class CoreTests:public QObject {
     Q_OBJECT
 private slots:
+    void serverListKeepsUnknownFields(){
+        QTemporaryDir dir;const auto file=dir.filePath("servers.dat");
+        QVERIFY(ServerList::read(file).isEmpty());
+        // A list written by Minecraft: one server with a field EBALIA does not use, plus a root field.
+        auto str=[](const QByteArray &s){QByteArray b;b.append(char(s.size()>>8));b.append(char(s.size()&255));return b+s;};
+        QByteArray nbt;nbt.append(char(10));nbt+=str("");
+        nbt.append(char(1));nbt+=str("extra");nbt.append(char(7));
+        nbt.append(char(9));nbt+=str("servers");nbt.append(char(10));nbt+=QByteArray::fromHex("00000001");
+        nbt.append(char(8));nbt+=str("name");nbt+=str("Hypixel");nbt.append(char(8));nbt+=str("ip");nbt+=str("mc.hypixel.net");
+        nbt.append(char(1));nbt+=str("acceptTextures");nbt.append(char(1));nbt.append(char(0));nbt.append(char(0));
+        {QFile f(file);QVERIFY(f.open(QIODevice::WriteOnly));f.write(nbt);}
+        auto servers=ServerList::read(file);QCOMPARE(servers.size(),1);QCOMPARE(servers[0].address,QString("mc.hypixel.net"));
+        ServerList::add(file,"Ñandú","play.example.org:25566");
+        servers=ServerList::read(file);QCOMPARE(servers.size(),2);QCOMPARE(servers[1].name,QString("Ñandú"));QCOMPARE(servers[1].address,QString("play.example.org:25566"));
+        {QFile f(file);QVERIFY(f.open(QIODevice::ReadOnly));const auto bytes=f.readAll();QVERIFY(bytes.contains("acceptTextures"));QVERIFY(bytes.contains("extra"));}
+        ServerList::remove(file,0);servers=ServerList::read(file);QCOMPARE(servers.size(),1);QCOMPARE(servers[0].name,QString("Ñandú"));
+        QVERIFY_EXCEPTION_THROWN(ServerList::remove(file,5),std::runtime_error);
+        {QFile f(file);QVERIFY(f.open(QIODevice::WriteOnly));f.write(nbt.left(20));}
+        QVERIFY(ServerList::read(file).isEmpty());QVERIFY_EXCEPTION_THROWN(ServerList::add(file,"x","y"),std::runtime_error);
+    }
     void modpackImportsAndRollback(){
         QTemporaryDir root;auto archive=root.path()+"/test.mrpack";auto hash=QString::fromLatin1(QCryptographicHash::hash("mod",QCryptographicHash::Sha512).toHex());
         QJsonObject index{{"formatVersion",1},{"game","minecraft"},{"dependencies",QJsonObject{{"minecraft","1.20.1"},{"fabric-loader","0.16.0"}}},{"files",QJsonArray{QJsonObject{{"path","mods/test.jar"},{"hashes",QJsonObject{{"sha512",hash}}},{"downloads",QJsonArray{"https://example.test/mod.jar"}}}}}};

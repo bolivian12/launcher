@@ -1,6 +1,7 @@
 #include "GuidedTour.hpp"
 #include "MainWindow.hpp"
 #include "Language.hpp"
+#include "TourMascot.hpp"
 #include <QtWidgets>
 namespace {
 struct Step {int page;const char *target,*esTitle,*enTitle,*esBody,*enBody;};
@@ -20,13 +21,19 @@ const QList<Step> steps{
  {MainWindow::Home,"launcherUpdateAvailable","Actualizaciones sin salir a la web","Updates without visiting the website","Cuando haya una versión nueva verás Actualizar y reiniciar. Primero cerrá las partidas y esperá las instalaciones. Se reemplazan los archivos del launcher; se conservan instancias, Lost Versions y descargas.","When a new release is available, choose Update and restart. Close games and wait for installations first. Launcher files are replaced; instances, Lost Versions and downloads are preserved."},
  {MainWindow::Guide,"navigation","Todo listo","You're ready","Esta guía siempre se puede repetir desde Guía y tutorial. ¡Ahora creá tu primera instancia y empezá a explorar!","You can repeat this tour from Guide & tutorial at any time. Create your first instance and start exploring!"}
 };
-QString words(const char *es,const char *en){return QString::fromUtf8(Language::current=="es"?es:en);}
+// Silence's pose for each step, in order.
+const TourMascot::Mood moods[]{TourMascot::Cheer,TourMascot::Point,TourMascot::Point,TourMascot::Happy,TourMascot::Surprised,TourMascot::Wink,TourMascot::Idle,TourMascot::Happy,TourMascot::Surprised,TourMascot::Happy,TourMascot::Think,TourMascot::Point,TourMascot::Wink,TourMascot::Cheer};
+static_assert(std::size(moods)==14);
+// Catalog translation keyed by the English text; Spanish and English are written inline.
+QString words(const char *es,const char *en){return Language::text(es,en,en);}
 }
 GuidedTour::GuidedTour(QWidget *parent,std::function<void(int)> navigate):QWidget(parent),m_navigate(std::move(navigate)) {
  setObjectName("interactiveTour");setAttribute(Qt::WA_DeleteOnClose);setFocusPolicy(Qt::StrongFocus);
  setGeometry(parent->rect());
  m_card=new QFrame(this);m_card->setObjectName("tourCard");m_card->setStyleSheet("#tourCard{background:#20251f;border:1px solid #9ad56c;border-radius:16px;} QLabel{color:#f4f6f0;} QPushButton{padding:9px 14px;}");
- auto layout=new QVBoxLayout(m_card);layout->setContentsMargins(22,18,22,18);layout->setSpacing(12);
+ auto outer=new QHBoxLayout(m_card);outer->setContentsMargins(14,14,22,18);outer->setSpacing(10);
+ m_mascot=new TourMascot;m_mascot->setFixedSize(112,168);m_mascot->setAttribute(Qt::WA_TransparentForMouseEvents);outer->addWidget(m_mascot,0,Qt::AlignBottom);
+ auto layout=new QVBoxLayout;layout->setContentsMargins(0,4,0,0);layout->setSpacing(12);outer->addLayout(layout,1);
  m_count=new QLabel; m_count->setObjectName("tourStepCount");layout->addWidget(m_count);
  m_title=new QLabel;m_title->setObjectName("tourTitle");m_title->setWordWrap(true);m_title->setStyleSheet("font-size:22px;font-weight:700;");layout->addWidget(m_title);
  m_body=new QLabel;m_body->setObjectName("tourBody");m_body->setWordWrap(true);m_body->setTextFormat(Qt::PlainText);layout->addWidget(m_body);
@@ -48,7 +55,7 @@ void GuidedTour::display() {
  m_title->setText(words(step.esTitle,step.enTitle));m_body->setText(words(step.esBody,step.enBody));
  m_count->setText(words("DESCUBRÍ EBALIA · %1 de %2","DISCOVER EBALIA · %1 of %2").arg(m_step+1).arg(steps.size()));
  m_previous->setEnabled(m_step>0);m_next->setText(m_step+1==steps.size()?words("Empezar","Get started"):words("Siguiente","Next"));m_progress->setValue(m_step+1);
- place();QTimer::singleShot(0,this,[this]{place();});
+ m_mascot->react(moods[m_step]);place();QTimer::singleShot(0,this,[this]{place();});
 }
 void GuidedTour::place() {
  if(m_finished||!m_card)return;
@@ -56,10 +63,12 @@ void GuidedTour::place() {
  if(auto target=parentWidget()->findChild<QWidget*>(steps[m_step].target);target&&target->isVisible()) {
   m_highlight=QRect(mapFromGlobal(target->mapToGlobal(QPoint(0,0))),target->size()).intersected(rect()).adjusted(-4,-4,4,4);
  }
- m_card->setFixedWidth(qMin(530,width()-32));m_card->adjustSize();
+ const int cardWidth=qMin(640,width()-32);m_mascot->setVisible(cardWidth>=460);
+ m_card->setFixedWidth(cardWidth);m_card->adjustSize();
  int y=height()-m_card->height()-24;
  if(m_highlight.isValid()&&m_highlight.center().y()>height()/2)y=24;
  m_card->move((width()-m_card->width())/2,qMax(12,y));raise();update();
+ m_mascot->lookAt(m_highlight.isValid()?mapToGlobal(m_highlight.center()):QPoint());
 }
 bool GuidedTour::eventFilter(QObject *watched,QEvent *event){if(watched==parentWidget()&&event->type()==QEvent::Resize)place();return QWidget::eventFilter(watched,event);}
 void GuidedTour::paintEvent(QPaintEvent *) {

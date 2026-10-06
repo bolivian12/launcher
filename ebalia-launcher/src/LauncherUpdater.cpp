@@ -12,6 +12,19 @@
 #endif
 namespace {
 void fail(const QString &message) { throw std::runtime_error(message.toStdString()); }
+// An AppImage runs from a read-only mount; the file to replace is $APPIMAGE.
+QString appImage() {
+#ifdef Q_OS_LINUX
+ const QFileInfo image(qEnvironmentVariable("APPIMAGE"));
+ if(!image.filePath().isEmpty()&&image.isFile())return image.absoluteFilePath();
+#endif
+ return {};
+}
+QString currentExecutable() {
+ const auto image=appImage();
+ return QFileInfo(image.isEmpty()?QCoreApplication::applicationFilePath():image).canonicalFilePath();
+}
+const QFile::Permissions executablePermissions=QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner|QFile::ReadGroup|QFile::ExeGroup|QFile::ReadOther|QFile::ExeOther;
 QByteArray run(const QString &program,const QStringList &args,int timeout,const QProcessEnvironment &env=QProcessEnvironment::systemEnvironment()) {
  QProcess process;process.setProcessEnvironment(env);process.start(program,args);
  if(!process.waitForStarted(10000))fail("Could not start "+program);
@@ -39,7 +52,7 @@ bool validPrepared(const QJsonObject &p,const QString &root) {
  if(!QRegularExpression("^[0-9]+\\.[0-9]+\\.[0-9]+$").match(version).hasMatch())return false;
  const auto directory=QFileInfo(root+"/updates").canonicalFilePath();
  const auto executable=QFileInfo(p["executable"].toString());
- if(p["installed"].toBool())return executable.isFile()&&executable.canonicalFilePath()==QFileInfo(QCoreApplication::applicationFilePath()).canonicalFilePath();
+ if(p["installed"].toBool())return executable.isFile()&&executable.canonicalFilePath()==currentExecutable();
  if(directory.isEmpty()||!QDir::cleanPath(executable.absoluteFilePath()).startsWith(directory+"/")||!executable.isFile())return false;
  const auto canonical=executable.canonicalFilePath();
  if(!canonical.startsWith(directory+"/")&&!(p["nix"].toBool()&&canonical.startsWith("/nix/store/")))return false;
@@ -59,7 +72,9 @@ bool trustedAsset(const QString &raw,const QString &tag) {
 QString assetName(const QString &platform,const QString &architecture) {
  if(platform=="windows"&&architecture=="x86_64")return "ebalia-windows-x64.zip";
  if(platform=="linux"&&architecture=="x86_64")return "ebalia-linux-x64-update.zip";
+ if(platform=="appimage"&&architecture=="x86_64")return "ebalia-linux-x86_64.AppImage";
  if(platform=="macos"&&architecture=="arm64")return "ebalia-macos-arm64.dmg";
+ if(platform=="macos"&&architecture=="x86_64")return "ebalia-macos-x64.dmg";
  return {};
 }
 QByteArray checksum(const QByteArray &manifest,const QString &name) {
@@ -82,12 +97,14 @@ QJsonObject prepare(const QJsonObject &release,const QString &root,Progress prog
  if(!QDir().mkpath(stage))fail("Could not create the update folder.");
  QJsonObject prepared{{"version",version},{"nix",false},{"stage",stage},{"parentPid",double(QCoreApplication::applicationPid())}};
 #if defined(Q_OS_WIN)
- const QString destination=QCoreApplication::applicationDirPath();
+ QString destination=QCoreApplication::applicationDirPath();
 #elif defined(Q_OS_MACOS)
- const QString destination=QDir::cleanPath(QCoreApplication::applicationDirPath()+"/../..");
+ QString destination=QDir::cleanPath(QCoreApplication::applicationDirPath()+"/../..");
 #else
- const QString destination=QDir::cleanPath(QCoreApplication::applicationDirPath()+"/..");
+ QString destination=QDir::cleanPath(QCoreApplication::applicationDirPath()+"/..");
 #endif
+ const auto image=appImage();const bool isAppImage=!image.isEmpty();
+ if(isAppImage){destination=image;prepared["appimage"]=true;}
  prepared["destination"]=destination;
  try {
 #if defined(Q_OS_LINUX)
@@ -105,12 +122,12 @@ QJsonObject prepare(const QJsonObject &release,const QString &root,Progress prog
 #elif defined(Q_OS_MACOS)
    const QString platform="macos";
 #else
-   const QString platform="linux";
+   const QString platform=isAppImage?"appimage":"linux";
 #endif
    #ifndef Q_OS_MACOS
-   if(!QFileInfo::exists(destination+"/update-files.json"))fail("This installation does not support automatic replacement yet. Install version 1.1.0 once to enable future in-app updates.");
+   if(!isAppImage&&!QFileInfo::exists(destination+"/update-files.json"))fail("This installation does not support automatic replacement yet. Install version 1.1.0 once to enable future in-app updates.");
 #endif
-   if(!QFileInfo(destination).isWritable())fail("The launcher folder is not writable. Install it in a folder owned by your user to enable automatic updates.");
+   if(!QFileInfo(isAppImage?QFileInfo(destination).absolutePath():destination).isWritable())fail("The launcher folder is not writable. Install it in a folder owned by your user to enable automatic updates.");
    const auto name=assetName(platform,QSysInfo::buildCpuArchitecture());
    if(name.isEmpty())fail("No automatic update package is available for this architecture.");
    QString assetUrl,manifestUrl;
@@ -138,22 +155,27 @@ QJsonObject prepare(const QJsonObject &release,const QString &root,Progress prog
    }catch(...){try{run("/usr/bin/hdiutil",{"detach",mount},30000);}catch(...){}throw;}
    run("/usr/bin/hdiutil",{"detach",mount},30000);
 #else
+   if(isAppImage) {
+    QFile::setPermissions(stage+"/"+name,executablePermissions);
+    prepared["executable"]=stage+"/"+name;
+   } else {
    Archive::extract(stage+"/"+name,stage+"/app");
 #ifdef Q_OS_WIN
    prepared["executable"]=stage+"/app/ebalia-launcher.exe";
 #else
    const auto exe=stage+"/app/bin/ebalia-launcher";
-   QFile::setPermissions(exe,QFile::ReadOwner|QFile::WriteOwner|QFile::ExeOwner|QFile::ReadGroup|QFile::ExeGroup|QFile::ReadOther|QFile::ExeOther);
+   QFile::setPermissions(exe,executablePermissions);
    prepared["executable"]=exe;
 #endif
-#endif
    QFile::remove(stage+"/"+name);
+   }
+#endif
   }
   if(!validPrepared(prepared,root))fail("The prepared executable is invalid.");
   report(96,"Verifying that the new launcher starts…");
   const auto output=run(prepared["executable"].toString(),{"--update-probe"},30000,environment(root,true));
   if(QJsonDocument::fromJson(output.trimmed()).object()["version"].toString()!=version)fail("The new launcher failed its startup check.");
-  if(!prepared["nix"].toBool()) {
+  if(!prepared["nix"].toBool()&&!isAppImage) {
 #ifndef Q_OS_MACOS
    auto source=QFileInfo(prepared["executable"].toString()).absolutePath();
 #ifdef Q_OS_LINUX
@@ -174,7 +196,7 @@ QString writePending(const QJsonObject &prepared,const QString &root) {
 QJsonObject readPending(const QString &name,const QString &root) {
  if(!QRegularExpression("^[0-9a-f-]{36}\\.json$").match(name).hasMatch())return {};
  auto p=readJson(root+"/updates/"+name);
- if(!validPrepared(p,root)||p["version"].toString()!=QCoreApplication::applicationVersion()||QFileInfo(p["executable"].toString()).canonicalFilePath()!=QFileInfo(QCoreApplication::applicationFilePath()).canonicalFilePath()) {
+ if(!validPrepared(p,root)||p["version"].toString()!=QCoreApplication::applicationVersion()||QFileInfo(p["executable"].toString()).canonicalFilePath()!=currentExecutable()) {
   // Nix wrappers exec a hidden binary in the same package.
   const auto target=QFileInfo(p["executable"].toString()).canonicalFilePath();
   const auto current=QFileInfo(QCoreApplication::applicationFilePath()).canonicalFilePath();
@@ -240,9 +262,22 @@ bool applyPrepared(const QJsonObject &prepared,const QString &root) {
  const auto updateRoot=QFileInfo(root+"/updates").canonicalFilePath();
  if(updateRoot.isEmpty()||QFileInfo(stage).canonicalFilePath().isEmpty()||!QFileInfo(stage).canonicalFilePath().startsWith(updateRoot+"/"))fail("Invalid staging directory.");
  if(prepared["nix"].toBool())return activate(prepared,root);
- if(!QDir::isAbsolutePath(destination)||!QFileInfo(destination).isWritable())fail("The installation directory is not writable.");
+ const bool isAppImage=prepared["appimage"].toBool();
+ if(!QDir::isAbsolutePath(destination)||!QFileInfo(isAppImage?QFileInfo(destination).absolutePath():destination).isWritable())fail("The installation directory is not writable.");
  QJsonObject installed=prepared;installed["installed"]=true;installed["parentPid"]=double(QCoreApplication::applicationPid());
  const auto backup=stage+"/previous";
+ QStringList oldFiles,newFiles;
+ auto restoreAppImage=[&]{if(QFileInfo::exists(backup)){QFile::remove(destination);QFile::copy(backup,destination);QFile::setPermissions(destination,executablePermissions);}};
+ if(isAppImage) {
+  // Copy next to the old file first so the final swap is a same-folder rename.
+  if(!destination.endsWith(".AppImage",Qt::CaseInsensitive)||!QFileInfo(destination).isFile())fail("Invalid AppImage destination.");
+  const auto incoming=destination+".new";QFile::remove(incoming);
+  if(!QFile::copy(destination,backup))fail("Could not back up the current AppImage.");
+  if(!QFile::copy(prepared["executable"].toString(),incoming)){QFile::remove(incoming);fail("Could not copy the new AppImage.");}
+  QFile::setPermissions(incoming,executablePermissions);
+  if(!QFile::remove(destination)||!QFile::rename(incoming,destination)){QFile::remove(incoming);restoreAppImage();fail("Could not replace the AppImage. Close other launcher processes.");}
+  installed["executable"]=destination;
+ } else {
 #ifdef Q_OS_MACOS
  if(!destination.endsWith(".app"))fail("Invalid application bundle destination.");
  const auto source=QDir::cleanPath(QFileInfo(prepared["executable"].toString()).absolutePath()+"/../..");
@@ -256,7 +291,7 @@ bool applyPrepared(const QJsonObject &prepared,const QString &root) {
 #ifdef Q_OS_LINUX
  source=QDir::cleanPath(source+"/..");
 #endif
- const auto oldFiles=ownedFiles(destination),newFiles=ownedFiles(source);
+ oldFiles=ownedFiles(destination);newFiles=ownedFiles(source);
  QStringList moved,copied;
  try {
   for(const auto &name:newFiles)if(QFileInfo::exists(destination+"/"+name)&&!oldFiles.contains(name))fail("Update would overwrite a file not owned by the launcher: "+name);
@@ -273,6 +308,7 @@ bool applyPrepared(const QJsonObject &prepared,const QString &root) {
  installed["executable"]=destination+"/bin/ebalia-launcher";
 #endif
 #endif
+ }
  // Verify the copied deployment too, before committing the restart.
  try {
   auto output=run(installed["executable"].toString(),{"--update-probe"},30000,environment(root,true));
@@ -283,6 +319,7 @@ bool applyPrepared(const QJsonObject &prepared,const QString &root) {
   if(!child.startDetached())fail("Could not restart the installed launcher.");
   return true;
  }catch(...){
+  if(isAppImage){restoreAppImage();throw;}
 #ifdef Q_OS_MACOS
   QDir(destination).removeRecursively();QDir().rename(backup,destination);
 #else

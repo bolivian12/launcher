@@ -1,0 +1,2 @@
+#pragma once
+#define EBALIA_MS_CLIENT_ID "@EBALIA_MS_CLIENT_ID@"

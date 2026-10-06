@@ -97,9 +97,14 @@ void Ui::fitToScreen(QWidget *window,QSize preferred){
 }
 int Ui::openWindow(QDialog &dialog){
     QList<QPointer<QWidget>> blocked;
-    if(auto owner=dialog.parentWidget()?dialog.parentWidget()->window():nullptr){
-        if(auto main=qobject_cast<QMainWindow*>(owner))blocked<<main->centralWidget();
-        else for(auto child:owner->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))if(!child->isWindow()&&child->isEnabled())blocked<<child;
+    // Keep the launcher behind ordinary dialogs inert. Fan-art viewers stay
+    // independent so their artwork remains in full colour.
+    if(dialog.objectName()!=QStringLiteral("fanartViewer")) {
+        if(auto owner=dialog.parentWidget()?dialog.parentWidget()->window():nullptr) {
+            if(auto main=qobject_cast<QMainWindow*>(owner)) blocked<<main->centralWidget();
+            else for(auto child:owner->findChildren<QWidget*>(Qt::FindDirectChildrenOnly))
+                if(!child->isWindow()&&child->isEnabled()) blocked<<child;
+        }
     }
     for(auto &w:blocked)if(w)w->setEnabled(false);
     dialog.setWindowModality(Qt::NonModal);dialog.setSizeGripEnabled(true);
@@ -166,7 +171,7 @@ QPushButton[patreon=true]{background:#ed6957;border:1px solid #f58978;color:#fff
 #instanceCard QLabel,#instanceCards,#instanceGrid,#instanceDetail,#instanceDetail QLabel{background:transparent;}
 #cardTitle{font-size:15px;font-weight:800;}#cardFooter{color:#8c8c95;font-size:11px;}
 #cardSettings,#instanceDetail QToolButton{background:rgba(38,38,43,230);border:1px solid #3a3a41;border-radius:9px;padding:9px;}#cardSettings:hover,#instanceDetail QToolButton:hover{border-color:#6fd15b;}
-#detailTitle{font-size:30px;font-weight:900;color:#ffffff;}#detailIcon{background:rgba(20,20,22,220);border:1px solid #3a3a41;border-radius:16px;}
+#detailTitle{font-size:30px;font-weight:900;color:#ffffff;}#detailIcon{background:rgba(20,20,22,220);border:1px solid #3a3a41;border-radius:16px;}#detailIcon:hover{border-color:#6fd15b;background:rgba(32,40,30,230);}#detailIcon::menu-indicator,#instanceIcon::menu-indicator{image:none;width:0;}#instanceGallery::item{border-radius:8px;padding:0;}#instanceGallery::item:hover{background:#2b3a27;}#instanceServers::item{padding:4px;border-radius:8px;}#instanceServers::item:selected{background:#2b3a27;}
 #statCard{background:rgba(30,30,34,235);border:1px solid #34343a;border-radius:14px;}#statCard:hover{border-color:#4a9e31;}#statCard QLabel{background:transparent;}#statTitle{font-size:16px;font-weight:800;}#statIcon{background:rgba(60,133,39,60);border-radius:10px;}
 #groupHeader{background:transparent;border:0;text-align:left;font-size:15px;font-weight:800;padding:6px 2px;}#groupHeader:hover{color:#97ec85;background:transparent;}
 #lostList{padding:8px;}#lostList::item{padding:0;margin:4px 2px;border-radius:12px;border:2px solid transparent;}#lostList::item:selected{background:transparent;border:2px solid #4a9e31;}#lostList::item:hover{background:transparent;border:2px solid #3a3a41;}

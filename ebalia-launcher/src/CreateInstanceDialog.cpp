@@ -18,12 +18,10 @@ CreateInstanceDialog::CreateInstanceDialog(McInstanceManager *manager,const QLis
     auto windowLayout=new QVBoxLayout(this);windowLayout->setSpacing(12);auto scroll=new QScrollArea;scroll->setObjectName("instanceFormScroll");scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);windowLayout->addWidget(scroll,1);
     auto content=new QWidget;auto outer=new QVBoxLayout(content);outer->setContentsMargins(0,0,0,0);outer->setSpacing(12);scroll->setWidget(content);
     auto header=new QHBoxLayout;outer->addLayout(header);
-    if(copy){try{m_iconKey=ModRepository::read(source.dir+"/instance.json")["icon"].toString(m_iconKey);if(m_iconKey=="custom")m_iconKey="grass";}catch(...){}}
-    m_icon=new QToolButton;m_icon->setObjectName("instanceIcon");m_icon->setIconSize(QSize(56,56));m_icon->setFixedSize(78,78);m_icon->setPopupMode(QToolButton::InstantPopup);m_icon->setToolTip(t("Choose an icon"));m_icon->setIcon(InstanceIcons::icon(m_iconKey));
-    auto iconMenu=new QMenu(m_icon);
-    const QStringList iconNames{t("Grass block"),"Creeper","TNT",t("Pickaxe"),t("Diamond"),t("Crafting table"),t("Book"),t("World"),t("Server"),t("Star"),t("Eyes in the dark"),"EBALIA"};
-    for(int i=0;i<InstanceIcons::keys().size();++i){auto key=InstanceIcons::keys()[i];auto action=iconMenu->addAction(InstanceIcons::icon(key),iconNames.value(i,key));connect(action,&QAction::triggered,this,[this,key]{m_iconKey=key;m_icon->setIcon(InstanceIcons::icon(key));});}
-    m_icon->setMenu(iconMenu);header->addWidget(m_icon,0,Qt::AlignTop);
+    if(copy){try{m_iconKey=ModRepository::read(source.dir+"/instance.json")["icon"].toString(m_iconKey);if(m_iconKey=="custom"){m_customIcon.load(source.dir+"/instance-icon.png");if(m_customIcon.isNull())m_iconKey="grass";}}catch(...){}}
+    m_icon=new QToolButton;m_icon->setObjectName("instanceIcon");m_icon->setIconSize(QSize(56,56));m_icon->setFixedSize(78,78);m_icon->setPopupMode(QToolButton::InstantPopup);m_icon->setToolTip(t("Choose an icon"));m_icon->setIcon(m_iconKey=="custom"?QIcon(QPixmap::fromImage(m_customIcon)):InstanceIcons::icon(m_iconKey));
+    m_icon->setMenu(InstanceIcons::menu(m_icon,[this](const QString &key,const QImage &custom){
+        m_iconKey=key;m_customIcon=custom;m_icon->setIcon(key=="custom"?QIcon(QPixmap::fromImage(custom)):InstanceIcons::icon(key));}));header->addWidget(m_icon,0,Qt::AlignTop);
     auto details=new QFormLayout;header->addLayout(details,1);
     m_name=new QLineEdit(copy?source.name+" (2)":"");m_name->setObjectName("instanceName");details->addRow(t("Name"),m_name);
     m_group=new QComboBox;m_group->setEditable(true);m_group->setObjectName("instanceGroup");m_group->addItem(t("No group"),"");

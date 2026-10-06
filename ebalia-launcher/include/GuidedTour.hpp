@@ -5,6 +5,7 @@ class QLabel;
 class QPushButton;
 class QProgressBar;
 class QFrame;
+class TourMascot;
 class GuidedTour:public QWidget {
 public:
  GuidedTour(QWidget *parent,std::function<void(int)> navigate);
@@ -20,6 +21,7 @@ private:
  int m_step=0;
  bool m_finished=false;
  QFrame *m_card=nullptr;
+ TourMascot *m_mascot=nullptr;
  QLabel *m_title,*m_body,*m_count;
  QPushButton *m_previous,*m_next;
  QProgressBar *m_progress;

@@ -2,6 +2,7 @@
 #include "InstanceIcons.hpp"
 #include "Language.hpp"
 #include "Ui.hpp"
+#include "ServerList.hpp"
 #include <QtWidgets>
 #include <algorithm>
 namespace {
@@ -146,7 +147,8 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     tool("settings",t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
     l->addSpacing(28); // the artwork shows above the title, like the instance page of the Minecraft Launcher
     auto titleRow=new Ui::ResponsiveRow(740);l->addWidget(titleRow);auto header=new QHBoxLayout;header->setSpacing(18);titleRow->box()->addLayout(header,1);
-    m_icon=new QLabel;m_icon->setFixedSize(84,84);m_icon->setObjectName("detailIcon");m_icon->setAlignment(Qt::AlignCenter);header->addWidget(m_icon,0,Qt::AlignVCenter);
+    m_icon=new QToolButton;m_icon->setFixedSize(84,84);m_icon->setObjectName("detailIcon");m_icon->setIconSize(QSize(62,62));m_icon->setCursor(Qt::PointingHandCursor);m_icon->setToolTip(t("Change icon"));m_icon->setAccessibleName(t("Change icon"));
+    m_icon->setPopupMode(QToolButton::InstantPopup);m_icon->setMenu(InstanceIcons::menu(m_icon,[this](const QString &key,const QImage &custom){if(changeIcon)changeIcon(key,custom);}));header->addWidget(m_icon,0,Qt::AlignVCenter);
     auto info=new QVBoxLayout;info->setSpacing(6);header->addLayout(info,1);info->addStretch();
     m_name=new QLabel;m_name->setObjectName("detailTitle");m_name->setWordWrap(true);m_name->setSizePolicy(QSizePolicy::Ignored,QSizePolicy::Preferred);info->addWidget(m_name);
     m_state=new QLabel;m_state->setObjectName("muted");m_state->setWordWrap(true);info->addWidget(m_state);info->addStretch();
@@ -167,7 +169,77 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     auto action=[this,actions](const QString &text,const QString &icon,const char *name,std::function<void()> InstanceDetail::*callback){auto b=iconButton(text,icon,name);b->setToolTip(text);b->setAccessibleName(text);m_actions<<qMakePair(b,text);actions->addWidget(b);connect(b,&QPushButton::clicked,this,[this,callback]{if(this->*callback)(this->*callback)();});return b;};
     action(t("Find mods"),"compass","findMods",&InstanceDetail::findMods);action(t("Save mods as a pack"),"package","savePack",&InstanceDetail::savePack);action(t("Copy instance"),"copy","copyInstance",&InstanceDetail::copy);action(t("Change group"),"layers","changeGroup",&InstanceDetail::changeGroup);
     actions->addStretch();auto remove=action(t("Delete instance"),"trash-2","deleteInstance",&InstanceDetail::remove);remove->setProperty("danger",true);remove->setIcon(Ui::icon("trash-2",QColor(255,163,174)));
+    // Fill the page with what the instance holds: its screenshots and its server list.
+    auto extras=new Ui::ResponsiveRow(900);extras->box()->setSpacing(14);l->addWidget(extras);
+    auto section=[extras](const QString &icon,const QString &title,QLabel **count){
+        auto card=new QFrame;card->setObjectName("statCard");card->setMinimumHeight(250);auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,16);cl->setSpacing(10);
+        auto head=new QHBoxLayout;head->setSpacing(10);cl->addLayout(head);
+        auto badge=new QLabel;badge->setObjectName("statIcon");badge->setFixedSize(32,32);badge->setAlignment(Qt::AlignCenter);badge->setPixmap(Ui::pixmap(icon,18,green));head->addWidget(badge);
+        auto label=new QLabel(title);label->setObjectName("statTitle");head->addWidget(label);
+        if(count){*count=muted({});head->addWidget(*count);}
+        head->addStretch();extras->box()->addWidget(card,1);return qMakePair(cl,head);
+    };
+    auto gallery=section("image",t("Screenshots"),&m_galleryCount);
+    auto openShots=new QPushButton(t("Open folder"));openShots->setProperty("link",true);openShots->setCursor(Qt::PointingHandCursor);gallery.second->addWidget(openShots);
+    connect(openShots,&QPushButton::clicked,this,[this]{QDir().mkpath(m_dir+"/screenshots");if(openFolder)openFolder("screenshots");});
+    m_gallery=new QListWidget;m_gallery->setObjectName("instanceGallery");m_gallery->setViewMode(QListView::IconMode);m_gallery->setFlow(QListView::LeftToRight);m_gallery->setWrapping(false);
+    m_gallery->setIconSize(QSize(192,108));m_gallery->setSpacing(6);m_gallery->setMovement(QListView::Static);m_gallery->setFixedHeight(150);m_gallery->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    m_gallery->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_gallery->setFrameShape(QFrame::NoFrame);m_gallery->setCursor(Qt::PointingHandCursor);gallery.first->addWidget(m_gallery);
+    connect(m_gallery,&QListWidget::itemActivated,this,[](QListWidgetItem *item){QDesktopServices::openUrl(QUrl::fromLocalFile(item->data(Qt::UserRole).toString()));});
+    connect(m_gallery,&QListWidget::itemClicked,this,[](QListWidgetItem *item){QDesktopServices::openUrl(QUrl::fromLocalFile(item->data(Qt::UserRole).toString()));});
+    m_galleryEmpty=muted(t("No screenshots yet. Press F2 in the game and they will appear here."));gallery.first->addWidget(m_galleryEmpty);gallery.first->addStretch();
+    auto servers=section("globe",t("Servers"),nullptr);
+    m_servers=new QListWidget;m_servers->setObjectName("instanceServers");m_servers->setIconSize(QSize(32,32));m_servers->setFixedHeight(150);m_servers->setFrameShape(QFrame::NoFrame);servers.first->addWidget(m_servers);
+    m_serversEmpty=muted(t("No servers yet. Add one here or from the game's Multiplayer menu."));servers.first->addWidget(m_serversEmpty);
+    auto serverRow=new QHBoxLayout;serverRow->setSpacing(8);servers.first->addLayout(serverRow);
+    m_addServer=iconButton(t("Add server"),"plus","addServer");m_copyServer=iconButton(t("Copy address"),"copy","copyServer");m_removeServer=iconButton(t("Remove"),"trash-2","removeServer");
+    serverRow->addWidget(m_addServer);serverRow->addWidget(m_copyServer);serverRow->addStretch();serverRow->addWidget(m_removeServer);
+    connect(m_servers,&QListWidget::currentRowChanged,this,[this](int row){m_copyServer->setEnabled(row>=0);m_removeServer->setEnabled(row>=0&&!m_running);});
+    connect(m_copyServer,&QPushButton::clicked,this,[this]{if(auto item=m_servers->currentItem())QGuiApplication::clipboard()->setText(item->data(Qt::UserRole).toString());});
+    connect(m_addServer,&QPushButton::clicked,this,[this]{
+        QDialog d(this);d.setObjectName("addServerDialog");d.setWindowTitle(t("Add server"));auto form=new QFormLayout(&d);form->setContentsMargins(20,18,20,16);
+        auto name=new QLineEdit;name->setPlaceholderText(t("Minecraft Server"));auto address=new QLineEdit;address->setObjectName("serverAddress");address->setPlaceholderText("play.example.org");
+        form->addRow(t("Name"),name);form->addRow(t("Address"),address);auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);
+        buttons->button(QDialogButtonBox::Save)->setEnabled(false);connect(address,&QLineEdit::textChanged,&d,[buttons](const QString &v){buttons->button(QDialogButtonBox::Save)->setEnabled(!v.trimmed().isEmpty()&&!v.contains(' '));});
+        connect(buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
+        if(Ui::openWindow(d)!=QDialog::Accepted)return;
+        try{ServerList::add(m_dir+"/servers.dat",name->text(),address->text());}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
+        showServers();
+    });
+    connect(m_removeServer,&QPushButton::clicked,this,[this]{
+        const int row=m_servers->currentRow();if(row<0)return;
+        if(QMessageBox::question(this,"EBALIA",t("Remove this server from the list?"))!=QMessageBox::Yes)return;
+        try{ServerList::remove(m_dir+"/servers.dat",row);}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
+        showServers();
+    });
     l->addStretch();arrange();
+}
+void InstanceDetail::showScreenshots(){
+    auto files=QDir(m_dir+"/screenshots").entryInfoList({"*.png","*.jpg","*.jpeg"},QDir::Files,QDir::Time);
+    // Instance refreshes are frequent: only reload when the folder changed.
+    const auto signature=m_dir+"|"+QString::number(files.size())+"|"+(files.isEmpty()?QString():files.first().fileName()+QString::number(files.first().lastModified().toMSecsSinceEpoch()));
+    if(signature==m_gallerySignature)return;
+    m_gallerySignature=signature;m_gallery->clear();
+    m_galleryCount->setText(files.isEmpty()?QString():QString::number(files.size()));
+    m_gallery->setVisible(!files.isEmpty());m_galleryEmpty->setVisible(files.isEmpty());
+    const auto dir=m_dir;
+    for(const auto &file:files.mid(0,30)){
+        auto item=new QListWidgetItem(m_gallery);item->setData(Qt::UserRole,file.absoluteFilePath());item->setToolTip(file.fileName()+"\n"+QLocale().toString(file.lastModified(),QLocale::ShortFormat));item->setSizeHint(QSize(198,114));
+        Ui::loadArt(file.absoluteFilePath(),{384,216},this,[this,dir,path=file.absoluteFilePath()](const QPixmap &p){
+            if(m_dir!=dir)return;for(int n=0;n<m_gallery->count();++n)if(m_gallery->item(n)->data(Qt::UserRole).toString()==path)m_gallery->item(n)->setIcon(QIcon(Ui::cover(p,{192,108},8)));});
+    }
+}
+void InstanceDetail::showServers(){
+    const auto selected=m_servers->currentRow();m_servers->clear();
+    const auto list=ServerList::read(m_dir+"/servers.dat");
+    for(const auto &server:list){
+        auto item=new QListWidgetItem(server.icon.isNull()?InstanceIcons::icon("server"):QIcon(QPixmap::fromImage(server.icon)),server.name+"\n"+server.address,m_servers);
+        item->setData(Qt::UserRole,server.address);item->setSizeHint(QSize(0,44));
+    }
+    m_servers->setVisible(!list.isEmpty());m_serversEmpty->setVisible(list.isEmpty());
+    if(selected>=0&&selected<m_servers->count())m_servers->setCurrentRow(selected);
+    m_addServer->setEnabled(!m_running);m_addServer->setToolTip(m_running?t("Close the game to edit its server list."):QString());
+    m_copyServer->setEnabled(m_servers->currentRow()>=0);m_removeServer->setEnabled(m_servers->currentRow()>=0&&!m_running);
 }
 // Cards reflow to two or one column; narrow windows keep action labels in tooltips.
 void InstanceDetail::arrange(){
@@ -185,7 +257,7 @@ void InstanceDetail::paintEvent(QPaintEvent *){
 }
 void InstanceDetail::showInstance(const InstanceInfo &i){
     if(m_dir!=i.base.dir){const auto dir=i.base.dir;m_dir=dir;m_backdrop={};m_scaled={};Ui::loadArt(Ui::artFor(dir),{1920,1080},this,[this,dir](const QPixmap &p){if(m_dir==dir){m_backdrop=p;m_scaled={};update();}});}
-    m_dir=i.base.dir;m_icon->setPixmap(InstanceIcons::icon(i.icon,i.base.dir).pixmap(62,62));m_name->setText(i.base.name);
+    m_dir=i.base.dir;m_icon->setIcon(InstanceIcons::icon(i.icon,i.base.dir));m_name->setText(i.base.name);
     auto chips=static_cast<QBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
     auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setWordWrap(true);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
     chip(InstanceText::loader(i.base.loader)+(i.base.loader=="vanilla"||i.loaderVersion.isEmpty()?QString():" "+i.loaderVersion),true);chip("Minecraft "+i.base.mcVersion);chip(QString::number(i.base.xmx)+" MB");
@@ -197,4 +269,5 @@ void InstanceDetail::showInstance(const InstanceInfo &i){
     m_counts[0]->setText(t("%1 mods enabled").arg(enabled)+(disabled?" · "+t("%1 disabled").arg(disabled):QString()));
     const int packs=count(dir+"/resourcepacks",{},QDir::Files|QDir::Dirs),shaders=count(dir+"/shaderpacks",{},QDir::Files|QDir::Dirs),worlds=count(dir+"/saves",{},QDir::Dirs);
     m_counts[1]->setText(packs?t("%1 resource packs").arg(packs):t("No resource packs yet"));m_counts[2]->setText(shaders?t("%1 shader packs").arg(shaders):t("No shader packs yet"));m_counts[3]->setText(worlds?t("%1 worlds").arg(worlds):t("No worlds yet"));
+    m_running=i.running;showScreenshots();showServers();
 }

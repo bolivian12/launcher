@@ -1,30 +1,63 @@
 #include "InstanceIcons.hpp"
 #include "Icons.hpp"
+#include "Language.hpp"
+#include "Ui.hpp"
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QMenu>
+#include <QMessageBox>
+#include <QPixmapCache>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QFile>
 #include <QHash>
 #include <QPainter>
-namespace {
-QPixmap pixels(const QStringList &rows,const QHash<QChar,QRgb> &palette,int size){
-    QImage image(rows.first().size(),rows.size(),QImage::Format_ARGB32);image.fill(Qt::transparent);
-    for(int y=0;y<rows.size();++y)for(int x=0;x<rows[y].size();++x)if(rows[y][x]!='.')image.setPixel(x,y,palette.value(rows[y][x],qRgb(255,0,255)));
-    return QPixmap::fromImage(image).scaled(size,size,Qt::IgnoreAspectRatio,Qt::FastTransformation);
-}
-QPixmap creeper(int size){return pixels({"GGgGGGgG","GgGGGGGG","GKKGgKKG","GKKGGKKG","gGGKKGGG","GGKKKKGg","GGKKKKGG","GgKGGKGG"},{{'G',qRgb(94,170,72)},{'g',qRgb(70,140,55)},{'K',qRgb(20,28,20)}},size);}
-QPixmap tnt(int size){return pixels({"RRRRRRRR","RrRRrRRr","WWWWWWWW","WKWKWKWW","WWWWWWWW","RRrRRRrR","RRRRRRRR","rRRrRRRR"},{{'R',qRgb(204,58,44)},{'r',qRgb(160,40,32)},{'W',qRgb(236,236,236)},{'K',qRgb(40,40,40)}},size);}
-QPixmap pickaxe(int size){return pixels({".CCCCC..","C.....C.","......CS",".....S..","....S...","...S....","..S.....",".S......"},{{'C',qRgb(90,210,220)},{'S',qRgb(140,100,60)}},size);}
-}
 QStringList InstanceIcons::keys(){return {"grass","creeper","tnt","pickaxe","gem","crafting","book","globe","server","star","horror","ebalia"};}
+QString InstanceIcons::name(const QString &key){
+    static const QHash<QString,const char*> names{{"grass","Grass block"},{"creeper","Creeper"},{"tnt","TNT"},{"pickaxe","Pickaxe"},{"gem","Diamond"},{"crafting","Crafting table"},
+        {"book","Book"},{"globe","World"},{"server","Server"},{"star","Star"},{"horror","Eyes in the dark"},{"ebalia","EBALIA"}};
+    return Language::key(QString::fromUtf8(names.value(key,"Custom")));
+}
 QIcon InstanceIcons::icon(const QString &value,const QString &dir){
     auto key=value.toLower();
     if(key=="custom"&&!dir.isEmpty()&&QFile::exists(dir+"/instance-icon.png"))return QIcon(dir+"/instance-icon.png");
     // Keys written by the previous creation dialog.
     if(key=="world")key="globe";else if(key=="mods")key="crafting";else if(key=="adventure")key="book";
-    const int s=64;
-    if(key=="creeper")return creeper(s);if(key=="tnt")return tnt(s);if(key=="pickaxe")return pickaxe(s);
-    if(key=="gem")return icons::release(s);if(key=="crafting")return icons::mods(s);if(key=="book")return icons::learn(s);
-    if(key=="globe")return icons::wiki(s);if(key=="server")return icons::server(s);if(key=="star")return icons::fanart(s);
-    if(key=="horror")return icons::horror(s);if(key=="ebalia")return QIcon(":/icon.png");
-    return icons::alpha(s);
+    if(key=="ebalia")return QIcon(":/icon.png");
+    if(!keys().contains(key))key="grass";
+    // 16×16 pixel art, enlarged without blurring.
+    static QHash<QString,QIcon> cache;
+    if(!cache.contains(key)){QImage art(":/icons/instances/"+key+".png");cache.insert(key,QPixmap::fromImage(art.scaled(128,128,Qt::IgnoreAspectRatio,Qt::FastTransformation)));}
+    return cache.value(key);
+}
+QImage InstanceIcons::chooseImage(QWidget *parent){
+    const auto file=QFileDialog::getOpenFileName(parent,Language::key("Choose an icon"),QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),Language::key("Images")+" (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.ico)");
+    if(file.isEmpty())return {};
+    QImageReader reader(file);reader.setAutoTransform(true);
+    if(QFileInfo(file).size()>16*1024*1024||reader.size().width()>8192||reader.size().height()>8192){QMessageBox::warning(parent,"EBALIA",Language::key("This image is too large. Choose one under 16 MB."));return {};}
+    QImage image=reader.read();
+    if(image.isNull()){QMessageBox::warning(parent,"EBALIA",Language::key("This file is not an image the launcher can open."));return {};}
+    // Centered square, so wide pictures are not squashed.
+    const int side=qMin(image.width(),image.height());
+    image=image.copy((image.width()-side)/2,(image.height()-side)/2,side,side).convertToFormat(QImage::Format_ARGB32);
+    const bool pixelArt=side<=64;
+    return image.scaled(128,128,Qt::IgnoreAspectRatio,pixelArt?Qt::FastTransformation:Qt::SmoothTransformation);
+}
+bool InstanceIcons::saveCustom(const QString &dir,const QImage &picture){
+    if(dir.isEmpty()||picture.isNull())return false;
+    QSaveFile out(dir+"/instance-icon.png");
+    if(!out.open(QIODevice::WriteOnly)||!picture.save(&out,"PNG")||!out.commit())return false;
+    QPixmapCache::clear(); // QIcon caches files by name
+    return true;
+}
+QMenu *InstanceIcons::menu(QWidget *parent,std::function<void(const QString &,const QImage &)> chosen){
+    auto menu=new QMenu(parent);menu->setObjectName("instanceIconMenu");
+    for(const auto &key:keys()){auto action=menu->addAction(icon(key),name(key));QObject::connect(action,&QAction::triggered,parent,[key,chosen]{chosen(key,{});});}
+    menu->addSeparator();
+    auto custom=menu->addAction(Ui::icon("image",QColor(200,200,206)),Language::key("Choose an image from your computer…"));custom->setObjectName("customInstanceIcon");
+    QObject::connect(custom,&QAction::triggered,parent,[parent,chosen]{auto image=chooseImage(parent);if(!image.isNull())chosen("custom",image);});
+    return menu;
 }
 QIcon InstanceIcons::provider(const QString &provider){
     if(provider=="custom")return icons::alpha(48);if(provider=="import")return icons::folder(48);

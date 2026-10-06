@@ -1,10 +1,11 @@
 #pragma once
+#include <QImage>
 #include <QWidget>
 #include <QSet>
 #include <QPixmap>
 #include <functional>
 #include "McInstanceManager.hpp"
-class QVBoxLayout;class QLineEdit;class QLabel;class QPushButton;class QGridLayout;class QScrollArea;
+class QVBoxLayout;class QLineEdit;class QLabel;class QPushButton;class QGridLayout;class QScrollArea;class QToolButton;class QListWidget;
 struct InstanceInfo {
     McInstance base;
     QString group,icon,loaderVersion;
@@ -34,13 +35,18 @@ public:
     QString dir() const {return m_dir;}
     std::function<void()> back,play,settings,log,exportZip,copy,remove,mods,findMods,savePack,changeGroup;
     std::function<void(const QString &folder)> openFolder;
+    std::function<void(const QString &key,const QImage &custom)> changeIcon;
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 private:
     void arrange();
     QGridLayout *m_cardGrid;QList<QWidget*> m_cards,m_cardIcons;QList<QPair<QPushButton*,QString>> m_actions;bool m_compact=false;int m_cardColumns=0;
-    QPixmap m_backdrop,m_scaled;QString m_dir;QLabel *m_icon,*m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
+    QPixmap m_backdrop,m_scaled;QString m_dir;QToolButton *m_icon;QLabel *m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
     QList<QLabel*> m_counts;
+    // Screenshots gallery and multiplayer servers, below the actions.
+    void showScreenshots();
+    void showServers();
+    QListWidget *m_gallery,*m_servers;QLabel *m_galleryEmpty,*m_serversEmpty,*m_galleryCount;QPushButton *m_addServer,*m_removeServer,*m_copyServer;bool m_running=false;QString m_gallerySignature;
 };
 namespace InstanceText {QString lastPlayed(qint64 seconds);QString loader(const QString &loader);}

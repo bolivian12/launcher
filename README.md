@@ -19,12 +19,13 @@ La [página oficial](https://ebalia-launcher.gitgud.site/#descargas) detecta el 
 
 | Sistema | Paquete | Instalación |
 | --- | --- | --- |
-| Windows 10 / 11 · x64 | [Instalador `.exe`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-setup.exe) | Ejecutalo y seguí el asistente. Incluye las bibliotecas Visual C++ y crea el acceso directo al escritorio. Si ya está instalado, recupera su carpeta y lo actualiza. |
-| macOS · Apple Silicon | [Imagen `.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64.dmg) | Abrí la imagen y copiá la aplicación a una carpeta de aplicaciones de tu usuario. Intel requiere una compilación propia. |
-| Linux · x64 | [Archivo `.tar.gz`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x64.tar.gz) | El binario se construye para Ubuntu 24.04 y necesita Qt 6 y libarchive compatibles. La web incluye instrucciones para Debian/Ubuntu, Arch, Fedora y otras distribuciones. |
+| Windows 10 / 11 · x64 | [Instalador `.exe`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-setup.exe) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-windows-x64-portable.zip) | Instalador: ejecutalo y seguí el asistente (incluye Visual C++ y el acceso directo). Portable: descomprimilo en cualquier carpeta o USB y abrí `ebalia-launcher.exe`, sin instalar. |
+| macOS · Apple Silicon | [`.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64.dmg) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-arm64-portable.zip) | Abrí la imagen y copiá la aplicación a tus aplicaciones, o descomprimí la versión portable donde quieras. |
+| macOS · Intel | [`.dmg`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-x64.dmg) · [Portable `.zip`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-macos-x64-portable.zip) | Igual que Apple Silicon. |
+| Linux · x64 (cualquier distribución) | [AppImage](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64.AppImage) · [Portable `.tar.gz`](https://github.com/ebalia-real/launcher/releases/latest/download/ebalia-linux-x86_64-portable.tar.gz) | Trae Qt, libarchive y OpenSSL: `chmod +x ebalia-linux-x86_64.AppImage` y abrilo. Funciona en distribuciones con glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora, Arch, openSUSE…). |
 | NixOS | Flake del proyecto | Nix prepara las dependencias y compila el launcher. Usá las instrucciones de abajo. |
 
-Los enlaces apuntan a la última versión publicada; los paquetes de una versión nueva aparecen después de que sus compilaciones y pruebas terminen. No se garantiza un único binario Linux compatible con todas las distribuciones. Windows y macOS se distribuyen actualmente sin firma digital del editor.
+Las versiones **portables** guardan instancias, mundos, cuentas y ajustes en la carpeta `ebalia-data` de al lado, gracias al archivo `portable.txt` que incluyen; podés llevarlas en un USB. Los enlaces apuntan a la última versión publicada; los paquetes de una versión nueva aparecen después de que sus compilaciones y pruebas terminen. Windows y macOS se distribuyen actualmente sin firma digital del editor (en macOS, la primera vez abrí la app con clic derecho → Abrir).
 
 ### NixOS
 

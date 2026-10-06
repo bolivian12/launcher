@@ -19,7 +19,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build qt6-base-dev qt6-tools-dev qt6-image-formats-plugins libarchive-dev libgl1-mesa-dev fonts-noto-cjk
-      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DEBALIA_CURSEFORGE_API_KEY="$EBALIA_CURSEFORGE_API_KEY" -DEBALIA_MS_CLIENT_ID="$EBALIA_MS_CLIENT_ID"
+        env:
+          EBALIA_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          EBALIA_MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
       - run: cmake --build build --parallel 2
       - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - name: Diagnose a failing Linux UI test
@@ -63,7 +66,10 @@ jobs:
           key: vcpkg-windows-2022-libarchive-v1
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake -S . -B build -A x64 "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" "-DEBALIA_CURSEFORGE_API_KEY=$env:EBALIA_CURSEFORGE_API_KEY" "-DEBALIA_MS_CLIENT_ID=$env:EBALIA_MS_CLIENT_ID"
+        env:
+          EBALIA_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          EBALIA_MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
       - run: cmake --build build --config Release --parallel
       - name: Preserve compiled tests for diagnosis
         uses: actions/upload-artifact@v4
@@ -118,12 +124,100 @@ jobs:
         with:
           name: ebalia-windows-installer
           path: ebalia-launcher/package/ebalia-windows-x64-setup.exe
+  # One AppImage for every glibc distribution (built on Ubuntu 22.04, glibc 2.35+):
+  # Qt, libarchive and OpenSSL travel inside, so nothing has to be installed.
+  linux-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: linux_gcc_64
+          modules: qtimageformats
+          cache: true
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-12 libarchive-dev libssl-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 file
+      - run: cmake -S . -B build-appimage -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-12 -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF -DEBALIA_CURSEFORGE_API_KEY="$EBALIA_CURSEFORGE_API_KEY" -DEBALIA_MS_CLIENT_ID="$EBALIA_MS_CLIENT_ID"
+        env:
+          EBALIA_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          EBALIA_MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+      - run: cmake --build build-appimage --parallel 2
+      - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          OUTPUT: ebalia-linux-x86_64.AppImage
+        run: |
+          DESTDIR="$PWD/AppDir" cmake --install build-appimage
+          for tool in linuxdeploy/linuxdeploy-x86_64 linuxdeploy-plugin-qt/linuxdeploy-plugin-qt-x86_64; do
+            curl -fsSLO "https://github.com/linuxdeploy/${tool%%/*}/releases/download/continuous/${tool##*/}.AppImage"
+          done
+          chmod +x linuxdeploy*.AppImage
+          export PATH="$PWD:$PATH" QMAKE="$QT_ROOT_DIR/bin/qmake" LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          ssl=/usr/lib/x86_64-linux-gnu
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --executable AppDir/usr/bin/ebalia-launcher \
+            --desktop-file AppDir/usr/share/applications/ebalia-launcher.desktop \
+            --library "$ssl/libssl.so.3" --library "$ssl/libcrypto.so.3" --plugin qt
+          # HTTPS needs Qt's TLS backend, which is loaded at runtime.
+          mkdir -p AppDir/usr/plugins/tls && cp -n "$QT_ROOT_DIR"/plugins/tls/*.so AppDir/usr/plugins/tls/
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          test -x ebalia-linux-x86_64.AppImage
+      - name: Starts outside the build machine's Qt
+        run: env -u LD_LIBRARY_PATH QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./ebalia-linux-x86_64.AppImage --update-probe
+      - name: Portable bundle
+        run: |
+          mkdir -p "portable/EBALIA Launcher"
+          cp ebalia-linux-x86_64.AppImage packaging/portable.txt "portable/EBALIA Launcher/"
+          tar -C portable -czf ebalia-linux-x86_64-portable.tar.gz "EBALIA Launcher"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebalia-linux-appimage
+          path: |
+            ebalia-launcher/ebalia-linux-x86_64.AppImage
+            ebalia-launcher/ebalia-linux-x86_64-portable.tar.gz
+  appimage-distros:
+    needs: linux-appimage
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12
+            setup: apt-get update && apt-get install -y libgl1 libegl1 libfontconfig1 libx11-6 libx11-xcb1 libglib2.0-0 libdbus-1-3 libxkbcommon0
+          - image: fedora:latest
+            setup: dnf install -y mesa-libGL mesa-libEGL fontconfig libX11 libX11-xcb glib2 dbus-libs libxkbcommon
+          - image: archlinux:latest
+            setup: pacman -Syu --noconfirm libglvnd mesa fontconfig libx11 glib2 dbus libxkbcommon
+          - image: opensuse/tumbleweed
+            setup: zypper -n install Mesa-libGL1 Mesa-libEGL1 fontconfig libX11-6 libX11-xcb1 libglib-2_0-0 libdbus-1-3 libxkbcommon0
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - run: ${{ matrix.setup }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ebalia-linux-appimage
+      - name: AppImage starts on ${{ matrix.image }}
+        run: chmod +x ebalia-linux-x86_64.AppImage && QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./ebalia-linux-x86_64.AppImage --update-probe
   macos:
-    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - run: brew install qt libarchive ninja
-      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix libarchive)"
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt);$(brew --prefix libarchive)" -DEBALIA_CURSEFORGE_API_KEY="$EBALIA_CURSEFORGE_API_KEY" -DEBALIA_MS_CLIENT_ID="$EBALIA_MS_CLIENT_ID"
+        env:
+          EBALIA_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          EBALIA_MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
       - run: cmake --build build --parallel 2
       - run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
       - name: Backtrace of a crashing core test
@@ -131,14 +225,22 @@ jobs:
         run: QT_QPA_PLATFORM=offscreen lldb --batch -o run -k "thread backtrace all" -- build/ebalia-tests
       - run: cmake --install build --prefix package
       - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -dmg -always-overwrite'
+      - name: Portable zip
+        run: |
+          mkdir -p "portable/EBALIA Launcher"
+          ditto package/ebalia-launcher.app "portable/EBALIA Launcher/ebalia-launcher.app"
+          cp packaging/portable.txt "portable/EBALIA Launcher/"
+          ditto -c -k --sequesterRsrc --keepParent "portable/EBALIA Launcher" package/ebalia-macos-${{ matrix.arch }}-portable.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: ebalia-macos-unsigned
-          path: ebalia-launcher/package/*.dmg
+          name: ebalia-macos-${{ matrix.arch }}-unsigned
+          path: |
+            ebalia-launcher/package/*.dmg
+            ebalia-launcher/package/*-portable.zip
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux, windows, macos]
+    needs: [linux, linux-appimage, appimage-distros, windows, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 #include <QList>
+#include <QPixmap>
+#include <QImage>
 
 struct McAccount {
     QString type;          // "offline" | "msa"
@@ -28,6 +30,13 @@ public:
     void updateTokens(const QString &uuid, const QString &mcToken,
                       const QString &refreshToken);
 
+    // Profile pictures (dataDir/mc/avatars/<uuid>.png); accounts without one
+    // use the initial-letter avatar.
+    QString picturePath(const QString &uuid) const;
+    bool hasPicture(const QString &uuid) const;
+    void setPicture(const QString &uuid, const QImage &picture);
+    QPixmap picture(const McAccount &account, int size) const;
+
 signals:
     void accountsChanged();
 
@@ -36,6 +45,7 @@ private:
     void save() const;
 
     QString m_path;
+    QString m_dir;
     QList<McAccount> m_accounts;
     QString m_activeUuid;
 };

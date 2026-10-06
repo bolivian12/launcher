@@ -29,10 +29,42 @@
 #include "JavaRunner.hpp"
 #include "VersionManager.hpp"
 #include <cstdio>
+#include <cstdlib>
+#include <QSettings>
+#include <QLocale>
+#include <QFileInfo>
+// Portable mode: a portable.txt beside the program (beside the AppImage file or
+// the .app bundle) keeps every instance, account and setting in an
+// "ebalia-data" folder next to it, so the whole launcher can live on a USB drive.
+static QString portableRoot(){
+    if(qEnvironmentVariableIsSet("EBALIA_PORTABLE")&&qEnvironmentVariableIsSet("EBALIA_DATA_DIR"))return qEnvironmentVariable("EBALIA_DATA_DIR");
+    QStringList bases{QCoreApplication::applicationDirPath()};
+#if defined(Q_OS_MACOS)
+    bases={QDir::cleanPath(QCoreApplication::applicationDirPath()+"/../../..")};
+#elif defined(Q_OS_LINUX)
+    const auto appImage=qEnvironmentVariable("APPIMAGE");
+    if(!appImage.isEmpty())bases={QFileInfo(appImage).absolutePath()};
+    else bases<<QDir::cleanPath(QCoreApplication::applicationDirPath()+"/..");
+#endif
+    for(const auto &base:bases)if(QFileInfo::exists(base+"/portable.txt"))return base+"/ebalia-data";
+    return {};
+}
+static void setEnvironment(const char *name,const QString &value){
+#ifdef Q_OS_WIN
+    _wputenv_s(reinterpret_cast<const wchar_t*>(QString::fromLatin1(name).utf16()),reinterpret_cast<const wchar_t*>(value.utf16())); // keeps non-ASCII folders intact
+#else
+    qputenv(name,QFile::encodeName(value));
+#endif
+}
 class ButtonTranslator:public QTranslator { public: QString translate(const char *,const char *s,const char *,int) const override {return Language::standard(QString::fromUtf8(s));} bool isEmpty() const override {return false;} };
 int main(int argc,char **argv){
     QApplication::setOrganizationName("EBALIA");QApplication::setApplicationName("EBALIA Launcher");QApplication::setApplicationVersion(EBALIA_APP_VERSION);
-    QApplication app(argc,argv);app.setStyle("Fusion");app.setWindowIcon(QIcon(":/icon.png"));
+    QApplication app(argc,argv);
+    if(const auto portable=portableRoot();!portable.isEmpty()&&QDir().mkpath(portable)) {
+        setEnvironment("EBALIA_DATA_DIR",portable);setEnvironment("EBALIA_PORTABLE","1");
+        QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,portable+"/settings");
+    }
+    app.setStyle("Fusion");app.setWindowIcon(QIcon(":/icon.png"));
     app.setDesktopFileName("ebalia-launcher");
     if(app.arguments().contains("--update-probe")) {fprintf(stdout,"{\"version\":\"%s\"}\n",EBALIA_APP_VERSION);return 0;}
     auto root=qEnvironmentVariable("EBALIA_DATA_DIR");if(root.isEmpty())root=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);QDir().mkpath(root);
@@ -44,7 +76,10 @@ int main(int argc,char **argv){
         pending=LauncherUpdater::readPending(app.arguments()[updateArg+1],root);
         if(pending.isEmpty()||!LauncherUpdater::waitForParent(pending))return 1;
     }else if(!app.arguments().contains("--selftest")&&LauncherUpdater::forwardToInstalled(root))return 0;
-    QLockFile lock(root+"/launcher.lock");if(!lock.tryLock(updateArg>=0?30000:0)){QMessageBox::information(nullptr,"EBALIA","EBALIA is already running with this data folder.");return 1;}
+    Language::current=QSettings().value("ui/language",QLocale::system().name().left(2)).toString();
+    if(qEnvironmentVariableIsSet("EBALIA_LANGUAGE"))Language::current=qEnvironmentVariable("EBALIA_LANGUAGE");
+    if(!Language::available().contains(Language::current))Language::current="en";
+    QLockFile lock(root+"/launcher.lock");if(!lock.tryLock(updateArg>=0?30000:0)){QMessageBox::information(nullptr,"EBALIA",Language::text("EBALIA ya está abierto con esta carpeta de datos.","EBALIA is already running with this data folder.","O EBALIA já está aberto com esta pasta de dados."));return 1;}
     if(applying>=0&&!pending["nix"].toBool()) {
         try {return LauncherUpdater::applyPrepared(pending,root)?0:1;}
         catch(const std::exception &e){
@@ -55,7 +90,7 @@ int main(int argc,char **argv){
 #elif defined(Q_OS_MACOS)
             const auto old=pending["destination"].toString()+"/Contents/MacOS/ebalia-launcher";
 #else
-            const auto old=pending["destination"].toString()+"/bin/ebalia-launcher";
+            const auto old=pending["appimage"].toBool()?pending["destination"].toString():pending["destination"].toString()+"/bin/ebalia-launcher";
 #endif
             QProcess::startDetached(old,{});return 1;
         }
@@ -95,7 +130,7 @@ int main(int argc,char **argv){
     MainWindow window;window.show();
     QTimer::singleShot(45000,&window,[root]{LauncherUpdater::cleanupInstalled(root);});
     if(updateArg>=0) {
-        if(!LauncherUpdater::activate(pending,root)){QMessageBox::warning(&window,"EBALIA","Could not finish the update. The previous installation has been retained.");}
+        if(!LauncherUpdater::activate(pending,root)){QMessageBox::warning(&window,"EBALIA",Language::text("No se pudo terminar la actualización. Se conservó la instalación anterior.","Could not finish the update. The previous installation has been retained.","Não foi possível concluir a atualização. A instalação anterior foi mantida."));}
         else {QTimer::singleShot(4000,&window,[root]{LauncherUpdater::cleanupInstalled(root);});QTimer::singleShot(30000,&window,[root]{LauncherUpdater::cleanupInstalled(root);});}
     }
     UpdateChecker updater(&window);QTimer updateTimer;updateTimer.setInterval(6*60*60*1000);
@@ -108,12 +143,12 @@ int main(int argc,char **argv){
     auto watcher=new QFutureWatcher<QJsonObject>(&window);
     auto installUpdate=[&] {
         if(window.property("launcherUpdating").toBool())return;
-        if(!window.canUpdate()){QMessageBox::information(&window,"EBALIA",Language::current=="es"?"Cerrá las partidas y esperá a que terminen las instalaciones antes de actualizar.":"Close games and wait for installations to finish before updating.");return;}
+        if(!window.canUpdate()){QMessageBox::information(&window,"EBALIA",Language::text("Cerrá las partidas y esperá a que terminen las instalaciones antes de actualizar.","Close games and wait for installations to finish before updating.","Feche os jogos e aguarde o fim das instalações antes de atualizar."));return;}
         window.setProperty("launcherUpdating",true);window.centralWidget()->setEnabled(false);updateButton->setEnabled(false);updateTask->show();
         auto release=updater.release();
         watcher->setFuture(QtConcurrent::run([release,root,&window,updateText,updateProgress] {
             try {return LauncherUpdater::prepare(release,root,[&window,updateText,updateProgress](int percent,const QString &message){
-                QMetaObject::invokeMethod(&window,[updateText,updateProgress,percent,message]{updateText->setText(message);updateProgress->setRange(0,percent<0?0:100);if(percent>=0)updateProgress->setValue(percent);},Qt::QueuedConnection);
+                QMetaObject::invokeMethod(&window,[updateText,updateProgress,percent,message]{updateText->setText(Language::message(message));updateProgress->setRange(0,percent<0?0:100);if(percent>=0)updateProgress->setValue(percent);},Qt::QueuedConnection);
             });}catch(const std::exception &e){return QJsonObject{{"error",QString::fromUtf8(e.what())}};}
         }));
     };
@@ -125,14 +160,14 @@ int main(int argc,char **argv){
             if(!pendingFile.isEmpty()&&LauncherUpdater::launch(result,root,pendingFile)) {
                 window.setProperty("launcherUpdating",false);window.close();return;
             }
-            error="Could not restart the new version. Your current installation is unchanged.";
+            error=Language::text("No se pudo reiniciar con la versión nueva. Tu instalación actual no cambió.","Could not restart the new version. Your current installation is unchanged.","Não foi possível reiniciar com a nova versão. Sua instalação atual não mudou.");
         }
         window.setProperty("launcherUpdating",false);window.centralWidget()->setEnabled(true);updateButton->setEnabled(true);updateTask->hide();
-        QMessageBox::warning(&window,"EBALIA · Update",error);
+        QMessageBox::warning(&window,"EBALIA",Language::message(error));
     });
     QString promptedVersion;
     QObject::connect(&updater,&UpdateChecker::updateAvailable,&window,[&](const QString &version){
-        updateButton->setText((Language::current=="es"?"Actualizar a ":"Update to ")+version);updateButton->show();
+        updateButton->setText(Language::text("Actualizar a %1","Update to %1","Atualizar para %1").arg(version));updateButton->show();
         if(promptedVersion!=version){promptedVersion=version;UpdateChecker::showUpdatePrompt(&window,version,installUpdate);}
     });
     QObject::connect(updateButton,&QPushButton::clicked,&window,installUpdate);

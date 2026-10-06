@@ -42,7 +42,7 @@ void SkinsPage::apply(bool local){
     auto account=m_accounts->active();if(account.type!="msa"){QMessageBox::information(this,"EBALIA",key("Choose a Microsoft account to apply an online skin."));return;}
     QProgressDialog progress(key("Refreshing session…"),key("Cancel"),0,0,this);progress.setWindowModality(Qt::ApplicationModal);MsAuth auth;QString token,refresh,uuid,name;
     connect(&auth,&MsAuth::loginDone,&progress,[&](const QString &t,const QString &r,const QString &u,const QString &n){token=t;refresh=r;uuid=u;name=n;progress.accept();});
-    connect(&auth,&MsAuth::loginFailed,&progress,[&](const QString &error){progress.reject();QMessageBox::warning(this,"EBALIA",error);});
+    connect(&auth,&MsAuth::loginFailed,&progress,[&](const QString &error){progress.reject();QMessageBox::warning(this,"EBALIA",Language::message(error));});
     QTimer::singleShot(0,&auth,[&]{auth.refresh(account.refreshToken);});progress.exec();auth.cancel();if(token.isEmpty())return;
     m_accounts->addAccount({"msa",name,uuid,token,refresh});
     m_work(key("Applying skin…"),[=]{SkinManager::upload(file,variant,token);return QJsonObject{};},[this](QJsonObject){m_details->setText(key("Skin applied. Start the game to see it."));});

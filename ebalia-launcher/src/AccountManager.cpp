@@ -6,10 +6,14 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QDir>
+#include <QRegularExpression>
+#include "Ui.hpp"
 
 AccountManager::AccountManager(const QString &mcDir, QObject *parent)
     : QObject(parent)
 {
+    m_dir = mcDir;
     m_path = mcDir + QStringLiteral("/accounts.json");
     load();
 }
@@ -92,6 +96,7 @@ void AccountManager::removeAccount(const QString &uuid)
     for (int i = 0; i < m_accounts.size(); ++i)
         if (m_accounts[i].uuid == uuid) {
             m_accounts.removeAt(i);
+            QFile::remove(picturePath(uuid));
             break;
         }
     if (m_activeUuid == uuid)
@@ -117,4 +122,39 @@ void AccountManager::updateTokens(const QString &uuid, const QString &mcToken,
             break;
         }
     save();
+}
+
+QString AccountManager::picturePath(const QString &uuid) const
+{
+    static const QRegularExpression valid(QStringLiteral("^[0-9A-Fa-f-]{32,36}$"));
+    if (!valid.match(uuid).hasMatch())
+        return {};
+    return m_dir + QStringLiteral("/avatars/") + uuid.toLower() + QStringLiteral(".png");
+}
+
+bool AccountManager::hasPicture(const QString &uuid) const
+{
+    const QString path = picturePath(uuid);
+    return !path.isEmpty() && QFile::exists(path);
+}
+
+void AccountManager::setPicture(const QString &uuid, const QImage &picture)
+{
+    const QString path = picturePath(uuid);
+    if (path.isEmpty() || picture.isNull())
+        return;
+    QDir().mkpath(m_dir + QStringLiteral("/avatars"));
+    QSaveFile f(path);
+    if (f.open(QIODevice::WriteOnly) && picture.save(&f, "PNG") && f.commit())
+        emit accountsChanged();
+}
+
+QPixmap AccountManager::picture(const McAccount &account, int size) const
+{
+    if (hasPicture(account.uuid)) {
+        const QPixmap source(picturePath(account.uuid));
+        if (!source.isNull())
+            return Ui::cover(source, QSize(size, size), int(size * 0.28));
+    }
+    return Ui::avatar(account.name, size);
 }

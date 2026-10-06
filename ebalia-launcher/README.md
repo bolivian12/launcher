@@ -68,9 +68,28 @@ Jugar instala lo que falte (cliente, cargador, Java) y abre el juego en el mismo
 
 ## Cuentas Microsoft
 
-Los perfiles locales están disponibles. El acceso Microsoft requiere registrar una aplicación propia de EBALIA como cliente público y habilitar el acceso correspondiente a Minecraft/Xbox. Configurá `EBALIA_MS_CLIENT_ID` o `auth/microsoftClientId` en QSettings. No se reutiliza el identificador de aplicación de Prism. No se guarda una contraseña Microsoft; se usan device code y refresh tokens. En sistemas POSIX el archivo de cuentas solo tiene permisos de lectura/escritura para su propietario. No es un almacén cifrado de credenciales.
+El Id. de aplicación público de EBALIA está en `microsoft-client-id.txt` (`c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb`) y se incorpora durante la compilación; `EBALIA_MS_CLIENT_ID` (variable o secreto de CI) lo reemplaza si se define. No es un secreto. El registro de Entra debe ser un cliente público para cuentas personales de Microsoft, con `http://localhost` como redirección de escritorio, y Minecraft Services debe aprobar el Id. en [aka.ms/AppRegInfo](https://aka.ms/AppRegInfo); sin esa aprobación el último paso responde HTTP 403. El botón abre el navegador de Microsoft con autorización PKCE y vuelve automáticamente al launcher, sin copiar códigos. No se guarda una contraseña Microsoft; se usan refresh tokens. En sistemas POSIX el archivo de cuentas solo tiene permisos de lectura/escritura para su propietario. No es un almacén cifrado de credenciales.
+
+Al iniciar sesión se descarga la foto de perfil de la cuenta (la imagen de jugador de Xbox de esa cuenta Microsoft) y se muestra en la barra lateral, en Inicio, en el menú de cuentas y en Ajustes. Si no se puede obtener, se usa la cara de la skin de Minecraft. Se guarda en `mc/avatars/<uuid>.png` y se borra al quitar la cuenta.
 
 El inicio de sesión con una cuenta real debe verificarse con el registro OAuth propio. Los tokens se renuevan antes de lanzar una instancia autenticada.
+
+## Modo portable
+
+Con un archivo `portable.txt` junto al launcher, todo (instancias, mundos, mods, cuentas, ajustes y Java descargada) se guarda en la carpeta `ebalia-data` de al lado, en vez de la carpeta de datos del sistema. La ubicación del marcador:
+
+| Paquete | `portable.txt` va junto a |
+| --- | --- |
+| Windows `ebalia-windows-x64-portable.zip` | `ebalia-launcher.exe` (ya incluido) |
+| Linux `ebalia-linux-x86_64-portable.tar.gz` | el archivo `.AppImage` (ya incluido) |
+| macOS `ebalia-macos-*-portable.zip` | `ebalia-launcher.app` (ya incluido) |
+| Linux `.tar.gz` clásico | `bin/` o `bin/ebalia-launcher` |
+
+Borrar `portable.txt` vuelve a la carpeta normal. Las actualizaciones dentro del launcher conservan `portable.txt` y `ebalia-data`.
+
+## Linux: AppImage para cualquier distribución
+
+`ebalia-linux-x86_64.AppImage` incluye Qt 6, libarchive y OpenSSL; se construye en Ubuntu 22.04, así que funciona en distribuciones x86_64 con glibc 2.35 o más reciente (Ubuntu 22.04+, Debian 12+, Fedora, Arch, openSUSE Tumbleweed, Mint 21+, etc.). CI comprueba que arranque en contenedores de Debian, Fedora, Arch y openSUSE. Se usa con `chmod +x` y doble clic; sin FUSE, ejecutalo con `APPIMAGE_EXTRACT_AND_RUN=1`. Se actualiza solo: el launcher reemplaza el archivo `.AppImage` (la carpeta debe permitir escritura). Alpine/musl y ARM requieren compilación propia; NixOS usa el flake.
 
 ## Windows, firma y antivirus
 

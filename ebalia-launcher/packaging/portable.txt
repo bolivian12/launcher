@@ -1,0 +1,11 @@
+EBALIA Launcher · modo portable / portable mode
+
+ES: Mientras este archivo esté junto al launcher, las instancias, mundos, mods,
+cuentas y ajustes se guardan en la carpeta "ebalia-data" de al lado. Podés
+llevar la carpeta completa en un USB. Borrá este archivo para volver a usar la
+carpeta de datos normal del sistema.
+
+EN: While this file sits next to the launcher, instances, worlds, mods,
+accounts and settings are stored in the "ebalia-data" folder beside it. You can
+carry the whole folder on a USB drive. Delete this file to go back to the
+system's regular data folder.

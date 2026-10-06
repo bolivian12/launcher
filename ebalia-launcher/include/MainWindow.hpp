@@ -59,6 +59,7 @@ private:
     void instancePickerMenu();
     void selection();
     McInstance selected() const;
+    void setInstanceIcon(const QString &dir,const QString &key,const QImage &custom);
     void createInstance(bool copy=false,int page=0);
     void instanceMenu();
     void groupMenu(const QString &group);
@@ -94,6 +95,7 @@ private:
     QStackedWidget *m_pages=nullptr;
     QPushButton *m_navSettings=nullptr,*m_accountButton=nullptr,*m_instancePicker=nullptr;
     QLabel *m_accountName=nullptr,*m_accountType=nullptr,*m_accountAvatar=nullptr;
+    QLabel *m_playerAvatar=nullptr;
     QLabel *m_pickerIcon=nullptr,*m_pickerName=nullptr,*m_pickerSub=nullptr,*m_playerName=nullptr,*m_playerType=nullptr;
     QLabel *m_status=nullptr,*m_packDetails=nullptr,*m_catalog=nullptr;
     QProgressBar *m_progress=nullptr;

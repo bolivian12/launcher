@@ -1,4 +1,5 @@
 #pragma once
+#include <QImage>
 #include <QDialog>
 #include <QJsonArray>
 #include "McInstanceManager.hpp"
@@ -6,6 +7,8 @@ class QLineEdit;class QComboBox;class QTreeWidget;class QListWidget;class QCheck
 // Laid out like Prism Launcher's "New instance" window: name and group on top, sources on the left, the chosen source on the right.
 class CreateInstanceDialog:public QDialog {
 public:
+    // The picture chosen from the computer, when configuration()["icon"] is "custom".
+    QImage customIcon() const {return m_customIcon;}
     enum Page{Custom,Import,ATLauncher,CurseForge,FTB,FTBLegacy,FTBApp,Modrinth,Technic};
     CreateInstanceDialog(McInstanceManager *manager,const QList<McVersion> &catalog,const QJsonArray &packs,const McInstance &source,bool copy,QWidget *parent=nullptr);
     QJsonObject configuration() const;
@@ -38,6 +41,7 @@ private:
     QHash<QString,QCheckBox*> m_types;
     QHash<int,PackBrowser*> m_browsers;
     QString m_loader="vanilla",m_iconKey="grass";
+    QImage m_customIcon;
     int m_request=0;
     bool m_loading=false,m_localListed=false;
 };

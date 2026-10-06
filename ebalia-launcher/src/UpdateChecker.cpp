@@ -40,13 +40,12 @@ void UpdateChecker::fetch(bool gitgud){
 }
 
 QMessageBox *UpdateChecker::showUpdatePrompt(QWidget *parent,const QString &version,std::function<void()> install) {
- const bool es=Language::current=="es";
- auto box=new QMessageBox(QMessageBox::Information,es?"Actualización disponible":"Update available",
-     es?QString("EBALIA Launcher %1 está disponible.").arg(version):QString("EBALIA Launcher %1 is available.").arg(version),QMessageBox::NoButton,parent);
+ auto box=new QMessageBox(QMessageBox::Information,Language::text("Actualización disponible","Update available","Atualização disponível"),
+     Language::text("EBALIA Launcher %1 está disponible.","EBALIA Launcher %1 is available.","O EBALIA Launcher %1 está disponível.").arg(version),QMessageBox::NoButton,parent);
  box->setObjectName("launcherUpdatePrompt");box->setAttribute(Qt::WA_DeleteOnClose);box->setTextFormat(Qt::PlainText);
- box->setInformativeText(es?"El launcher descargará y verificará la nueva versión, se reiniciará y eliminará los archivos de la versión anterior. Tus mundos, mods y ajustes se conservan.":"The launcher will download and verify the new version, restart, and remove the previous launcher files. Your worlds, mods and settings are preserved.");
- auto download=box->addButton(es?"Actualizar y reiniciar":"Update and restart",QMessageBox::AcceptRole);
- auto later=box->addButton(es?"Más tarde":"Later",QMessageBox::RejectRole);
+ box->setInformativeText(Language::text("El launcher descargará y verificará la nueva versión, se reiniciará y eliminará los archivos de la versión anterior. Tus mundos, mods y ajustes se conservan.","The launcher will download and verify the new version, restart, and remove the previous launcher files. Your worlds, mods and settings are preserved.","O launcher vai baixar e verificar a nova versão, reiniciar e remover os arquivos da versão anterior. Seus mundos, mods e configurações são mantidos."));
+ auto download=box->addButton(Language::text("Actualizar y reiniciar","Update and restart","Atualizar e reiniciar"),QMessageBox::AcceptRole);
+ auto later=box->addButton(Language::text("Más tarde","Later","Mais tarde"),QMessageBox::RejectRole);
  box->setDefaultButton(later);box->setEscapeButton(later);box->setModal(false);
  QObject::connect(box,&QMessageBox::buttonClicked,box,[download,install](QAbstractButton *clicked){
      if(clicked==download&&install)QTimer::singleShot(0,qApp,install);

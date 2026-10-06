@@ -11,6 +11,7 @@
 #include <QNetworkReply>
 #include <QEventLoop>
 #include <QTimer>
+#include <QThread>
 #include <QUrlQuery>
 #include <QTemporaryDir>
 #include <QSettings>
@@ -51,19 +52,27 @@ void ModRepository::write(const QString &path, const QJsonObject &o) { bytes(pat
 QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers) {
     if (url.scheme() != "https") fail("La descarga requiere HTTPS: " + url.host());
     QNetworkAccessManager nam;
-    QNetworkRequest req(url);
-    req.setHeader(QNetworkRequest::UserAgentHeader, "EbaliaLauncher/4.0 (github.com/HeelXel/Launcher)");
-    for(auto it=headers.begin();it!=headers.end();++it)req.setRawHeader(it.key(),it.value());
-    req.setTransferTimeout(30000);
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, headers.isEmpty()?QNetworkRequest::NoLessSafeRedirectPolicy:QNetworkRequest::ManualRedirectPolicy);
-    auto *reply = nam.get(req);
-    QEventLoop loop;
-    QTimer timer; timer.setSingleShot(true);
-    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    QObject::connect(&timer, &QTimer::timeout, reply, &QNetworkReply::abort);
-    timer.start(120000); loop.exec();
-    if (reply->error() != QNetworkReply::NoError) fail("Error de red (" + url.host() + "): " + reply->errorString());
-    return reply->readAll();
+    QString lastError;
+    // Mojang occasionally closes the metadata connection while the launcher is
+    // starting. Retry transient transport failures before falling back to the
+    // cached manifest, instead of surfacing "Operation canceled" immediately.
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::UserAgentHeader, "EBALIA-Launcher/1.1");
+        for(auto it=headers.begin();it!=headers.end();++it)req.setRawHeader(it.key(),it.value());
+        req.setTransferTimeout(60000);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, headers.isEmpty()?QNetworkRequest::NoLessSafeRedirectPolicy:QNetworkRequest::ManualRedirectPolicy);
+        auto *reply = nam.get(req);
+        QEventLoop loop; QTimer timer; timer.setSingleShot(true);
+        QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        QObject::connect(&timer, &QTimer::timeout, reply, &QNetworkReply::abort);
+        timer.start(70000); loop.exec();
+        if (reply->error() == QNetworkReply::NoError) return reply->readAll();
+        lastError = reply->errorString();
+        reply->deleteLater();
+        if (attempt < 2) QThread::msleep(400 * (attempt + 1));
+    }
+    fail("Error de red (" + url.host() + "): " + lastError);
 }
 QByteArray ModRepository::get(const QUrl &url) { return m_transport ? m_transport(url) : fetch(url); }
 QJsonDocument ModRepository::api(const QString &path, const QList<QPair<QString, QString>> &items) {

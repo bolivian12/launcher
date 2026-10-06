@@ -1,6 +1,7 @@
 #include <QStatusBar>
 #include "MainWindow.hpp"
 #include "GuidedTour.hpp"
+#include "TourMascot.hpp"
 #include "CommunityPage.hpp"
 #include "BedrockPage.hpp"
 #include "PatreonAuth.hpp"
@@ -247,6 +248,7 @@ QWidget *MainWindow::buildHome() {
     connect(m_playButton,&QPushButton::clicked,this,[this]{play();});bl->addWidget(m_playButton,0,1,Qt::AlignCenter);
     auto player=new QWidget;player->setMaximumWidth(310);auto playerLayout=new QHBoxLayout(player);playerLayout->setContentsMargins(0,0,0,0);playerLayout->setSpacing(10);
     auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
+    m_playerAvatar=new QLabel;m_playerAvatar->setObjectName("playerAvatar");m_playerAvatar->setFixedSize(44,44);playerLayout->addWidget(m_playerAvatar,0,Qt::AlignVCenter);
     auto playerSlot=new QWidget;auto playerSlotLayout=new QHBoxLayout(playerSlot);playerSlotLayout->setContentsMargins(0,0,0,0);playerSlotLayout->addStretch();playerSlotLayout->addWidget(player);bl->addWidget(playerSlot,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
     auto creator=new QWidget;creator->setObjectName("creatorStrip");auto creatorLayout=new QHBoxLayout(creator);creatorLayout->setContentsMargins(28,12,28,0);creatorLayout->setSpacing(12);
     auto mods=button(k("My Mods"),creatorLayout,[this]{openCreatorDialog(false);},this,false,"package");mods->setObjectName("myModsButton");mods->setIcon(Ui::navigationIcon("package"));mods->setIconSize({24,24});
@@ -269,6 +271,7 @@ QWidget *MainWindow::buildInstances() {
     m_grid->groupMenu=[this](const QString &group){groupMenu(group);};
     m_detail->back=[this]{m_library->setCurrentWidget(m_grid);refreshInstances();};
     m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{showLog(selected().dir,this);};
+    m_detail->changeIcon=[this](const QString &key,const QImage &custom){setInstanceIcon(m_detail->dir(),key,custom);refreshInstances();};
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
     m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
     m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));};
@@ -379,7 +382,16 @@ void MainWindow::startTour() {
 }
 QWidget *MainWindow::buildGuide() {
     auto s=section(k("Guide & tutorial"),text("Esta guía siempre está disponible en la barra lateral.","This guide is always available in the sidebar.","Este guia está sempre disponível na barra lateral."));auto l=s.layout;
-    auto tourRow=new QHBoxLayout;l->addLayout(tourRow);button(text("Iniciar guía interactiva","Start interactive tour","Iniciar guia interativo"),tourRow,[this]{startTour();},this,true,"compass")->setObjectName("startInteractiveTour");tourRow->addStretch();
+    auto hero=new QFrame;hero->setObjectName("guideMascotCard");hero->setStyleSheet("#guideMascotCard{background:#1b2019;border:1px solid #2f3d2a;border-radius:14px;}");l->addWidget(hero);
+    auto heroRow=new QHBoxLayout(hero);heroRow->setContentsMargins(12,8,18,10);heroRow->setSpacing(14);
+    auto mascot=new TourMascot;mascot->setObjectName("guideMascot");mascot->setFixedSize(100,146);mascot->setToolTip("Silence");heroRow->addWidget(mascot,0,Qt::AlignBottom);
+    auto wave=new QTimer(mascot);wave->setInterval(7000);wave->start();
+    connect(wave,&QTimer::timeout,mascot,[mascot]{static const TourMascot::Mood moods[]{TourMascot::Happy,TourMascot::Wink,TourMascot::Idle,TourMascot::Cheer,TourMascot::Think,TourMascot::Point};static int next=0;mascot->react(moods[next++%6]);});
+    mascot->setMood(TourMascot::Happy);
+    auto heroText=new QVBoxLayout;heroText->setSpacing(10);heroRow->addLayout(heroText,1);heroText->addStretch();
+    auto hello=new QLabel(text("¡Hola! Soy Silence. Te acompaño en la guía interactiva y te muestro cada parte del launcher.","Hi! I'm Silence. I'll walk you through the interactive tour and show you every part of the launcher.","Olá! Eu sou o Silence. Vou te acompanhar no guia interativo e mostrar cada parte do launcher."));
+    hello->setObjectName("guideMascotHello");hello->setWordWrap(true);hello->setStyleSheet("font-size:15px;");heroText->addWidget(hello);
+    auto tourRow=new QHBoxLayout;heroText->addLayout(tourRow);heroText->addStretch();button(text("Iniciar guía interactiva","Start interactive tour","Iniciar guia interativo"),tourRow,[this]{startTour();},this,true,"compass")->setObjectName("startInteractiveTour");tourRow->addStretch();
     auto guide=new QTextBrowser;guide->setObjectName("guide");guide->setOpenExternalLinks(false);guide->setHtml(text(
         "<h2>1. Elegí tu modo</h2><p><b>Mis instancias</b> es el cliente normal de Minecraft. <b>Versiones perdidas</b> abre el archivo de EBALIA.</p><h2>2. Creá una instancia</h2><p>Elegí un nombre, una versión y un cargador. Vanilla es el juego original; Fabric, Quilt, Forge o NeoForge permiten mods. Los mundos y ajustes quedan separados. El catálogo se actualiza al abrir y cada 30 minutos. Las instancias existentes conservan su versión para cuidar tus mundos.</p><h2>3. Agregá mods</h2><p>En <b>Explorar mods</b>, seleccioná tu instancia y buscá Sodium, luces dinámicas, FallingTree o Veinminer. Revisá las dependencias y confirmá la instalación. La compatibilidad publicada no garantiza que todos los mods funcionen juntos.</p><h2>4. Guardá tus favoritos como pack</h2><p>En tu instancia, usá <b>Guardar mods como pack</b>. Luego aplicalo desde <b>Mis packs</b> a otra instancia. Buscamos una edición para su versión y cargador; si no existe, te lo mostramos antes de descargar. No copiamos un JAR incompatible. Los mods locales deben poder identificarse en Modrinth; los desactivados no se incluyen.</p><h2>5. Jugá</h2><p>Agregá una cuenta, instalá Java y pulsá <b>Jugar / Instalar</b>. Una vez terminada la instalación, pulsá Jugar. Si falta Java, el launcher indica qué versión requiere el juego. Podés elegir su ruta y memoria en los ajustes de instancia.</p><h2>Si algo falla</h2><p>Abrí <b>Ajustes de instancia → Registro</b>. Reparar vuelve a comprobar las descargas del juego. Quitar una instancia la mueve a la papelera local con sus mundos. Forge y NeoForge se instalan con sus instaladores oficiales y necesitan Java antes de comenzar. Las versiones perdidas pueden requerir Wine, Java antiguo o paquetes originales que ya no estén disponibles.</p>",
         "<h2>1. Choose your mode</h2><p><b>My instances</b> is the regular Minecraft client. <b>Lost versions</b> opens the EBALIA archive.</p><h2>2. Create an instance</h2><p>Choose a name, game version and loader. Vanilla is the original game; Fabric, Quilt, Forge or NeoForge support mods. Worlds and settings stay separate. The catalog refreshes at startup and every 30 minutes. Existing instances keep their game version to protect your worlds.</p><h2>3. Add mods</h2><p>In <b>Discover mods</b>, choose your instance and search for Sodium, dynamic lights, FallingTree or Veinminer. Review dependencies and confirm installation. Published compatibility does not guarantee that all mods work together.</p><h2>4. Save your favorites as a pack</h2><p>Use <b>Save mods as a pack</b> on your instance. Apply it to another instance from <b>My packs</b>. We look up builds for its game version and loader; unavailable mods are listed before downloading. Incompatible JARs are never copied. Local mods must be identifiable on Modrinth; disabled mods are excluded.</p><h2>5. Play</h2><p>Add an account, install Java and press <b>Play / Install</b>. After installation finishes, press Play. If Java is missing, the launcher tells you which version the game requires. Choose its path and memory in instance settings.</p><h2>Troubleshooting</h2><p>Open <b>Instance settings → Log</b>. Repair verifies game downloads again. Removing an instance moves it to local trash with its worlds. Forge and NeoForge use their official installers and require Java before installation. Lost versions may require Wine, older Java or original packages that are no longer available.</p>",
@@ -420,7 +432,7 @@ QWidget *MainWindow::buildSettings() {
     button(Language::key("Save"),providerRow,[this,curse,microsoft]{QSettings settings;settings.setValue("integrations/curseforgeKey",curse->text().trimmed());settings.setValue("auth/microsoftClientId",microsoft->text().trimmed());m_status->setText(k("Saved"));},this,true);
     auto getKey=button(k("Get a key"),providerRow,[]{QDesktopServices::openUrl(QUrl("https://console.curseforge.com/"));},this,false,"external-link");getKey->setProperty("link",true);providerRow->addStretch();
     // Data
-    auto data=settingsCard(column,"folder",k("Data"),text("EBALIA 1.0.0 · La actualización automática es del catálogo y las noticias. No cambia los mundos, mods ni la versión de tus instancias.","EBALIA 1.0.0 · Automatic refresh updates the catalog and news. It does not change worlds, mods or existing instance versions.","EBALIA 1.0.0 · A atualização automática é do catálogo e das notícias. Não altera mundos, mods ou versões das instâncias."));
+    auto data=settingsCard(column,"folder",k("Data"),text("EBALIA %1 · La actualización automática es del catálogo y las noticias. No cambia los mundos, mods ni la versión de tus instancias.","EBALIA %1 · Automatic refresh updates the catalog and news. It does not change worlds, mods or existing instance versions.","EBALIA %1 · A atualização automática é do catálogo e das notícias. Não altera mundos, mods ou versões das instâncias.").arg(QCoreApplication::applicationVersion()));
     auto dataRow=new QHBoxLayout;dataRow->setSpacing(10);data->addLayout(dataRow);
     button(text("Abrir carpeta de datos","Open data folder","Abrir pasta de dados"),dataRow,[this]{QDesktopServices::openUrl(QUrl::fromLocalFile(m_root));},this,false,"folder");
     button(text("Abrir papelera de instancias","Open instance trash","Abrir lixeira de instâncias"),dataRow,[this]{QDir().mkpath(m_mc->mcDir()+"/trash");QDesktopServices::openUrl(QUrl::fromLocalFile(m_mc->mcDir()+"/trash"));},this,false,"trash-2");
@@ -448,17 +460,18 @@ void MainWindow::error(const QString &e){QMessageBox::warning(this,"EBALIA",Lang
 void MainWindow::refreshAccounts(){
     const auto active=m_accounts->active();const bool none=active.uuid.isEmpty();
     const auto type=[](const auto &a){return a.type=="msa"?QString("Microsoft"):k("Local profile");};
-    if(m_accountName){m_accountName->setText(none?k("No account"):active.name);m_accountType->setText(none?k("Add account"):type(active));m_accountAvatar->setPixmap(Ui::avatar(none?QString():active.name,40));m_accountButton->setAccessibleName(m_accountName->text());m_accountButton->setToolTip(m_accountName->text());}
+    if(m_accountName){m_accountName->setText(none?k("No account"):active.name);m_accountType->setText(none?k("Add account"):type(active));m_accountAvatar->setPixmap(none?Ui::avatar(QString(),40):m_accounts->picture(active,40));m_accountButton->setAccessibleName(m_accountName->text());m_accountButton->setToolTip(m_accountName->text());}
     if(m_playerName){m_playerName->setText(none?k("No account"):active.name);m_playerType->setText(none?k("Local profile"):type(active));}
+    if(m_playerAvatar)m_playerAvatar->setPixmap(none?Ui::avatar(QString(),44):m_accounts->picture(active,44));
     if(m_accountList){
-        m_accountList->clear();for(const auto &a:m_accounts->accounts()){auto item=new QListWidgetItem(QIcon(Ui::avatar(a.name,30)),a.name+"\n"+type(a),m_accountList);item->setData(Qt::UserRole,a.uuid);if(a.uuid==active.uuid)m_accountList->setCurrentItem(item);}
+        m_accountList->clear();for(const auto &a:m_accounts->accounts()){auto item=new QListWidgetItem(QIcon(m_accounts->picture(a,30)),a.name+"\n"+type(a),m_accountList);item->setData(Qt::UserRole,a.uuid);if(a.uuid==active.uuid)m_accountList->setCurrentItem(item);}
         if(!m_accountList->count()){auto item=new QListWidgetItem(QIcon(Ui::avatar({},30)),k("No account"),m_accountList);item->setFlags(Qt::ItemIsEnabled);}
         m_accountList->setFixedHeight(qMin(m_accountList->count(),3)*62+16);
     }
 }
 void MainWindow::accountMenu(){
     QMenu menu(this);menu.setObjectName("accountMenu");const auto active=m_accounts->active().uuid;
-    for(const auto &a:m_accounts->accounts()){auto action=menu.addAction(QIcon(Ui::avatar(a.name,24)),a.name+"   ·   "+(a.type=="msa"?QString("Microsoft"):k("Local profile")));action->setCheckable(true);action->setChecked(a.uuid==active);connect(action,&QAction::triggered,this,[this,uuid=a.uuid]{m_accounts->setActive(uuid);});}
+    for(const auto &a:m_accounts->accounts()){auto action=menu.addAction(QIcon(m_accounts->picture(a,24)),a.name+"   ·   "+(a.type=="msa"?QString("Microsoft"):k("Local profile")));action->setCheckable(true);action->setChecked(a.uuid==active);connect(action,&QAction::triggered,this,[this,uuid=a.uuid]{m_accounts->setActive(uuid);});}
     if(!m_accounts->accounts().isEmpty())menu.addSeparator();
     menuAction(menu,"plus",k("Add Microsoft account"),this,[this]{account(true);});
     menuAction(menu,"user-round",k("Add local profile"),this,[this]{account(false);});
@@ -559,11 +572,20 @@ void MainWindow::createInstance(bool copy,int page){
     CreateInstanceDialog dialog(m_mc,m_manifest,m_packData,source,copy,this);if(page)dialog.showPage(page);Ui::fitToScreen(&dialog,{1060,760});
     if(Ui::openWindow(dialog)!=QDialog::Accepted)return;auto c=dialog.configuration();
     auto reveal=[this](const QString &dir){m_selectedDir=dir;showPage(Instances);m_library->setCurrentWidget(m_detail);refreshInstances();};
-    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));auto info=ModRepository::read(dir+"/instance.json");if(info["icon"].toString()!="custom"){info["icon"]=c["icon"];ModRepository::write(dir+"/instance.json",info);}return QJsonObject{{"dir",dir}};},[this,reveal](QJsonObject result){reveal(result["dir"].toString());m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
-    try{auto dir=m_mc->createInstance(c["name"].toString(),c["mcVersion"].toString(),c["loader"].toString(),c["loaderVersion"].toString());auto info=ModRepository::read(dir+"/instance.json");for(auto key:{"xmx","group","icon"})info[key]=c[key];ModRepository::write(dir+"/instance.json",info);reveal(dir);
+    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));auto info=ModRepository::read(dir+"/instance.json");if(info["icon"].toString()!="custom"){info["icon"]=c["icon"];ModRepository::write(dir+"/instance.json",info);}return QJsonObject{{"dir",dir}};},[this,reveal,custom=c["icon"].toString()=="custom"?dialog.customIcon():QImage()](QJsonObject result){if(!custom.isNull())setInstanceIcon(result["dir"].toString(),"custom",custom);reveal(result["dir"].toString());m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
+    try{auto dir=m_mc->createInstance(c["name"].toString(),c["mcVersion"].toString(),c["loader"].toString(),c["loaderVersion"].toString());auto info=ModRepository::read(dir+"/instance.json");for(auto key:{"xmx","group","icon"})info[key]=c[key];ModRepository::write(dir+"/instance.json",info);
+        if(c["icon"].toString()=="custom")setInstanceIcon(dir,"custom",dialog.customIcon());
+        reveal(dir);
         if(copy){auto root=m_root;work(text("Identificando los mods…","Identifying mods…","Identificando mods…"),[root,source]{return ModRepository(root).capture(source.dir,source.name);},[this,dir](QJsonObject p){preview(p["projects"].toArray(),dir);});}
         else if(!c["pack"].toObject().isEmpty())preview(c["pack"].toObject()["projects"].toArray(),dir);
     }catch(...){error(exception());}
+}
+// Built-in icon key, or "custom" with the picture saved as instance-icon.png.
+void MainWindow::setInstanceIcon(const QString &dir,const QString &key,const QImage &custom){
+    if(dir.isEmpty())return;
+    auto icon=key;
+    if(key=="custom"&&!InstanceIcons::saveCustom(dir,custom)){error(text("No se pudo guardar el icono.","Could not save the icon.","Não foi possível salvar o ícone."));icon="grass";}
+    try{auto info=ModRepository::read(dir+"/instance.json");info["icon"]=icon;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());}
 }
 void MainWindow::instanceMenu(){
     auto i=selected();if(i.dir.isEmpty())return;QMenu menu(this);
@@ -623,7 +645,8 @@ void MainWindow::launchInstance(const McInstance &i){
     if(a.type!="msa"){m_mc->launch(i.dir,a.name,a.uuid,{},"legacy");return;}
     auto auth=new MsAuth(this);auto dialog=new QProgressDialog(text("Renovando sesión…","Refreshing session…","Renovando sessão…"),QString(),0,0,this);dialog->setCancelButton(nullptr);dialog->setWindowModality(Qt::ApplicationModal);dialog->show();
     connect(auth,&MsAuth::loginFailed,dialog,[this,auth,dialog](const QString &e){dialog->close();dialog->deleteLater();auth->deleteLater();error(e);});
-    connect(auth,&MsAuth::loginDone,dialog,[this,auth,dialog,i](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});dialog->close();dialog->deleteLater();auth->deleteLater();m_mc->launch(i.dir,name,uuid,token,"msa");});auth->refresh(a.refreshToken);
+    connect(auth,&MsAuth::profilePicture,this,[this](const QString &uuid,const QImage &picture){m_accounts->setPicture(uuid,picture);});
+    connect(auth,&MsAuth::loginDone,dialog,[this,auth,dialog,i](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});dialog->close();dialog->deleteLater();auth->deleteLater();m_mc->launch(i.dir,name,uuid,token,"msa");});auth->refresh(a.refreshToken,!m_accounts->hasPicture(a.uuid));
 }
 void MainWindow::removeInstance(){
     auto i=selected();if(i.dir.isEmpty())return;
@@ -724,12 +747,12 @@ void MainWindow::searchMods(int offset){
         if(hits.isEmpty())m_status->setText(text("No se encontraron más mods compatibles.","No more compatible mods found.","Nenhum outro mod compatível encontrado."));});
 }
 void MainWindow::account(bool microsoft){
-    if(!microsoft){bool ok;auto suggestion=qEnvironmentVariable("USER",qEnvironmentVariable("USERNAME"));suggestion.remove(QRegularExpression("[^A-Za-z0-9_]"));suggestion=suggestion.left(16);if(suggestion.size()<3)suggestion="Player";
+    if(!microsoft){bool ok;const QString suggestion="Player";
         auto name=QInputDialog::getText(this,text("Perfil local","Local profile","Perfil local"),text("Nombre de jugador","Player name","Nome de jogador"),QLineEdit::Normal,suggestion,&ok);if(!ok)return;if(!QRegularExpression("^[A-Za-z0-9_]{3,16}$").match(name).hasMatch()){error(text("Usá entre 3 y 16 letras, números o guiones bajos.","Use 3–16 letters, numbers or underscores.","Use de 3 a 16 letras, números ou sublinhados."));return;}auto hash=QCryptographicHash::hash(("OfflinePlayer:"+name).toUtf8(),QCryptographicHash::Md5);hash[6]=(hash[6]&0x0f)|0x30;hash[8]=(hash[8]&0x3f)|0x80;m_accounts->addAccount({"offline",name,QString::fromLatin1(hash.toHex()),{}, {}});return;}
     QDialog d(this);d.setObjectName("microsoftLogin");d.setWindowTitle("Microsoft");d.resize(600,300);QVBoxLayout lay(&d);lay.setContentsMargins(24,22,24,20);lay.setSpacing(12);auto status=label(text("Conectando…","Connecting…","Conectando…"),&lay);auto code=label("",&lay,"sectionTitle");code->setTextInteractionFlags(Qt::TextSelectableByMouse);lay.addStretch();MsAuth auth;
     QDialogButtonBox cancel(QDialogButtonBox::Cancel);lay.addWidget(&cancel);connect(&cancel,&QDialogButtonBox::rejected,&d,&QDialog::reject);
-    connect(&auth,&MsAuth::statusUpdate,&d,[status](const QString &s){status->setText(Language::message(s));});connect(&auth,&MsAuth::showCode,&d,[code](const QString &c,const QString &url){code->setText(c+"\n"+url);QDesktopServices::openUrl(QUrl(url));});
-    connect(&auth,&MsAuth::loginFailed,&d,[this,&d](const QString &e){d.reject();error(e);});connect(&auth,&MsAuth::loginDone,&d,[this,&d](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});d.accept();});QTimer::singleShot(0,&auth,&MsAuth::startLogin);Ui::openWindow(d);auth.cancel();
+    connect(&auth,&MsAuth::statusUpdate,&d,[status](const QString &s){status->setText(Language::message(s));});
+    connect(&auth,&MsAuth::profilePicture,&d,[this](const QString &uuid,const QImage &picture){m_accounts->setPicture(uuid,picture);});connect(&auth,&MsAuth::loginFailed,&d,[this,&d](const QString &e){d.reject();error(e);});connect(&auth,&MsAuth::loginDone,&d,[this,&d](const QString &token,const QString &refresh,const QString &uuid,const QString &name){m_accounts->addAccount({"msa",name,uuid,token,refresh});d.accept();});QTimer::singleShot(0,&auth,&MsAuth::startLogin);Ui::openWindow(d);auth.cancel();
 }
 void MainWindow::loadImage(const QString &url,std::function<void(const QPixmap &)> done){
     if(!url.startsWith("https://"))return;if(auto it=m_imageCache.constFind(url);it!=m_imageCache.cend()){done(*it);return;}

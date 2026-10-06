@@ -16,6 +16,12 @@
 #include "Ui.hpp"
 #include "BedrockPage.hpp"
 #include "LauncherUpdater.hpp"
+#include "MsAuth.hpp"
+#include "InstanceIcons.hpp"
+#include "InstanceViews.hpp"
+#include "ServerList.hpp"
+#include <QTcpSocket>
+#include <QUrlQuery>
 class UiTests:public QObject {
     Q_OBJECT
 public:
@@ -23,6 +29,31 @@ public:
 private:
     QUrl lastUrl;
 private slots:
+    void microsoftBrowserCallback() {
+        const auto previous=qgetenv("EBALIA_MS_CLIENT_ID");
+        const bool wasSet=qEnvironmentVariableIsSet("EBALIA_MS_CLIENT_ID");
+        auto restore=qScopeGuard([&]{QDesktopServices::unsetUrlHandler("https");if(wasSet)qputenv("EBALIA_MS_CLIENT_ID",previous);else qunsetenv("EBALIA_MS_CLIENT_ID");});
+        qputenv("EBALIA_MS_CLIENT_ID","00000000-0000-0000-0000-000000000001");
+        QDesktopServices::setUrlHandler("https",this,"captureUrl");lastUrl=QUrl();
+        MsAuth auth;QSignalSpy failed(&auth,&MsAuth::loginFailed);QSignalSpy done(&auth,&MsAuth::loginDone);
+        auth.startLogin();
+        QCOMPARE(lastUrl.host(),QString("login.microsoftonline.com"));
+        QUrlQuery query(lastUrl);QCOMPARE(query.queryItemValue("code_challenge_method"),QString("S256"));
+        QCOMPARE(query.queryItemValue("response_type"),QString("code"));
+        QVERIFY(query.queryItemValue("state").size()>=32);QVERIFY(query.queryItemValue("code_challenge").size()>=43);
+        const QUrl redirect(query.queryItemValue("redirect_uri"));QCOMPARE(redirect.host(),QString("localhost"));
+        auto callback=[&](const QString &state){
+            QTcpSocket socket;socket.connectToHost(QHostAddress::LocalHost,redirect.port());
+            if(!socket.waitForConnected(2000))return QByteArray();
+            socket.write("GET /?error=access_denied&state="+state.toUtf8()+" HTTP/1.1\r\nHost: localhost\r\n\r\n");socket.flush();
+            QElapsedTimer timer;timer.start();QByteArray response;
+            while(timer.elapsed()<2000&&!response.contains("\r\n\r\n")){QCoreApplication::processEvents();response+=socket.readAll();QTest::qWait(5);}
+            return response;
+        };
+        QVERIFY(callback("wrong-state").startsWith("HTTP/1.1 400"));QCOMPARE(failed.count(),0);QCOMPARE(done.count(),0);
+        QVERIFY(callback(query.queryItemValue("state")).startsWith("HTTP/1.1 200"));QCOMPARE(failed.count(),1);QCOMPARE(done.count(),0);
+        auth.cancel();
+    }
     void initTestCase(){QSettings().setValue("ui/tutorialSeen",true);QApplication::setStyle("Fusion");QCoreApplication::setOrganizationName("EBALIA-test");QCoreApplication::setApplicationName("UI-test");QSettings().setValue("ui/tutorialSeen",true);qputenv("EBALIA_NO_NETWORK","1");}
 
     void bedrockCommandValidation() {
@@ -150,6 +181,8 @@ printf started > launched-marker
         QVERIFY_EXCEPTION_THROWN(LauncherUpdater::checksum(hash+"  file.zip\n"+hash+"  file.zip\n","file.zip"),std::runtime_error);
         QCOMPARE(LauncherUpdater::assetName("linux","x86_64"),QString("ebalia-linux-x64-update.zip"));
         QVERIFY(LauncherUpdater::assetName("windows","arm64").isEmpty());
+        QCOMPARE(LauncherUpdater::assetName("appimage","x86_64"),QString("ebalia-linux-x86_64.AppImage"));
+        QCOMPARE(LauncherUpdater::assetName("macos","x86_64"),QString("ebalia-macos-x64.dmg"));
     }
     void updateReplacementAndCleanup(){
 #ifdef Q_OS_MACOS
@@ -272,6 +305,29 @@ printf started > launched-marker
         QVERIFY(content->rect().contains(playRect));QVERIFY(content->rect().contains(nameRect));QVERIFY(!playRect.intersects(nameRect));
         QCOMPARE(content->width(),content->parentWidget()->width());
         for(auto stat:content->findChildren<QFrame*>("statCard"))QVERIFY(content->rect().contains(QRect(stat->mapTo(content,QPoint()),stat->size())));
+    }
+    void instanceGalleryServersAndIcon(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());qputenv("EBALIA_LANGUAGE","es");
+        QString dir;{McInstanceManager manager(data.path());dir=manager.createInstance("Galería","1.20.1","fabric");}
+        QDir().mkpath(dir+"/screenshots");
+        for(int n=0;n<3;++n){QImage shot(320,180,QImage::Format_RGB32);shot.fill(QColor::fromHsv(n*100,180,200));QVERIFY(shot.save(dir+QString("/screenshots/2026-10-0%1_12.00.00.png").arg(n+1)));}
+        ServerList::add(dir+"/servers.dat","Hypixel","mc.hypixel.net");ServerList::add(dir+"/servers.dat","","play.example.org");
+        MainWindow window;window.resize(1280,900);window.show();window.showPage(MainWindow::Instances);QTest::qWait(60);
+        auto card=window.findChild<QFrame*>("instanceCard");QVERIFY(card);QTest::mouseClick(card,Qt::LeftButton,{},QPoint(30,30));QTest::qWait(60);
+        auto gallery=window.findChild<QListWidget*>("instanceGallery");auto servers=window.findChild<QListWidget*>("instanceServers");QVERIFY(gallery&&servers);
+        QTRY_COMPARE(gallery->count(),3);QCOMPARE(servers->count(),2);QVERIFY(servers->item(1)->text().contains("play.example.org"));
+        QTRY_VERIFY(!gallery->item(0)->icon().isNull());
+        // Built-in icon from the instance page menu.
+        auto icon=window.findChild<QToolButton*>("detailIcon");QVERIFY(icon&&icon->menu());
+        QAction *tnt=nullptr;for(auto a:icon->menu()->actions())if(a->text()==InstanceIcons::name("tnt"))tnt=a;
+        QVERIFY(tnt);QVERIFY(icon->menu()->findChild<QAction*>("customInstanceIcon"));tnt->trigger();
+        QCOMPARE(ModRepository::read(dir+"/instance.json")["icon"].toString(),QString("tnt"));
+        // A picture from the computer, after the instance exists.
+        auto detail=static_cast<InstanceDetail*>(window.findChild<QWidget*>("instanceDetail"));QVERIFY(detail&&detail->changeIcon);
+        QImage picture(400,300,QImage::Format_ARGB32);picture.fill(QColor(200,40,180));detail->changeIcon("custom",picture.scaled(128,128));
+        QCOMPARE(ModRepository::read(dir+"/instance.json")["icon"].toString(),QString("custom"));QVERIFY(QFile::exists(dir+"/instance-icon.png"));
+        QCOMPARE(QImage(dir+"/instance-icon.png").size(),QSize(128,128));
+        const auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");if(!out.isEmpty()){QDir().mkpath(out);QTest::qWait(300);QVERIFY(window.grab().save(out+"/instance-detail-extras.png"));}
     }
     void compactInstanceWizard(){
         QTemporaryDir data;McInstanceManager manager(data.path());Language::current="es";
