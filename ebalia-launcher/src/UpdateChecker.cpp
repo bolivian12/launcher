@@ -23,7 +23,7 @@ QString UpdateChecker::releasePage(const QJsonObject &release,bool gitgud){
  if(url.scheme()!="https"||url.host()!=(gitgud?"gitgud.io":"github.com")||!pathAllowed||!url.userInfo().isEmpty())return {};
  return url.toString();
 }
-void UpdateChecker::check(){if(m_busy||qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))return;m_busy=true;fetch(false);}
+void UpdateChecker::check(){if(m_busy)return;if(qEnvironmentVariableIsSet("EBALIA_NO_NETWORK")){emit checkFailed("Network disabled.");return;}m_busy=true;fetch(false);}
 void UpdateChecker::fetch(bool gitgud){
  QNetworkRequest request{QUrl(gitgud?"https://gitgud.io/api/v4/projects/castigarse%2Flauncher/releases?per_page=20":"https://api.github.com/repos/ebalia-real/launcher/releases?per_page=20")};
  request.setHeader(QNetworkRequest::UserAgentHeader,"EBALIA-Launcher/"+QCoreApplication::applicationVersion());

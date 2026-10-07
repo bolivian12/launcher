@@ -143,6 +143,11 @@ bool JavaRuntime::compatible(int required,int major){return major>0&&(major==req
 QString JavaRuntime::select(int required,const QString &overridePath){
     if(!overridePath.trimmed().isEmpty()){auto java=inspect(overridePath);return compatible(required,java.major)?java.path:QString();}
     auto all=discover();int best=0;
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+    // Java 8 games use LWJGL 2, whose natives are x64-only: on Apple Silicon and Windows on ARM
+    // an arm64 Java 8 cannot load them, so only x64 runtimes (run through emulation) qualify.
+    if(required<=8&&QSysInfo::currentCpuArchitecture()=="arm64")all.erase(std::remove_if(all.begin(),all.end(),[](const JavaInstallation &j){return j.major<=8&&j.architecture!="amd64"&&j.architecture!="x86_64";}),all.end());
+#endif
     for(const auto &java:all)if(compatible(required,java.major)&&(!best||java.major==required||(best!=required&&java.major<best)))best=java.major;
     for(const auto &java:all)if(java.major==best&&best)return java.path; // 64-bit first within the same major
     return {};

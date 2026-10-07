@@ -11,8 +11,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "free",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/a1.2.6_06"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/a1.2.6_06",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "lib/666_1.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_1.2.7",
@@ -25,8 +43,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "free",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Alpha 1.2.7"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Alpha 1.2.7",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "Minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_1.2.6_04",
@@ -39,8 +75,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "free",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/alpha 1.2.6_04"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/alpha 1.2.6_04",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "Minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_herobrine_test",
@@ -53,8 +107,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "exclusive",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Alpha Herobrine Test"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Alpha Herobrine Test",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "Minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "minecraft_a1.1.1",
@@ -67,8 +139,34 @@
       "launcher": "WindowsMPP",
       "required_tier": "free",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Minecraft a1.1.1"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Minecraft a1.1.1",
+      "native": {
+        "java": 8,
+        "workingDir": "a1.1.1",
+        "classpath": [
+          "versions/a1.1.1.jar",
+          "@lwjgl2",
+          "@launchwrapper"
+        ],
+        "mainClass": "net.minecraft.launchwrapper.Launch",
+        "jvmArgs": [
+          "-Xmx1G",
+          "-Djava.util.Arrays.useLegacyMergeSort=true",
+          "-Dhttp.proxyHost=betacraft.uk",
+          "-Dhttp.proxyPort=11702",
+          "-Dsun.net.client.defaultConnectTimeout=10000",
+          "-Dsun.net.client.defaultReadTimeout=10000"
+        ],
+        "gameArgs": [
+          "${username}",
+          "--gameDir",
+          "${workingDir}",
+          "--tweakClass",
+          "net.minecraft.launchwrapper.AlphaVanillaTweaker"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_d3ath_exe",
@@ -81,22 +179,70 @@
       "launcher": "WindowsMPP",
       "required_tier": "senior",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Alpha D3ATH.EXE"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Alpha D3ATH.EXE",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "Minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_1.0.16.05_20",
       "name": "Alpha 1.0.16.05_20",
       "category": "alpha",
       "description": "Very early Alpha build (UltimMC)",
-      "download_url": "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/betacraft.zip",
+      "download_url": "https://github.com/ebalia-real/launcher/releases/download/lost-versions/betacraft.zip",
       "launch_command": "Alpha1.0.16.05_20.bat",
       "working_dir": "",
       "launcher": "UltimMC",
       "required_tier": "free",
-      "archive_size": 841699541,
-      "archive_sha256": "",
-      "archive_prefix": ""
+      "archive_size": 732138493,
+      "archive_sha256": "533ca3cc23283ac9c9ddcd8285dfaf1ddb8f919c95120cbe26f406ff580eea04",
+      "archive_prefix": "",
+      "native": {
+        "java": 8,
+        "workingDir": "UltimMC/instances/Alpha 1.0.16.05_20/.minecraft",
+        "classpath": [
+          "UltimMC/jars/NewLaunch.jar",
+          "@lwjgl2",
+          "UltimMC/instances/Alpha 1.0.16.05_20/libraries/customjar-1.jar"
+        ],
+        "mainClass": "org.multimc.EntryPoint",
+        "jvmArgs": [
+          "-Xms512M",
+          "-Xmx1024M"
+        ],
+        "gameArgs": [],
+        "natives": "lwjgl2",
+        "stdin": [
+          "cp unused-by-legacy-launch",
+          "natives ${natives}",
+          "userName ${username}",
+          "sessionId 0",
+          "windowTitle Alpha 1.0.16.05_20",
+          "windowParams 854x480",
+          "traits legacyLaunch",
+          "mainClass net.minecraft.client.Minecraft",
+          "param ${username}",
+          "param 0",
+          "launcher onesix",
+          "launch"
+        ]
+      }
     },
     {
       "id": "alpha_0.0.0_remastered",
@@ -109,8 +255,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "exclusive",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Alpha0.0.0 Remastered"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Alpha0.0.0 Remastered",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "Minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "alpha_1.3",
@@ -123,8 +287,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "free",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Alpha 1.3"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Alpha 1.3",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "minecraft.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "ghost",
@@ -137,8 +319,26 @@
       "launcher": "WindowsMPP",
       "required_tier": "exclusive",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Ghost"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Ghost",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "minecraft.jar",
+          "lib/minecraftlib.jar"
+        ],
+        "mainClass": "net.minecraft.client.Minecraft",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms1024M"
+        ],
+        "gameArgs": [
+          "${username}"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "minecraft_1_li02",
@@ -151,22 +351,73 @@
       "launcher": "WindowsMPP",
       "required_tier": "explicit",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/Minecraft 1.Li02"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/Minecraft 1.Li02",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "bin/minecraft.jar"
+        ],
+        "mainClass": "net.minecraft.client.Minecraft",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "nsss",
       "name": "NSSS",
       "category": "horror",
       "description": "NSSS horror experience (UltimMC)",
-      "download_url": "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/betacraft.zip",
+      "download_url": "https://github.com/ebalia-real/launcher/releases/download/lost-versions/betacraft.zip",
       "launch_command": "NSSS.bat",
       "working_dir": "",
       "launcher": "UltimMC",
       "required_tier": "explicit",
-      "archive_size": 841699541,
-      "archive_sha256": "",
-      "archive_prefix": ""
+      "archive_size": 732138493,
+      "archive_sha256": "533ca3cc23283ac9c9ddcd8285dfaf1ddb8f919c95120cbe26f406ff580eea04",
+      "archive_prefix": "",
+      "native": {
+        "java": 8,
+        "workingDir": ".minecraft",
+        "classpath": [
+          "UltimMC/jars/NewLaunch.jar",
+          "@lwjgl2",
+          "UltimMC/instances/NSSS_a1.1.11_111/jarmods/a1.1.11_111.jar",
+          "UltimMC/libraries/com/mojang/minecraft/a1.1.2_01/minecraft-a1.1.2_01-client.jar"
+        ],
+        "mainClass": "org.multimc.EntryPoint",
+        "jvmArgs": [
+          "-Xms512M",
+          "-Xmx1024M"
+        ],
+        "gameArgs": [],
+        "natives": "lwjgl2",
+        "stdin": [
+          "cp unused-by-legacy-launch",
+          "natives ${natives}",
+          "userName ${username}",
+          "sessionId 0",
+          "windowTitle NSSS",
+          "windowParams 854x480",
+          "traits legacyLaunch",
+          "traits noapplet",
+          "traits no-texturepacks",
+          "mainClass com.mojang.minecraft.Minecraft",
+          "param ${username}",
+          "param 00000000000000000000000000000000",
+          "param 0",
+          "launcher onesix",
+          "launch"
+        ]
+      }
     },
     {
       "id": "undef_554e",
@@ -179,22 +430,67 @@
       "launcher": "WindowsMPP",
       "required_tier": "senior",
       "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/554e444546494e45"
+      "archive_sha256": "945d772b4ad57cdde1da33df9d9b00083f6a16e8211f27e60cd6a1c1480bf5fe",
+      "archive_prefix": "WindowsMPP/554e444546494e45",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "libs/CodecJOrbis.jar",
+          "libs/CodecWav.jar",
+          "libs/SoundSystem.jar",
+          "libs/LibraryLWJGLOpenAL.jar",
+          "libs/jcodec-0.2.5.jar",
+          "libs/jcodec-javase-0.2.5.jar",
+          "UNDEFINE.jar"
+        ],
+        "mainClass": "net.minecraft.client.Minecraft",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-noverify",
+          "-Dhttp.proxyHost=betacraft.uk",
+          "-Dsun.net.client.defaultConnectTimeout=10000",
+          "-Dsun.net.client.defaultReadTimeout=10000"
+        ],
+        "gameArgs": [
+          "${username}"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "1.1_patch_1",
       "name": "1.1 Patch 1",
       "category": "release",
       "description": "Minecraft 1.1 with patches",
-      "download_url": "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/Versiones.zip",
-      "launch_command": "minecraft.exe",
+      "download_url": "https://github.com/ebalia-real/launcher/releases/download/lost-versions/lost-1.1-patch-1.zip",
+      "launch_command": "client-1.1.jar",
       "working_dir": "",
       "launcher": "WindowsMPP",
       "required_tier": "free",
-      "archive_size": 1749294297,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPP/1.1 Patch 1"
+      "archive_size": 68050815,
+      "archive_sha256": "f67ded89af2c2a5523e731b919440894456b6e9a29d842ec3ef7d8bd2a057b0b",
+      "archive_prefix": "1.1 Patch 1",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "minecraft.jar",
+          "client-1.1.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx1024M",
+          "-Xms512M"
+        ],
+        "gameArgs": [
+          "${username}",
+          "-"
+        ],
+        "natives": "lwjgl2"
+      }
     },
     {
       "id": "minecraft_1.7.10",
@@ -207,14 +503,59 @@
       "launcher": "WindowsMPRP",
       "required_tier": "free",
       "archive_size": 961310070,
-      "archive_sha256": "",
-      "archive_prefix": "WindowsMPRP/Minecraft 1.7.20"
+      "archive_sha256": "07f4524d887f6881aebcc0d2fe5b2d72d9c63554b9c6c396dfa885ed91f9ef46",
+      "archive_prefix": "WindowsMPRP/Minecraft 1.7.20",
+      "native": {
+        "java": 8,
+        "workingDir": "",
+        "classpath": [
+          "@lwjgl2",
+          "libraries/authlib-1.5.21.jar",
+          "libraries/codecjorbis-20101023.jar",
+          "libraries/codecwav-20101023.jar",
+          "libraries/commons-codec-1.9.jar",
+          "libraries/commons-compress-1.8.1.jar",
+          "libraries/commons-io-2.4.jar",
+          "libraries/commons-lang3-3.1.jar",
+          "libraries/commons-logging-1.1.3.jar",
+          "libraries/gson-2.2.4.jar",
+          "libraries/guava-15.0.jar",
+          "libraries/httpclient-4.3.3.jar",
+          "libraries/httpcore-4.3.2.jar",
+          "libraries/icu4j-core-mojang-51.2.jar",
+          "libraries/jopt-simple-4.5.jar",
+          "libraries/libraryjavasound-20101123.jar",
+          "libraries/librarylwjglopenal-20100824.jar",
+          "libraries/log4j-api-2.0-beta9.jar",
+          "libraries/log4j-core-2.0-beta9.jar",
+          "libraries/netty-1.8.8.jar",
+          "libraries/netty-all-4.0.10.Final.jar",
+          "libraries/realms-1.3.5.jar",
+          "libraries/slick.jar",
+          "libraries/soundsystem-20120107.jar",
+          "libraries/trove4j-3.0.3.jar",
+          "libraries/twitch-5.16.jar",
+          "libraries/vecmath-1.3.1.jar",
+          "1.7.20.jar"
+        ],
+        "mainClass": "Start",
+        "jvmArgs": [
+          "-Xmx2048M",
+          "-Xms1024M"
+        ],
+        "gameArgs": [
+          "--username",
+          "${username}"
+        ],
+        "natives": "lwjgl2"
+      }
     }
   ],
   "global_resources": [
     "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/Versiones.zip",
     "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/Versiones2.zip",
     "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/Versiones3.zip",
-    "https://github.com/HeelXel/Launcher/releases/download/Launcher-Archivos1.0/betacraft.zip"
+    "https://github.com/ebalia-real/launcher/releases/download/lost-versions/betacraft.zip",
+    "https://github.com/ebalia-real/launcher/releases/download/lost-versions/lost-1.1-patch-1.zip"
   ]
 }

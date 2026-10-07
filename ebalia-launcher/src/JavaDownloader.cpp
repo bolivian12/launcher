@@ -42,7 +42,9 @@ QString JavaDownloader::component(int major){
 }
 QString JavaDownloader::installed(const QString &root,const QString &component,QString platform){
     if(platform.isEmpty())platform=JavaDownloader::platform();
-    try{auto marker=ModRepository::read(root+"/"+component+"-"+platform+"/.ebalia-runtime.json");auto java=root+"/"+component+"-"+platform+"/"+relative(marker["java"].toString());if(QFileInfo(java).isFile())return java;}catch(...){}
+    QStringList platforms{platform};
+    if(platform=="mac-os-arm64")platforms<<"mac-os";else if(platform=="windows-arm64")platforms<<"windows-x64"; // see install()
+    for(const auto &p:platforms)try{auto marker=ModRepository::read(root+"/"+component+"-"+p+"/.ebalia-runtime.json");auto java=root+"/"+component+"-"+p+"/"+relative(marker["java"].toString());if(QFileInfo(java).isFile())return java;}catch(...){}
     return {};
 }
 QString JavaDownloader::install(const QString &root,const QString &component,QString platform,std::function<void(int,int)> progress,ModRepository::Transport transport){
@@ -50,7 +52,14 @@ QString JavaDownloader::install(const QString &root,const QString &component,QSt
     if(platform.isEmpty()||!ModRepository::safeName(component)||!ModRepository::safeName(platform))fail(Language::key("Mojang does not publish an official Java runtime for this system."));
     auto get=[transport](const QString &url){return transport?transport(QUrl(url)):ModRepository::fetch(QUrl(url));};
     auto json=[&](const QString &url,const QByteArray &hash={}){auto data=get(url);if(!hash.isEmpty()&&sha1(data)!=hash.toLower())fail("Java runtime catalog checksum mismatch");QJsonParseError e;auto d=QJsonDocument::fromJson(data,&e);if(e.error!=QJsonParseError::NoError||!d.isObject())fail("Invalid Java runtime catalog");return d.object();};
-    auto entries=json(catalog)[platform].toObject()[component].toArray();
+    const auto all=json(catalog);auto entries=all[platform].toObject()[component].toArray();
+    // Mojang has no Java 8 for Apple Silicon or Windows on ARM: like the official launcher,
+    // use the x64 build, which macOS (Rosetta) and Windows 11 run through emulation. The
+    // LWJGL 2 natives of the versions that need Java 8 are x64-only anyway.
+    if(entries.isEmpty()&&(platform=="mac-os-arm64"||platform=="windows-arm64")){
+        const auto x64=platform=="mac-os-arm64"?QString("mac-os"):QString("windows-x64");
+        entries=all[x64].toObject()[component].toArray();if(!entries.isEmpty())platform=x64;
+    }
     if(entries.isEmpty())fail(Language::key("Mojang does not publish an official Java runtime for this system.")+" ("+component+" · "+platform+")");
     const auto entry=entries.first().toObject(),manifest=entry["manifest"].toObject();const auto version=entry["version"].toObject()["name"].toString();
     const auto target=root+"/"+component+"-"+platform;

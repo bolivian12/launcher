@@ -11,12 +11,16 @@
 #include "Archive.hpp"
 #include "Language.hpp"
 #include "Loaders.hpp"
+#include <algorithm>
 #include "SkinManager.hpp"
 #include "JavaRuntime.hpp"
 #include "JavaDownloader.hpp"
 #include "PackService.hpp"
 #include "ServerList.hpp"
+#include "LostNative.hpp"
 #include <stdexcept>
+#include <clocale>
+#include <functional>
 
 namespace {
 QJsonObject version(QString id,QString project,QString file,QByteArray data,QJsonArray deps={}) {
@@ -37,10 +41,84 @@ void zip(const QString &path,const QString &name,const QByteArray &data="jar"){
     auto a=archive_write_new();archive_write_set_format_zip(a);QCOMPARE(archive_write_open_filename(a,QFile::encodeName(path).constData()),ARCHIVE_OK);
     auto e=archive_entry_new();archive_entry_set_pathname(e,name.toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_perm(e,0644);archive_entry_set_size(e,data.size());archive_write_header(a,e);archive_write_data(a,data.constData(),data.size());archive_entry_free(e);archive_write_close(a);archive_write_free(a);
 }
+using Files=QList<QPair<QString,QByteArray>>;
+// ZIP with several entries, names stored as UTF-8: a name ending in '/' is a folder, data starting with "->" a symbolic link.
+void zipEntries(const QString &path,const Files &entries){
+    auto a=archive_write_new();archive_write_set_format_zip(a);archive_write_set_options(a,"zip:hdrcharset=UTF-8");QCOMPARE(archive_write_open_filename(a,QFile::encodeName(path).constData()),ARCHIVE_OK);
+    for(const auto &[name,data]:entries){
+        auto e=archive_entry_new();archive_entry_set_pathname_utf8(e,name.toUtf8().constData());
+        if(name.endsWith('/')){archive_entry_set_filetype(e,AE_IFDIR);archive_entry_set_perm(e,0755);archive_entry_set_size(e,0);archive_write_header(a,e);}
+        else if(data.startsWith("->")){archive_entry_set_filetype(e,AE_IFLNK);archive_entry_set_perm(e,0777);archive_entry_set_symlink(e,data.mid(2).constData());archive_entry_set_size(e,0);archive_write_header(a,e);}
+        else{archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_perm(e,0644);archive_entry_set_size(e,data.size());archive_write_header(a,e);archive_write_data(a,data.constData(),size_t(data.size()));}
+        archive_entry_free(e);
+    }
+    archive_write_close(a);archive_write_free(a);
+}
+Files prefixed(const QString &prefix,const Files &files){Files out;for(const auto &f:files)out<<qMakePair(prefix+f.first,f.second);return out;}
+void writeTree(const QString &base,const Files &files){for(const auto &[name,data]:files){if(name.endsWith('/')){QDir().mkpath(base+"/"+name);continue;}QDir().mkpath(QFileInfo(base+"/"+name).absolutePath());writeFile(base+"/"+name,data);}}
+QByteArray zipBytes(const Files &files){QTemporaryDir t;zipEntries(t.path()+"/x.zip",files);return readFile(t.path()+"/x.zip");}
+// Imports through the real PackService and returns the written instance.json (or {"error": message}).
+QJsonObject importPack(PackService &service,const QJsonObject &pack){
+    try{auto dir=service.install(pack,{},"Imported");auto info=ModRepository::read(dir+"/instance.json");info["dir"]=dir;return info;}
+    catch(const std::exception &e){return {{"error",QString::fromUtf8(e.what())}};}
+}
+QJsonObject importPath(PackService &service,const QString &path){return importPack(service,{{"provider","import"},{"path",path}});}
+QString describe(const QJsonObject &info){return info.contains("error")?"error: "+info["error"].toString():(info["mcVersion"].toString()+" "+info["loader"].toString()+" "+info["loaderVersion"].toString()).trimmed();}
+QByteArray mmcPack(const QString &game,const QString &uid={},const QString &version={}){QJsonArray c{QJsonObject{{"uid","net.minecraft"},{"version",game}}};if(!uid.isEmpty())c.append(QJsonObject{{"uid",uid},{"version",version}});return encode(QJsonObject{{"formatVersion",1},{"components",c}});}
+QByteArray mrIndex(const QJsonObject &deps,const QJsonArray &files={}){return encode(QJsonObject{{"formatVersion",1},{"game","minecraft"},{"versionId","1"},{"name","Test"},{"dependencies",deps},{"files",files}});}
+QByteArray cfManifest(const QString &game,const QJsonArray &loaders,const QJsonArray &files={}){return encode(QJsonObject{{"minecraft",QJsonObject{{"version",game},{"modLoaders",loaders}}},{"manifestType","minecraftModpack"},{"manifestVersion",1},{"name","Test"},{"version","1"},{"files",files},{"overrides","overrides"}});}
+// Trimmed copies of real loader profiles (Forge/NeoForge installer version.json, Fabric/Quilt meta profiles) as Technic carries them.
+QByteArray profile(const QString &id,const QString &inherits,const QStringList &libraries,const QStringList &game={}){QJsonArray libs;for(const auto &l:libraries)libs.append(QJsonObject{{"name",l}});QJsonObject o{{"id",id},{"inheritsFrom",inherits},{"libraries",libs}};if(!game.isEmpty())o["arguments"]=QJsonObject{{"game",QJsonArray::fromStringList(game)}};return encode(o);}
 }
 class CoreTests:public QObject {
     Q_OBJECT
 private slots:
+    void loaderLibrariesKeepEveryClassifier(){
+        // Regression: Forge 26.x ships forge:...:universal and forge:...:client; dropping one gave "Failed to find system mod: forge".
+        auto lib=[](const QString &name){return QJsonObject{{"name",name}};};
+        const QJsonArray game{lib("com.google.guava:guava:31.1-jre"),lib("org.lwjgl:lwjgl:3.3.3"),lib("org.lwjgl:lwjgl:3.3.3:natives-windows"),lib("org.ow2.asm:asm:9.3")};
+        const QJsonArray loader{lib("net.minecraftforge:forge:26.3-66.0.9:universal"),lib("net.minecraftforge:forge:26.3-66.0.9:client"),lib("com.google.guava:guava:33.6.0-jre"),lib("org.ow2.asm:asm:9.10.1")};
+        QStringList names;for(const auto &l:McInstanceManager::mergeLibraries(game,loader))names<<l.toObject()["name"].toString();
+        QCOMPARE(names,QStringList({"net.minecraftforge:forge:26.3-66.0.9:universal","net.minecraftforge:forge:26.3-66.0.9:client","com.google.guava:guava:33.6.0-jre","org.ow2.asm:asm:9.10.1","org.lwjgl:lwjgl:3.3.3","org.lwjgl:lwjgl:3.3.3:natives-windows"}));
+    }
+    void neoforgeVersionsForEveryNumbering(){
+        QCOMPARE(Loaders::neoforgePrefix("1.21.1"),QString("21.1."));QCOMPARE(Loaders::neoforgePrefix("1.20.6"),QString("20.6."));QCOMPARE(Loaders::neoforgePrefix("1.21"),QString("21.0."));
+        QCOMPARE(Loaders::neoforgePrefix("26.3"),QString("26.3.0."));QCOMPARE(Loaders::neoforgePrefix("26.1.2"),QString("26.1.2."));
+        QStringList neo{"26.3.0.9-beta","26.3.0.52-beta","26.3.0.10-beta"};Loaders::sort("neoforge","26.3",neo);QCOMPARE(neo.first(),QString("26.3.0.52-beta"));
+        QStringList mixed{"21.1.9","21.1.100-beta","21.1.77"};Loaders::sort("neoforge","1.21.1",mixed);QCOMPARE(mixed,QStringList({"21.1.77","21.1.9","21.1.100-beta"}));
+        QStringList forge{"1.20.1-47.4.9","1.20.1-47.4.26","1.20.1-47.10.0"};Loaders::sort("forge","1.20.1",forge);QCOMPARE(forge.first(),QString("1.20.1-47.10.0"));
+        QStringList quilt{"0.20.0-beta.9","0.20.0-beta.10","0.24.0","0.30.1","0.31.0-beta.4","0.30.1-beta.4"};Loaders::sort("quilt","26.3",quilt);
+        QCOMPARE(quilt,QStringList({"0.30.1","0.24.0","0.31.0-beta.4","0.30.1-beta.4","0.20.0-beta.10","0.20.0-beta.9"}));
+        QStringList neo1201{"1.20.1-47.1.9","1.20.1-47.1.106","1.20.1-47.1.82"};Loaders::sort("neoforge","1.20.1",neo1201);QCOMPARE(neo1201.first(),QString("1.20.1-47.1.106"));
+        QCOMPARE(Loaders::installerUrl("neoforge","1.20.1","1.20.1-47.1.106"),QString("https://maven.neoforged.net/releases/net/neoforged/forge/1.20.1-47.1.106/forge-1.20.1-47.1.106-installer.jar"));
+        QStringList old{"1.7.10-10.13.4.1614-1.7.10","1.7.10-10.13.4.1558-1.7.10"};Loaders::sort("forge","1.7.10",old);QCOMPARE(old.first(),QString("1.7.10-10.13.4.1614-1.7.10"));
+    }
+    void libraryRulesUnderstandArchitectureNames(){
+        const auto arch=QSysInfo::currentCpuArchitecture();
+        const bool x64=arch=="x86_64";
+        const QJsonObject amd64{{"rules",QJsonArray{QJsonObject{{"action","allow"},{"os",QJsonObject{{"arch",x64?"x86_64":"arm64"}}}}}}};
+        QVERIFY(McInstanceManager::allowedByRules(amd64));
+        const QJsonObject other{{"rules",QJsonArray{QJsonObject{{"action","allow"},{"os",QJsonObject{{"arch",x64?"aarch64":"amd64"}}}}}}};
+        QVERIFY(!McInstanceManager::allowedByRules(other));
+    }
+    void lostVersionNativeCommand(){
+        QTemporaryDir root;const auto install=root.filePath("versions/alpha");QDir().mkpath(install+"/bin");
+        QFile jar(install+"/bin/minecraft.jar");QVERIFY(jar.open(QIODevice::WriteOnly));jar.write("x");jar.close();
+        const QJsonObject spec{{"java",8},{"workingDir",""},{"classpath",QJsonArray{"bin/minecraft.jar","@lwjgl2"}},{"mainClass","net.minecraft.client.Minecraft"},
+            {"jvmArgs",QJsonArray{"-Xmx1G"}},{"gameArgs",QJsonArray{"${username}","--gameDir","${installDir}"}},{"natives","lwjgl2"}};
+        QVERIFY(LostNative::available(spec));
+        const auto cmd=LostNative::command(spec,install,root.filePath("libraries"),"Arq");
+        QCOMPARE(QFileInfo(cmd.workingDir).absoluteFilePath(),QFileInfo(install).absoluteFilePath());
+        const auto cp=cmd.arguments[cmd.arguments.indexOf("-cp")+1].split(QDir::listSeparator());
+        QVERIFY(cp.first().endsWith("minecraft.jar"));QVERIFY(cp.join(" ").contains("lwjgl"));QVERIFY(cp.join(" ").contains("jinput-2.0.5.jar"));
+        QVERIFY(cmd.arguments.contains("Arq"));QVERIFY(cmd.arguments.contains(QDir::toNativeSeparators(install)));
+        QVERIFY(cmd.arguments.indexOf("net.minecraft.client.Minecraft")>cmd.arguments.indexOf("-cp"));
+        QVERIFY(std::any_of(cmd.arguments.begin(),cmd.arguments.end(),[](const QString &a){return a.startsWith("-Djava.library.path=")&&a.contains("natives-"+LostNative::system());}));
+        // Paths from the catalog may not leave the package.
+        auto escape=spec;escape["classpath"]=QJsonArray{"../other.jar"};QVERIFY_EXCEPTION_THROWN(LostNative::command(escape,install,root.filePath("libraries"),"Arq"),std::runtime_error);
+        auto missing=spec;missing["classpath"]=QJsonArray{"bin/none.jar"};QVERIFY_EXCEPTION_THROWN(LostNative::command(missing,install,root.filePath("libraries"),"Arq"),std::runtime_error);
+        QCOMPARE(LostNative::command(spec,install,root.filePath("libraries"),"  ").arguments.contains("Player"),true);
+    }
     void serverListKeepsUnknownFields(){
         QTemporaryDir dir;const auto file=dir.filePath("servers.dat");
         QVERIFY(ServerList::read(file).isEmpty());
@@ -281,6 +359,221 @@ private slots:
         auto pack=packs.first().toObject();QCOMPARE(pack["provider"].toString(),QString("curseforge"));
         auto versions=service.versions(pack);QVERIFY(!versions.isEmpty());
         qInfo().noquote()<<"Modpack catalog:"<<pack["name"].toString()<<versions.size()<<"versions";
+    }
+    // ---- Modpack import: every format the Import page lists, with each loader ----
+    void importLoaderDetection(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &url)->QByteArray{throw std::runtime_error(("unexpected network request: "+url.toString()).toStdString());});
+        int n=0;auto next=[&]{return root.path()+"/fixture-"+QString::number(++n);};
+        auto zipOf=[&](const Files &files,const QString &ext=".zip"){auto path=next()+ext;zipEntries(path,files);return QJsonObject{{"provider","import"},{"path",path}};};
+        auto folderOf=[&](const Files &files){auto path=next();writeTree(path,files);return QJsonObject{{"provider","import"},{"path",path}};};
+        struct Case{QString label;QJsonObject pack;QString expected;bool mod=true;};
+        QList<Case> cases;
+        // Modrinth (.mrpack): loader keys of "dependencies".
+        auto mr=[&](QJsonObject deps){return zipOf({{"modrinth.index.json",mrIndex(deps)},{"overrides/mods/a.jar","mod"}},".mrpack");};
+        cases<<Case{"mrpack fabric",mr({{"minecraft","1.21.1"},{"fabric-loader","0.16.7"}}),"1.21.1 fabric 0.16.7"}
+             <<Case{"mrpack quilt",mr({{"minecraft","1.20.1"},{"quilt-loader","0.29.1"}}),"1.20.1 quilt 0.29.1"}
+             <<Case{"mrpack forge",mr({{"minecraft","1.20.1"},{"forge","47.1.44"}}),"1.20.1 forge 47.1.44"}
+             <<Case{"mrpack forge 1.12.2",mr({{"minecraft","1.12.2"},{"forge","14.23.5.2860"}}),"1.12.2 forge 14.23.5.2860"}
+             <<Case{"mrpack neoforge",mr({{"minecraft","1.21.1"},{"neoforge","21.1.230"}}),"1.21.1 neoforge 21.1.230"}
+             <<Case{"mrpack neoforge 1.20.1",mr({{"minecraft","1.20.1"},{"neoforge","47.1.106"}}),"1.20.1 neoforge 47.1.106"}
+             <<Case{"mrpack vanilla",mr({{"minecraft","1.21.1"}}),"1.21.1 vanilla"};
+        // CurseForge (.zip with manifest.json): modLoaders ids exactly as CurseForge writes them.
+        auto cf=[&](QString game,QJsonArray loaders){return zipOf({{"manifest.json",cfManifest(game,loaders)},{"modlist.html","<ul></ul>"},{"overrides/mods/a.jar","mod"}});};
+        auto id=[](QString id,bool primary=true){return QJsonObject{{"id",id},{"primary",primary}};};
+        cases<<Case{"curseforge forge",cf("1.20.1",{id("forge-47.4.10")}),"1.20.1 forge 47.4.10"}
+             <<Case{"curseforge forge 1.12.2",cf("1.12.2",{id("forge-14.23.5.2860")}),"1.12.2 forge 14.23.5.2860"}
+             <<Case{"curseforge fabric",cf("1.20.1",{id("fabric-0.19.5")}),"1.20.1 fabric 0.19.5"}
+             <<Case{"curseforge quilt",cf("1.20.1",{id("quilt-0.22.0")}),"1.20.1 quilt 0.22.0"}
+             <<Case{"curseforge neoforge 1.21.1",cf("1.21.1",{id("neoforge-21.1.77")}),"1.21.1 neoforge 21.1.77"}
+             <<Case{"curseforge neoforge 1.20.1",cf("1.20.1",{id("neoforge-1.20.1-47.1.106")}),"1.20.1 neoforge 47.1.106"}
+             <<Case{"curseforge primary loader",cf("1.20.1",{id("fabric-0.15.11",false),id("forge-47.2.0")}),"1.20.1 forge 47.2.0"}
+             <<Case{"curseforge fabric with game suffix",cf("1.20.1",{id("fabric-0.15.11-1.20.1")}),"1.20.1 fabric 0.15.11"};
+        // Prism Launcher / PolyMC / MultiMC components.
+        auto prism=[&](QString game,QString uid,QString version,QString gameDir="minecraft"){return folderOf({{"instance.cfg","[General]\nInstanceType=OneSix\nname=Test\n"},{"mmc-pack.json",mmcPack(game,uid,version)},{gameDir+"/mods/a.jar","mod"}});};
+        cases<<Case{"prism fabric",prism("1.20.1","net.fabricmc.fabric-loader","0.15.11"),"1.20.1 fabric 0.15.11"}
+             <<Case{"prism quilt",prism("1.20.1","org.quiltmc.quilt-loader","0.26.0"),"1.20.1 quilt 0.26.0"}
+             <<Case{"prism forge",prism("1.20.1","net.minecraftforge","47.2.0",".minecraft"),"1.20.1 forge 47.2.0"}
+             <<Case{"prism forge 1.12.2",prism("1.12.2","net.minecraftforge","14.23.5.2860",".minecraft"),"1.12.2 forge 14.23.5.2860"}
+             <<Case{"prism neoforge",prism("1.21.1","net.neoforged","21.1.77"),"1.21.1 neoforge 21.1.77"}
+             <<Case{"prism neoforge 1.20.1",prism("1.20.1","net.neoforged","47.1.106"),"1.20.1 neoforge 47.1.106"}
+             <<Case{"prism vanilla",prism("1.21.1",{},{}),"1.21.1 vanilla"};
+        // CurseForge app instance folders: baseModLoader objects as api.curseforge.com/v1/minecraft/modloader/<name> returns them.
+        auto cfApp=[&](QString game,QJsonValue loader){return folderOf({{"minecraftinstance.json",encode(QJsonObject{{"name","Test"},{"gameVersion",game},{"baseModLoader",loader}})},{"mods/a.jar","mod"}});};
+        auto base=[](QString name,int type,QString version,QString game){return QJsonObject{{"name",name},{"type",type},{"forgeVersion",version},{"minecraftVersion",game}};};
+        cases<<Case{"curseforge app forge",cfApp("1.20.1",base("forge-47.2.0",1,"47.2.0","1.20.1")),"1.20.1 forge 47.2.0"}
+             <<Case{"curseforge app fabric",cfApp("1.20.1",base("fabric-0.15.11-1.20.1",4,"0.15.11","1.20.1")),"1.20.1 fabric 0.15.11"}
+             <<Case{"curseforge app quilt",cfApp("1.20.1",base("quilt-0.30.1-1.20.1",5,"0.30.1","1.20.1")),"1.20.1 quilt 0.30.1"}
+             <<Case{"curseforge app neoforge",cfApp("1.21.1",base("neoforge-21.1.77",6,"21.1.77","1.21.1")),"1.21.1 neoforge 21.1.77"}
+             <<Case{"curseforge app neoforge 1.20.1",cfApp("1.20.1",base("neoforge-1.20.1-47.1.99",6,"1.20.1-47.1.99","1.20.1")),"1.20.1 neoforge 47.1.99"}
+             <<Case{"curseforge app vanilla",cfApp("1.20.1",QJsonValue::Null),"1.20.1 vanilla"};
+        // FTB App instance folders: modLoader holds the installed version id (FTB-App InstanceInstaller, *InstallTask.getModLoaderTarget()).
+        auto ftbApp=[&](QString game,QString modLoader,QString provider,QByteArray versionJson={}){Files f{{"instance.json",encode(QJsonObject{{"uuid","00000000-0000-0000-0000-000000000000"},{"id",1},{"versionId",1},{"name","FTB"},{"version","1.0"},{"mcVersion",game},{"modLoader",modLoader}})},{"mods/a.jar","mod"}};if(!versionJson.isEmpty())f<<qMakePair(QString(".ftbapp/version.json"),versionJson);auto pack=folderOf(f);pack["provider"]=provider;return pack;};
+        auto targets=[](QString game,QString loader,QString version){return encode(QJsonObject{{"targets",QJsonArray{QJsonObject{{"type","game"},{"name","minecraft"},{"version",game}},QJsonObject{{"type","modloader"},{"name",loader},{"version",version}}}}});};
+        for(QString provider:{"import","import_ftb"}){
+            cases<<Case{"ftb app neoforge ("+provider+")",ftbApp("1.21.1","neoforge-21.1.77",provider),"1.21.1 neoforge 21.1.77"}
+                 <<Case{"ftb app forge ("+provider+")",ftbApp("1.20.1","1.20.1-forge-47.2.0",provider),"1.20.1 forge 47.2.0"}
+                 <<Case{"ftb app forge 1.12.2 ("+provider+")",ftbApp("1.12.2","1.12.2-forge-14.23.5.2860",provider),"1.12.2 forge 14.23.5.2860"}
+                 <<Case{"ftb app fabric ("+provider+")",ftbApp("1.20.1","fabric-loader-1.20.1-0.15.11",provider),"1.20.1 fabric 0.15.11"}
+                 <<Case{"ftb app vanilla ("+provider+")",ftbApp("1.20.1","1.20.1",provider),"1.20.1 vanilla"}
+                 <<Case{"ftb app version.json ("+provider+")",ftbApp("1.20.1","1.20.1-forge-47.2.0",provider,targets("1.20.1","forge","47.2.0")),"1.20.1 forge 47.2.0"};
+        }
+        // ATLauncher instance folders and their ZIPs (instance.json: "id" is the game, launcher.loaderVersion the loader).
+        auto atl=[&](QString game,QString type,QString version,bool zipped){QJsonObject launcher{{"name","ATL"},{"pack","ATL"},{"version","1"}};if(!type.isEmpty())launcher["loaderVersion"]=QJsonObject{{"type",type},{"version",version},{"rawVersion",version}};Files f{{"instance.json",encode(QJsonObject{{"id",game},{"type","release"},{"mainClass","x"},{"launcher",launcher}})},{"mods/a.jar","mod"}};return zipped?zipOf(f):folderOf(f);};
+        cases<<Case{"atlauncher fabric",atl("1.20.1","Fabric","0.15.11",false),"1.20.1 fabric 0.15.11"}
+             <<Case{"atlauncher quilt zip",atl("1.20.1","Quilt","0.26.0",true),"1.20.1 quilt 0.26.0"}
+             <<Case{"atlauncher forge zip",atl("1.20.1","Forge","47.2.0",true),"1.20.1 forge 47.2.0"}
+             <<Case{"atlauncher neoforge",atl("1.21.1","NeoForge","21.1.77",false),"1.21.1 neoforge 21.1.77"}
+             <<Case{"atlauncher vanilla",atl("1.21.1",{},{},false),"1.21.1 vanilla"};
+        // Technic (.zip with bin/modpack.jar or bin/version.json); profiles trimmed from the real installers and meta servers.
+        auto technic=[&](QByteArray versionJson,bool inJar=true,bool onlyBin=false){Files f;if(inJar)f<<qMakePair(QString("bin/modpack.jar"),zipBytes({{"version.json",versionJson}}));else f<<qMakePair(QString("bin/version.json"),versionJson);if(!onlyBin)f<<qMakePair(QString("mods/a.jar"),QByteArray("mod"))<<qMakePair(QString("config/a.cfg"),QByteArray("cfg"));return zipOf(f);};
+        auto forge1710=profile("1.7.10-Forge10.13.4.1614-1.7.10","1.7.10",{"net.minecraftforge:forge:1.7.10-10.13.4.1614-1.7.10","net.minecraft:launchwrapper:1.12"});
+        auto forge1201=profile("1.20.1-forge-47.2.0","1.20.1",{"net.minecraftforge:forgespi:7.0.1","net.minecraftforge:fmlloader:1.20.1-47.2.0"},{"--launchTarget","forgeclient","--fml.forgeVersion","47.2.0","--fml.mcVersion","1.20.1","--fml.forgeGroup","net.minecraftforge"});
+        auto neo1211=profile("neoforge-21.1.77","1.21.1",{"net.neoforged.fancymodloader:loader:4.0.31@jar","net.neoforged:mergetool:2.0.3:api@jar"},{"--fml.neoForgeVersion","21.1.77","--fml.fmlVersion","4.0.31","--fml.mcVersion","1.21.1","--launchTarget","forgeclient"});
+        auto neo1201=profile("1.20.1-forge-47.1.106","1.20.1",{"net.neoforged.fancymodloader:loader:47.2.2","net.minecraftforge:forgespi:7.0.1"},{"--launchTarget","forgeclient","--fml.forgeVersion","47.1.106","--fml.fmlVersion","47.2.2","--fml.mcVersion","1.20.1"});
+        auto fabric=profile("fabric-loader-0.15.11-1.20.1","1.20.1",{"net.fabricmc:intermediary:1.20.1","net.fabricmc:fabric-loader:0.15.11"});
+        auto quilt=profile("quilt-loader-0.26.0-1.20.1","1.20.1",{"org.quiltmc:hashed:1.20.1","org.quiltmc:quilt-loader:0.26.0"});
+        cases<<Case{"technic forge 1.7.10",technic(forge1710),"1.7.10 forge 10.13.4.1614-1.7.10"}
+             <<Case{"technic forge 1.20.1",technic(forge1201),"1.20.1 forge 47.2.0"}
+             <<Case{"technic neoforge 1.21.1",technic(neo1211),"1.21.1 neoforge 21.1.77"}
+             <<Case{"technic neoforge 1.20.1",technic(neo1201),"1.20.1 neoforge 47.1.106"}
+             <<Case{"technic fabric",technic(fabric),"1.20.1 fabric 0.15.11"}
+             <<Case{"technic quilt bin/version.json",technic(quilt,false),"1.20.1 quilt 0.26.0"}
+             <<Case{"technic zip with only bin/",technic(forge1201,true,true),"1.20.1 forge 47.2.0",false};
+        // GDLauncher (config.json) and Modrinth App 0.7 (profile.json) instance folders.
+        cases<<Case{"gdlauncher forge",folderOf({{"config.json",encode(QJsonObject{{"loader",QJsonObject{{"loaderType","forge"},{"mcVersion","1.16.5"},{"loaderVersion","1.16.5-36.2.39"}}}})},{"mods/a.jar","mod"}}),"1.16.5 forge 36.2.39"}
+             <<Case{"gdlauncher fabric",folderOf({{"config.json",encode(QJsonObject{{"loader",QJsonObject{{"loaderType","fabric"},{"mcVersion","1.20.1"},{"loaderVersion","0.15.11"}}}})},{"mods/a.jar","mod"}}),"1.20.1 fabric 0.15.11"}
+             <<Case{"modrinth app profile",folderOf({{"profile.json",encode(QJsonObject{{"path","Test"},{"metadata",QJsonObject{{"name","Test"},{"game_version","1.20.1"},{"loader","forge"},{"loader_version",QJsonObject{{"id","1.20.1-47.2.0"}}}}}})},{"mods/a.jar","mod"}}),"1.20.1 forge 47.2.0"};
+        // EBALIA exports keep their own instance.json.
+        {McInstanceManager manager(root.path());auto made=manager.createInstance("Exported","1.21.1","neoforge","21.1.77");writeFile(made+"/mods/a.jar","mod");auto path=next()+".zip";manager.exportInstance(made,path);cases<<Case{"ebalia export",QJsonObject{{"provider","import"},{"path",path}},"1.21.1 neoforge 21.1.77"};}
+        QStringList failures;
+        for(const auto &c:cases){
+            auto info=importPack(service,c.pack);auto got=describe(info);
+            if(got!=c.expected)failures<<c.label+": expected \""+c.expected+"\", got \""+got+"\"";
+            else if(c.mod&&readFile(info["dir"].toString()+"/mods/a.jar")!="mod")failures<<c.label+": mods/a.jar was not imported";
+        }
+        for(const auto &f:failures)qWarning().noquote()<<"IMPORT"<<f;
+        QVERIFY2(failures.isEmpty(),qPrintable(QString::number(failures.size())+" of "+QString::number(cases.size())+" imports are wrong (see warnings)"));
+    }
+    void importArchiveLayouts(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &url)->QByteArray{throw std::runtime_error(("unexpected network request: "+url.toString()).toStdString());});
+        auto instance=[](QString gameDir){return Files{{"instance.cfg","[General]\nname=My Pack\n"},{"mmc-pack.json",mmcPack("1.20.1","net.fabricmc.fabric-loader","0.15.11")},{gameDir+"/mods/a.jar","mod"},{gameDir+"/saves/World/level.dat","level"}};};
+        auto cfPack=Files{{"manifest.json",cfManifest("1.20.1",{QJsonObject{{"id","fabric-0.15.11"},{"primary",true}}})},{"overrides/mods/a.jar","mod"},{"overrides/saves/World/level.dat","level"}};
+        auto mac=Files{{"__MACOSX/My Pack/._instance.cfg","apple"},{"__MACOSX/._My Pack","apple"}};
+        QList<QPair<QString,Files>> layouts{
+            {"prism export, minecraft/ at the root",instance("minecraft")},
+            {"prism export, .minecraft/ at the root",instance(".minecraft")},
+            {"multimc export inside one folder",prefixed("My Pack/",instance(".minecraft"))},
+            {"zip made on Windows (backslashes)",prefixed("My Pack\\",Files{{"instance.cfg","[General]\n"},{"mmc-pack.json",mmcPack("1.20.1","net.fabricmc.fabric-loader","0.15.11")},{"minecraft\\mods\\a.jar","mod"},{"minecraft\\saves\\World\\level.dat","level"}})},
+            {"macOS Finder zip (__MACOSX next to the folder)",prefixed("My Pack/",instance("minecraft"))+mac},
+            {".DS_Store next to the folder",prefixed("My Pack/",instance("minecraft"))+Files{{".DS_Store","ds"}}},
+            {"folder inside a folder",prefixed("Export/My Pack/",instance("minecraft"))},
+            {"curseforge zip inside one folder",prefixed("Pack/",cfPack)},
+            {"curseforge zip inside one folder with __MACOSX",prefixed("Pack/",cfPack)+Files{{"__MACOSX/Pack/._manifest.json","apple"}}},
+        };
+        QStringList failures;int i=0;
+        for(const auto &[label,files]:layouts){
+            auto path=root.path()+"/layout-"+QString::number(++i)+".zip";zipEntries(path,files);auto info=importPath(service,path);auto dir=info["dir"].toString();
+            if(describe(info)!="1.20.1 fabric 0.15.11")failures<<label+": got \""+describe(info)+"\"";
+            else if(readFile(dir+"/mods/a.jar")!="mod"||readFile(dir+"/saves/World/level.dat")!="level")failures<<label+": game files not at the instance root";
+            else if(QFile::exists(dir+"/__MACOSX")||QFile::exists(dir+"/My Pack")||QFile::exists(dir+"/minecraft")||QFile::exists(dir+"/.minecraft"))failures<<label+": wrapper folders copied into the instance";
+        }
+        for(const auto &f:failures)qWarning().noquote()<<"LAYOUT"<<f;
+        QVERIFY2(failures.isEmpty(),qPrintable(QString::number(failures.size())+" of "+QString::number(layouts.size())+" layouts fail (see warnings)"));
+    }
+    void importModrinthFiles(){
+        // Modelled on the real "The Pixelmon Modpack 9.2.3" index: Windows separators, and client-"optional" mods that required mods depend on.
+        QTemporaryDir root;QMap<QString,QByteArray> served;
+        PackService service(root.path(),[&](const QUrl &url){if(!served.contains(url.toString()))throw std::runtime_error(("404 "+url.toString()).toStdString());return served[url.toString()];});
+        QJsonArray files;
+        auto file=[&](QString path,QString client,QByteArray data,bool mirror=false){
+            auto url="https://cdn.modrinth.com/data/"+QString::number(files.size())+"/"+QFileInfo(QString(path).replace('\\','/')).fileName();served[url]=data;QJsonArray urls{url};if(mirror)urls.prepend("https://cdn.example.org/gone.jar");
+            files.append(QJsonObject{{"path",path},{"hashes",QJsonObject{{"sha1",QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha1).toHex())},{"sha512",QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha512).toHex())}}},{"env",QJsonObject{{"client",client},{"server","optional"}}},{"downloads",urls},{"fileSize",data.size()}});
+        };
+        file("mods\\Pixelmon-1.20.1-9.2.3-universal.jar","required","pixelmon");
+        file("mods\\konkrete_forge_1.6.1-2_MC_1.20.jar","optional","konkrete");
+        file("mods\\journeymap-1.20.1-5.9.12-forge.jar","optional","journeymap");
+        file("mods\\fancymenu_forge_2.14.9_MC_1.20.1.jar","required","fancymenu");
+        file("mods\\server-only.jar","unsupported","server");
+        file("mods/mirrored.jar","required","mirror",true);
+        auto path=root.path()+"/pixelmon.mrpack";
+        zipEntries(path,{{"modrinth.index.json",mrIndex({{"minecraft","1.20.1"},{"forge","47.1.44"}},files)},{"overrides/config/a.toml","base"},{"overrides/options.txt","base"},{"client-overrides/config/a.toml","client"},{"server-overrides/server.properties","server"}});
+        auto info=importPath(service,path);QVERIFY2(!info.contains("error"),qPrintable(describe(info)));auto dir=info["dir"].toString();
+        QCOMPARE(describe(info),QString("1.20.1 forge 47.1.44"));
+        QCOMPARE(readFile(dir+"/mods/Pixelmon-1.20.1-9.2.3-universal.jar"),QByteArray("pixelmon"));QCOMPARE(readFile(dir+"/mods/fancymenu_forge_2.14.9_MC_1.20.1.jar"),QByteArray("fancymenu"));
+        QCOMPARE(readFile(dir+"/config/a.toml"),QByteArray("client"));QCOMPARE(readFile(dir+"/options.txt"),QByteArray("base"));
+        QVERIFY(!QFile::exists(dir+"/mods/server-only.jar"));QVERIFY(!QFile::exists(dir+"/server.properties"));
+        // FancyMenu requires Konkrete: client-"optional" files are installed, as the Modrinth App and Prism Launcher do by default.
+        QCOMPARE(readFile(dir+"/mods/konkrete_forge_1.6.1-2_MC_1.20.jar"),QByteArray("konkrete"));
+        QCOMPARE(readFile(dir+"/mods/journeymap-1.20.1-5.9.12-forge.jar"),QByteArray("journeymap"));
+        // "downloads" lists mirrors: a dead first URL falls back to the next one.
+        QCOMPARE(readFile(dir+"/mods/mirrored.jar"),QByteArray("mirror"));
+    }
+    void importCurseForgeFiles(){
+        // CurseForge manifests list resource packs and shaders next to mods (3 of 41 files in the real "Into the Backrooms" Fabric pack, 14 of 18 in "X-Ray Unlimited").
+        QTemporaryDir root;QMap<QString,QByteArray> served;
+        auto cfFile=[&](int project,int id,QString name,QByteArray data,int classId){
+            QJsonObject f{{"id",id},{"modId",project},{"fileName",name},{"displayName",name},{"downloadUrl","https://edge.forgecdn.net/files/"+QString::number(id/1000)+"/"+QString::number(id%1000)+"/"+name},{"hashes",QJsonArray{QJsonObject{{"algo",1},{"value",QString::fromLatin1(QCryptographicHash::hash(data,QCryptographicHash::Sha1).toHex())}}}}};
+            served[f["downloadUrl"].toString()]=data;served["/v1/mods/"+QString::number(project)+"/files/"+QString::number(id)]=encode(QJsonObject{{"data",f}});
+            served["/v1/mods/"+QString::number(project)]=encode(QJsonObject{{"data",QJsonObject{{"id",project},{"classId",classId},{"name",name}}}});
+        };
+        cfFile(1,1001,"sodium.jar","sodium",6);cfFile(2,2002,"FreshAnimations_v1.10.4.zip","rp",12);cfFile(3,3003,"ComplementaryShaders.zip","shader",6552);cfFile(4,4004,"optional.jar","opt",6);
+        PackService service(root.path(),[&](const QUrl &url){auto key=url.host()=="api.curseforge.com"?url.path():url.toString();if(!served.contains(key))throw std::runtime_error(("404 "+url.toString()).toStdString());return served[key];});
+        auto ref=[](int p,int f,bool required=true){return QJsonObject{{"projectID",p},{"fileID",f},{"required",required}};};
+        auto path=root.path()+"/cf.zip";zipEntries(path,{{"manifest.json",cfManifest("1.20.1",{QJsonObject{{"id","fabric-0.15.11"},{"primary",true}}},{ref(1,1001),ref(2,2002),ref(3,3003),ref(4,4004,false)})},{"overrides/options.txt","resourcePacks:[\"vanilla\",\"file/FreshAnimations_v1.10.4.zip\"]"}});
+        auto info=importPath(service,path);QVERIFY2(!info.contains("error"),qPrintable(describe(info)));auto dir=info["dir"].toString();
+        QCOMPARE(readFile(dir+"/mods/sodium.jar"),QByteArray("sodium"));QVERIFY(!QFile::exists(dir+"/mods/optional.jar"));
+        QCOMPARE(readFile(dir+"/resourcepacks/FreshAnimations_v1.10.4.zip"),QByteArray("rp"));QVERIFY(!QFile::exists(dir+"/mods/FreshAnimations_v1.10.4.zip"));
+        QCOMPARE(readFile(dir+"/shaderpacks/ComplementaryShaders.zip"),QByteArray("shader"));QVERIFY(!QFile::exists(dir+"/mods/ComplementaryShaders.zip"));
+    }
+    void importUnicodeNames(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &)->QByteArray{throw std::runtime_error("offline");});
+        auto path=root.path()+"/unicode.mrpack";
+        zipEntries(path,{{"modrinth.index.json",mrIndex({{"minecraft","1.20.1"},{"fabric-loader","0.15.11"}})},{"overrides/saves/Mundo Ñandú ★/level.dat","level"},{"overrides/config/日本語.txt","jp"},{"overrides/resourcepacks/Café.zip","rp"}});
+        auto check=[&](const QString &label){
+            auto info=importPath(service,path);QVERIFY2(!info.contains("error"),qPrintable(label+": "+describe(info)));auto dir=info["dir"].toString();
+            QVERIFY2(readFile(dir+"/saves/Mundo Ñandú ★/level.dat")=="level",qPrintable(label+": "+QDir(dir+"/saves").entryList(QDir::Dirs|QDir::NoDotAndDotDot).join(", ")));
+            QCOMPARE(readFile(dir+"/config/日本語.txt"),QByteArray("jp"));QCOMPARE(readFile(dir+"/resourcepacks/Café.zip"),QByteArray("rp"));
+        };
+        check("UTF-8 locale");
+        // Windows keeps narrow file names in the ANSI code page: emulate a C library locale that is not UTF-8.
+        struct Restore{QByteArray saved=setlocale(LC_CTYPE,nullptr);~Restore(){setlocale(LC_CTYPE,saved.constData());}}restore;
+        QVERIFY(setlocale(LC_CTYPE,"C"));check("C locale");
+    }
+    void importRejectsUnsafePaths(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &){return QByteArray("evil");});
+        auto mr=[&](QString path){return mrIndex({{"minecraft","1.20.1"},{"fabric-loader","0.15.11"}},{QJsonObject{{"path",path},{"hashes",QJsonObject{{"sha512",QString::fromLatin1(QCryptographicHash::hash("evil",QCryptographicHash::Sha512).toHex())}}},{"downloads",QJsonArray{"https://cdn.modrinth.com/evil.jar"}}}});};
+        QList<QPair<QString,Files>> evil{
+            {"index ../",{{"modrinth.index.json",mr("../../escape-1.jar")}}},
+            {"index backslash ..",{{"modrinth.index.json",mr("mods\\..\\..\\escape-2.jar")}}},
+            {"index absolute",{{"modrinth.index.json",mr(root.path()+"/escape-3.jar")}}},
+            {"index drive letter",{{"modrinth.index.json",mr("C:/escape-4.jar")}}},
+            {"index UNC",{{"modrinth.index.json",mr("\\\\server\\share\\escape-5.jar")}}},
+            {"entry ../",{{"modrinth.index.json",mr("mods/ok.jar")},{"overrides/../../escape-6.txt","x"}}},
+            {"entry backslash ..",{{"modrinth.index.json",mr("mods/ok.jar")},{"overrides\\..\\..\\escape-7.txt","x"}}},
+            {"entry absolute",{{"modrinth.index.json",mr("mods/ok.jar")},{root.path()+"/escape-8.txt","x"}}},
+            {"entry symlink",{{"modrinth.index.json",mr("mods/ok.jar")},{"overrides/mods","->"+root.path().toUtf8()},{"overrides/mods/escape-9.txt","x"}}},
+            {"curseforge overrides outside",{{"manifest.json",encode(QJsonObject{{"minecraft",QJsonObject{{"version","1.20.1"},{"modLoaders",QJsonArray{}}}},{"files",QJsonArray{}},{"overrides","../.."}})}}},
+        };
+        int i=0;QStringList failures;
+        for(const auto &[label,files]:evil){auto path=root.path()+"/evil-"+QString::number(++i)+".zip";zipEntries(path,files);auto info=importPath(service,path);if(!info.contains("error"))failures<<label+": accepted";}
+        QDirIterator it(root.path(),QDir::Files|QDir::Hidden,QDirIterator::Subdirectories);while(it.hasNext()){auto f=it.next();if(it.fileName().startsWith("escape-"))failures<<"written outside: "+f;}
+        QCOMPARE(QDir(root.path()+"/mc/instances").entryList(QDir::Dirs|QDir::NoDotAndDotDot).size(),0);
+        QVERIFY2(failures.isEmpty(),qPrintable(failures.join("; ")));
+    }
+    void importRealPacks(){
+        // Opt-in: EBALIA_IMPORT_FIXTURES=<folder with real .mrpack/.zip packs>; downloads every file from Modrinth/CurseForge.
+        const auto fixtures=qEnvironmentVariable("EBALIA_IMPORT_FIXTURES");if(fixtures.isEmpty())QSKIP("Set EBALIA_IMPORT_FIXTURES to a folder of real packs");
+        const QMap<QString,QString> expected{{"modrinth-fabric.mrpack","1.21.1 fabric 0.16.7"},{"modrinth-quilt.mrpack","1.20.1 quilt 0.29.1"},{"modrinth-neoforge.mrpack","1.21.1 neoforge 21.1.230"},{"modrinth-forge.mrpack","1.20.1 forge 47.1.44"},
+            {"curseforge-forge.zip","1.20.1 forge 47.4.10"},{"curseforge-fabric.zip","1.20.1 fabric 0.19.5"},{"curseforge-quilt.zip","1.20.1 quilt 0.22.0"},{"curseforge-neoforge.zip","1.20.1 neoforge 47.1.106"},
+            {"technic-forge-1.7.10.zip","1.7.10 forge 10.13.4.1614-1.7.10"},{"technic-neoforge-21.1.77.zip","1.21.1 neoforge 21.1.77"},{"technic-forge-1.20.1.zip","1.20.1 forge 47.2.0"},{"technic-neoforge-1.20.1.zip","1.20.1 neoforge 47.1.106"}};
+        QTemporaryDir root(fixtures+"/run-XXXXXX");PackService service(root.path());QStringList failures;
+        for(const auto &file:QDir(fixtures).entryList({"*.mrpack","*.zip"},QDir::Files,QDir::Name)){
+            QElapsedTimer timer;timer.start();auto info=importPath(service,fixtures+"/"+file);auto got=describe(info);auto dir=info["dir"].toString();
+            auto count=[&](QString sub){return QDir(dir+"/"+sub).entryList(QDir::Files).size();};
+            qInfo().noquote()<<file<<"->"<<got<<"| mods"<<count("mods")<<"resourcepacks"<<count("resourcepacks")<<"shaderpacks"<<count("shaderpacks")<<"|"<<timer.elapsed()/1000<<"s";
+            if(expected.contains(file)&&got!=expected[file])failures<<file+": expected \""+expected[file]+"\", got \""+got+"\"";
+        }
+        QVERIFY2(failures.isEmpty(),qPrintable(failures.join("; ")));
     }
     void liveModrinth(){
         if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");

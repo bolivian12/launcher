@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include <QJsonObject>
 
 struct VersionInfo {
     QString id;
@@ -18,6 +19,7 @@ struct VersionInfo {
     bool installed = false;
     QString archivePrefix,archiveSha256;
     qint64 archiveSize=0;
+    QJsonObject native; // launch description used on every system (see LostNative.hpp)
 };
 
 class VersionManager : public QObject {

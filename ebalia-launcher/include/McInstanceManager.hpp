@@ -32,6 +32,8 @@ public:
     bool isInstalling(const QString &dir) const { return m_installing.contains(dir); }
     void killInstance(const QString &dir);
     static bool allowedByRules(const QJsonObject &object);
+    // inheritsFrom-style merge: loader libraries first, replacing the game's copy of the same group:artifact:classifier.
+    static QJsonArray mergeLibraries(const QJsonArray &game, const QJsonArray &loader);
     static QStringList arguments(const QJsonArray &list, const QMap<QString,QString> &values);
 signals:
     void manifestReady(const QList<McVersion> &versions);

@@ -13,6 +13,43 @@ QString enc(QString s){return QString::fromLatin1(QUrl::toPercentEncoding(s));}
 QString safeName(QString name){if(!ModRepository::safeName(name))fail("Invalid file name in modpack");return name;}
 QJsonObject fileHashes(QJsonObject o){auto hashes=o["hashes"].toObject();for(auto key:{"sha512","sha256","sha1","md5"})if(o[key].isString())hashes[key]=o[key];return hashes;}
 void write(const QString &path,QByteArray data){QDir().mkpath(QFileInfo(path).absolutePath());QSaveFile f(path);if(!f.open(QIODevice::WriteOnly)||f.write(data)!=data.size()||!f.commit())fail("Could not write modpack file");}
+// Optional metadata: missing or invalid files read as empty.
+QJsonObject json(const QString &path){try{return QFileInfo(path).isFile()?ModRepository::read(path):QJsonObject{};}catch(const std::exception &){return {};}}
+// Entries that archivers add next to the packed folder (macOS Finder, Windows Explorer).
+bool junk(const QString &name){return name=="__MACOSX"||name==".DS_Store"||name=="Thumbs.db"||name=="desktop.ini"||name.startsWith("._");}
+const QStringList junkNames{"__MACOSX",".DS_Store","Thumbs.db","desktop.ini"};
+// Game folders: a pack is never wrapped inside one of these.
+const QStringList gameFolders{"minecraft",".minecraft","mods","overrides","client-overrides","config","saves","bin","resourcepacks","shaderpacks","coremods","kubejs","scripts","defaultconfigs"};
+bool hasPackMetadata(const QString &dir){
+    for(auto name:{"modrinth.index.json","mmc-pack.json","instance.cfg","minecraftinstance.json","bin/modpack.jar","bin/version.json"})if(QFileInfo::exists(dir+"/"+name))return true;
+    const auto instance=json(dir+"/instance.json");
+    return json(dir+"/manifest.json")["minecraft"].isObject()||instance.contains("mcVersion")||instance["launcher"].isObject()
+        ||json(dir+"/config.json")["loader"].toObject().contains("mcVersion")||json(dir+"/profile.json")["metadata"].toObject().contains("game_version");
+}
+// One loader version format for every source: no game prefix ("1.20.1-47.2.0", NeoForge "1.20.1-47.1.106") and no game suffix on Fabric and Quilt ("0.15.11-1.20.1").
+// Forge keeps the suffix of its own artifacts (1.7.10: "10.13.4.1614-1.7.10").
+void normalizeLoader(QJsonObject &c){
+    const auto game=c["mcVersion"].toString(),loader=c["loader"].toString();auto version=c["loaderVersion"].toString();
+    if(game.isEmpty()||loader=="vanilla"||version.isEmpty())return;
+    if(version.startsWith(game+"-"))version=version.mid(game.size()+1);
+    if((loader=="fabric"||loader=="quilt")&&version.endsWith("-"+game))version.chop(game.size()+1);
+    c["loaderVersion"]=version;
+}
+// Loader ids as launchers write them: "forge-47.2.0" (CurseForge), "1.20.1-forge-47.2.0" and "fabric-loader-1.20.1-0.15.11" (FTB App),
+// "neoforge-1.20.1-47.1.106", or only the game version (vanilla). Needs c["mcVersion"].
+void loaderId(QString id,QJsonObject &c){
+    const auto game=c["mcVersion"].toString();id=id.trimmed();
+    if(!game.isEmpty()&&id.startsWith(game+"-"))id=id.mid(game.size()+1);
+    if(id.isEmpty()||id==game){c["loader"]="vanilla";c.remove("loaderVersion");return;}
+    static const QRegularExpression known("^(neoforge|forge|fabric|quilt)(?:-loader)?-(.+)$",QRegularExpression::CaseInsensitiveOption);
+    auto m=known.match(id);
+    if(m.hasMatch()){c["loader"]=m.captured(1).toLower();c["loaderVersion"]=m.captured(2);}else{c["loader"]=id.section('-',0,0).toLower();c["loaderVersion"]=id.section('-',1);}
+    normalizeLoader(c);
+}
+// FTB App instances keep the loader target in .ftbapp/version.json (older ones in version.json).
+void ftbTargets(const QString &dir,QJsonObject &c){
+    for(auto path:{".ftbapp/version.json","version.json"})for(auto v:json(dir+"/"+path)["targets"].toArray())if(v.toObject()["type"]=="modloader"){c["loader"]=v.toObject()["name"].toString().toLower();c["loaderVersion"]=v.toObject()["version"];return;}
+}
 }
 QString PackService::safePath(QString path){path.replace('\\','/');while(path.startsWith("./"))path=path.mid(2);if(path.isEmpty()||QDir::isAbsolutePath(path)||path.contains(':')||path.split('/').contains(".."))fail("Unsafe modpack path: "+path);return path;}
 QByteArray PackService::bytes(const QString &url,bool curse){if(m_transport)return m_transport(QUrl(url));QMap<QByteArray,QByteArray> headers;if(curse){auto key=ModRepository::curseForgeKey();if(key.isEmpty())fail("CurseForge requires your EBALIA API key in Provider settings.");headers["x-api-key"]=key.toUtf8();}return ModRepository::fetch(QUrl(url),headers);}
@@ -38,10 +75,24 @@ QJsonArray PackService::versions(const QJsonObject &pack){
     else if(provider=="technic"){auto p=get(technic+"modpack/"+enc(id)+"?build=999").object();auto solder=p["solder"].toString();if(solder.isEmpty())out.append(QJsonObject{{"id",p["version"]},{"name",p["version"]},{"data",p}});else{if(!solder.endsWith('/'))solder+='/';auto meta=get(solder+"modpack/"+enc(id)).object();auto builds=meta["builds"].toArray();auto recommended=meta["recommended"].toString();if(builds.contains(recommended)){for(int i=0;i<builds.size();++i)if(builds[i]==recommended){builds.removeAt(i);break;}builds.prepend(recommended);}for(auto b:builds)out.append(QJsonObject{{"id",b},{"name",b},{"data",p},{"solder",solder}});}}
     else{auto list=pack["versions"].toArray();if(provider=="ftb"){QJsonArray reversed;for(auto v:list)reversed.prepend(v);list=reversed;}for(auto v:list){const auto o=v.toObject();auto id=o["version"].toString(o["id"].toVariant().toString());out.append(QJsonObject{{"id",id},{"name",o["name"].toString(id)},{"data",o}});}}return out;
 }
-void PackService::copyTree(const QString &from,const QString &to){QDirIterator it(from,QDir::Files|QDir::Dirs|QDir::Hidden|QDir::NoDotAndDotDot,QDirIterator::Subdirectories);while(it.hasNext()){auto path=it.next();if(it.fileInfo().isSymLink())fail("Symlinks are not supported in imported packs");auto rel=safePath(QDir(from).relativeFilePath(path));auto target=to+"/"+rel;if(it.fileInfo().isDir()){QDir().mkpath(target);continue;}QFile source(path);if(!source.open(QIODevice::ReadOnly))fail("Could not read imported file");QDir().mkpath(QFileInfo(target).absolutePath());QSaveFile dest(target);if(!dest.open(QIODevice::WriteOnly))fail("Could not write imported file");while(!source.atEnd()){auto data=source.read(1024*1024);if(data.isEmpty()&&source.error()!=QFile::NoError)fail("Read error");if(dest.write(data)!=data.size())fail("Copy error");}if(!dest.commit())fail("Copy error");}}
+void PackService::copyTree(const QString &from,const QString &to,const QStringList &skip){
+    // Instance folders on disk often link shared folders (saves, resourcepacks): copy what the link points to. Archives never hold links (Archive::extract refuses them).
+    QDirIterator it(from,QDir::Files|QDir::Dirs|QDir::Hidden|QDir::NoDotAndDotDot,QDirIterator::Subdirectories|QDirIterator::FollowSymlinks);while(it.hasNext()){auto path=it.next();auto rel=QDir(from).relativeFilePath(path);if(rel.isEmpty()||rel.startsWith("../")||rel==".."||QDir::isAbsolutePath(rel))fail("Unsafe modpack path: "+rel);if(skip.contains(rel.section('/',0,0)))continue;auto target=to+"/"+rel;if(it.fileInfo().isDir()){QDir().mkpath(target);continue;}QFile source(path);if(!source.open(QIODevice::ReadOnly))fail("Could not read imported file");QDir().mkpath(QFileInfo(target).absolutePath());QSaveFile dest(target);if(!dest.open(QIODevice::WriteOnly))fail("Could not write imported file");while(!source.atEnd()){auto data=source.read(1024*1024);if(data.isEmpty()&&source.error()!=QFile::NoError)fail("Read error");if(dest.write(data)!=data.size())fail("Copy error");}if(!dest.commit())fail("Copy error");}}
 void PackService::profileLoader(const QJsonObject &profile,QJsonObject &config){
     if(!profile["inheritsFrom"].toString().isEmpty())config["mcVersion"]=profile["inheritsFrom"];
-    for(auto v:profile["libraries"].toArray()){auto name=v.toObject()["name"].toString();auto coordinate=name.section(':',0,1),version=name.section(':',2,2);QString loader;if(coordinate=="net.minecraftforge:forge"||coordinate=="net.minecraftforge:minecraftforge"||coordinate=="net.minecraftforge:fmlloader")loader="forge";else if(coordinate=="net.neoforged:neoforge")loader="neoforge";else if(coordinate=="net.fabricmc:fabric-loader")loader="fabric";else if(coordinate=="org.quiltmc:quilt-loader")loader="quilt";if(!loader.isEmpty()){config["loader"]=loader;if(loader=="forge"&&version.startsWith(config["mcVersion"].toString()+"-"))version=version.mid(config["mcVersion"].toString().size()+1);config["loaderVersion"]=version;}}
+    bool neoforged=false;
+    for(auto v:profile["libraries"].toArray()){
+        auto name=v.toObject()["name"].toString().section('@',0,0);auto coordinate=name.section(':',0,1),version=name.section(':',2,2);QString loader;
+        if(coordinate.startsWith("net.neoforged"))neoforged=true;
+        if(coordinate=="net.minecraftforge:forge"||coordinate=="net.minecraftforge:minecraftforge"||coordinate=="net.minecraftforge:fmlloader")loader="forge";else if(coordinate=="net.neoforged:neoforge"||coordinate=="net.neoforged:forge")loader="neoforge";else if(coordinate=="net.fabricmc:fabric-loader")loader="fabric";else if(coordinate=="org.quiltmc:quilt-loader")loader="quilt";
+        if(!loader.isEmpty()){config["loader"]=loader;if((loader=="forge"||loader=="neoforge")&&version.startsWith(config["mcVersion"].toString()+"-"))version=version.mid(config["mcVersion"].toString().size()+1);config["loaderVersion"]=version;}
+    }
+    // Modern Forge and NeoForge profiles name their loader in the game arguments (NeoForge for 1.20.1 still says "forgeVersion").
+    QStringList args;for(auto v:profile["arguments"].toObject()["game"].toArray())if(v.isString())args<<v.toString();
+    args<<profile["minecraftArguments"].toString().split(' ',Qt::SkipEmptyParts);
+    auto value=[&](const QString &key){auto i=args.indexOf(key);return i>=0&&i+1<args.size()?args[i+1]:QString();};
+    if(!value("--fml.neoForgeVersion").isEmpty()){config["loader"]="neoforge";config["loaderVersion"]=value("--fml.neoForgeVersion");}
+    else if(!value("--fml.forgeVersion").isEmpty()){config["loader"]=neoforged||value("--fml.forgeGroup")=="net.neoforged"?"neoforge":"forge";config["loaderVersion"]=value("--fml.forgeVersion");}
 }
 QJsonObject PackService::ftbManifest(const QJsonObject &d,const QString &stage){
     QJsonObject c{{"loader","vanilla"}};for(auto v:d["targets"].toArray()){auto t=v.toObject();if(t["type"]=="game")c["mcVersion"]=t["version"];if(t["type"]=="modloader"){c["loader"]=t["name"].toString().toLower();c["loaderVersion"]=t["version"];}}
@@ -50,11 +101,38 @@ QJsonObject PackService::ftbManifest(const QJsonObject &d,const QString &stage){
 QJsonObject PackService::unpack(const QString &archive,const QString &stage){QTemporaryDir temp;Archive::extract(archive,temp.path());return importFolder(temp.path(),stage);}
 QJsonObject PackService::importFolder(QString base,const QString &stage){
     QJsonObject c{{"loader","vanilla"}};
-    // Prism/MultiMC exports and hand-made ZIPs often wrap the instance in a single folder.
-    auto top=QDir(base).entryInfoList(QDir::Dirs|QDir::Files|QDir::Hidden|QDir::NoDotAndDotDot);
-    if(top.size()==1&&top.first().isDir()&&!top.first().isSymLink()&&!QStringList{"minecraft",".minecraft","mods","overrides","config","saves"}.contains(top.first().fileName()))base=top.first().filePath();
-    if(QFile::exists(base+"/modrinth.index.json")){auto d=ModRepository::read(base+"/modrinth.index.json");if(d["formatVersion"].toInt()!=1||d["game"]!="minecraft")fail("Unsupported Modrinth pack format");auto deps=d["dependencies"].toObject();c["mcVersion"]=deps["minecraft"];for(auto key:{"forge","neoforge","fabric-loader","quilt-loader"})if(deps.contains(key)){c["loader"]=QString(key).section('-',0,0);c["loaderVersion"]=deps[key];}for(auto v:d["files"].toArray()){auto f=v.toObject();if(f["env"].toObject()["client"]=="unsupported"||f["env"].toObject()["client"]=="optional")continue;auto urls=f["downloads"].toArray();if(urls.isEmpty())fail("Modpack file has no download URL");download(urls.first().toString(),stage+"/"+safePath(f["path"].toString()),f["hashes"].toObject());}for(auto folder:{"overrides","client-overrides"})if(QDir(base+"/"+folder).exists())copyTree(base+"/"+folder,stage);return c;}
-    if(QFile::exists(base+"/manifest.json")&&ModRepository::read(base+"/manifest.json")["minecraft"].isObject()){auto d=ModRepository::read(base+"/manifest.json");auto mc=d["minecraft"].toObject();c["mcVersion"]=mc["version"];for(auto v:mc["modLoaders"].toArray()){auto lo=v.toObject();if(!lo["primary"].toBool(true))continue;auto id=lo["id"].toString();c["loader"]=id.section('-',0,0);c["loaderVersion"]=id.section('-',1);break;}for(auto v:d["files"].toArray()){auto f=v.toObject();if(!f["required"].toBool(true))continue;auto id=QString::number(f["projectID"].toInteger()),version=QString::number(f["fileID"].toInteger());auto file=get("https://api.curseforge.com/v1/mods/"+id+"/files/"+version,true).object()["data"].toObject();if(file["downloadUrl"].toString().isEmpty())fail("Author requires manual download: https://www.curseforge.com/projects/"+id+"/files/"+version);QJsonObject hashes;for(auto h:file["hashes"].toArray())if(h.toObject()["algo"].toInt()==1)hashes["sha1"]=h.toObject()["value"];download(file["downloadUrl"].toString(),stage+"/mods/"+safeName(file["fileName"].toString()),hashes);}auto overrides=d["overrides"].toString("overrides");if(QDir(base+"/"+safePath(overrides)).exists())copyTree(base+"/"+overrides,stage);return c;}
+    // Exports and hand-made ZIPs often wrap the instance in one or two folders, next to what macOS Finder or Windows Explorer add.
+    for(int depth=0;depth<4&&!hasPackMetadata(base);++depth){
+        QFileInfoList top;for(const auto &e:QDir(base).entryInfoList(QDir::Dirs|QDir::Files|QDir::Hidden|QDir::NoDotAndDotDot))if(!junk(e.fileName()))top<<e;
+        if(top.size()!=1||!top.first().isDir()||top.first().isSymLink()||gameFolders.contains(top.first().fileName()))break;
+        base=top.first().filePath();
+    }
+    if(QFile::exists(base+"/modrinth.index.json")){
+        auto d=ModRepository::read(base+"/modrinth.index.json");if(d["formatVersion"].toInt()!=1||d["game"]!="minecraft")fail("Unsupported Modrinth pack format");
+        auto deps=d["dependencies"].toObject();c["mcVersion"]=deps["minecraft"];for(auto key:{"forge","neoforge","fabric-loader","quilt-loader"})if(deps.contains(key)){c["loader"]=QString(key).section('-',0,0);c["loaderVersion"]=deps[key];}
+        for(auto v:d["files"].toArray()){
+            // Client "optional" files are installed, as the Modrinth App and Prism Launcher do: required mods often depend on them.
+            auto f=v.toObject();if(f["env"].toObject()["client"]=="unsupported")continue;
+            auto urls=f["downloads"].toArray();if(urls.isEmpty())fail("Modpack file has no download URL");auto target=stage+"/"+safePath(f["path"].toString());
+            // "downloads" lists mirrors of one file: try them in order.
+            QString error;bool done=false;for(auto url:urls){try{download(url.toString(),target,f["hashes"].toObject());done=true;break;}catch(const std::exception &e){error=QString::fromUtf8(e.what());}}if(!done)fail(error);
+        }
+        for(auto folder:{"overrides","client-overrides"})if(QDir(base+"/"+folder).exists())copyTree(base+"/"+folder,stage,junkNames);return c;
+    }
+    if(json(base+"/manifest.json")["minecraft"].isObject()){
+        auto d=ModRepository::read(base+"/manifest.json");auto mc=d["minecraft"].toObject();c["mcVersion"]=mc["version"];
+        for(auto v:mc["modLoaders"].toArray()){auto lo=v.toObject();if(!lo["primary"].toBool(true))continue;loaderId(lo["id"].toString(),c);break;}
+        for(auto v:d["files"].toArray()){
+            auto f=v.toObject();if(!f["required"].toBool(true))continue;auto id=QString::number(f["projectID"].toInteger()),version=QString::number(f["fileID"].toInteger());
+            auto file=get("https://api.curseforge.com/v1/mods/"+id+"/files/"+version,true).object()["data"].toObject();if(file["downloadUrl"].toString().isEmpty())fail("Author requires manual download: https://www.curseforge.com/projects/"+id+"/files/"+version);
+            QJsonObject hashes;for(auto h:file["hashes"].toArray())if(h.toObject()["algo"].toInt()==1)hashes["sha1"]=h.toObject()["value"];
+            // Resource packs and shaders are listed next to mods; only the project's class tells them apart (jars are always mods).
+            auto name=safeName(file["fileName"].toString());QString folder="mods";
+            if(!name.endsWith(".jar",Qt::CaseInsensitive)){auto classId=get("https://api.curseforge.com/v1/mods/"+id,true).object()["data"].toObject()["classId"].toInt();if(classId==12)folder="resourcepacks";else if(classId==6552)folder="shaderpacks";}
+            download(file["downloadUrl"].toString(),stage+"/"+folder+"/"+name,hashes);
+        }
+        auto overrides=safePath(d["overrides"].toString("overrides"));if(QDir(base+"/"+overrides).exists())copyTree(base+"/"+overrides,stage,junkNames);return c;
+    }
     // Prism Launcher, PolyMC and MultiMC describe the game and loader as components.
     if(QFile::exists(base+"/mmc-pack.json")){
         components(ModRepository::read(base+"/mmc-pack.json"),c);
@@ -62,21 +140,36 @@ QJsonObject PackService::importFolder(QString base,const QString &stage){
         if(!QDir(base+"/jarmods").isEmpty()&&QDir(base+"/jarmods").exists())fail("This legacy pack modifies minecraft.jar directly; its original launcher is required.");
     }
     QString game=base;if(QDir(base+"/minecraft").exists())game+="/minecraft";else if(QDir(base+"/.minecraft").exists())game+="/.minecraft";
-    copyTree(game,stage);
+    copyTree(game,stage,junkNames);
     if(c["mcVersion"].toString().isEmpty()&&QFile::exists(base+"/minecraftinstance.json")){ // CurseForge app instance folder
-        const auto o=ModRepository::read(base+"/minecraftinstance.json");c["mcVersion"]=o["gameVersion"].toString(o["baseModLoader"].toObject()["minecraftVersion"].toString());
-        auto id=o["baseModLoader"].toObject()["name"].toString();if(!id.isEmpty()){c["loader"]=id.section('-',0,0).toLower();c["loaderVersion"]=id.section('-',1);}
+        const auto o=ModRepository::read(base+"/minecraftinstance.json");const auto loader=o["baseModLoader"].toObject();
+        c["mcVersion"]=o["gameVersion"].toString(loader["minecraftVersion"].toString());if(!loader["name"].toString().isEmpty())loaderId(loader["name"].toString(),c);
     }
-    if(c["mcVersion"].toString().isEmpty()&&QFile::exists(base+"/instance.json")){ // EBALIA export or FTB App instance
-        auto o=ModRepository::read(base+"/instance.json");c["mcVersion"]=o["mcVersion"];
-        if(o.contains("loader")){c["loader"]=o["loader"].toString("vanilla");c["loaderVersion"]=o["loaderVersion"];}
-        else if(!o["modLoader"].toString().isEmpty()){auto id=o["modLoader"].toString();c["loader"]=id.section('-',0,0).toLower();c["loaderVersion"]=id.section('-',1);}
-        if(c["loader"]=="vanilla")for(auto path:{".ftbapp/version.json","version.json"})if(QFile::exists(base+"/"+path))for(auto v:ModRepository::read(base+"/"+path)["targets"].toArray())if(v.toObject()["type"]=="modloader"){c["loader"]=v.toObject()["name"].toString().toLower();c["loaderVersion"]=v.toObject()["version"];}
+    if(c["mcVersion"].toString().isEmpty()&&QFile::exists(base+"/instance.json")){
+        auto o=ModRepository::read(base+"/instance.json");
+        if(o["launcher"].isObject()&&!o.contains("mcVersion")){ // ATLauncher: "id" is the game version
+            c["mcVersion"]=o["id"];const auto loader=o["launcher"].toObject()["loaderVersion"].toObject();
+            if(!loader["type"].toString().isEmpty()){c["loader"]=loader["type"].toString().toLower();c["loaderVersion"]=loader["version"];}
+        }else{ // EBALIA export or FTB App instance
+            c["mcVersion"]=o["mcVersion"];
+            if(o.contains("loader")){c["loader"]=o["loader"].toString("vanilla");c["loaderVersion"]=o["loaderVersion"];}
+            else loaderId(o["modLoader"].toString(),c);
+            if(c["loader"]=="vanilla")ftbTargets(base,c);
+        }
     }
-    if(c["mcVersion"].toString().isEmpty()){
+    if(c["mcVersion"].toString().isEmpty()){ // GDLauncher
+        const auto loader=json(base+"/config.json")["loader"].toObject();
+        if(!loader["mcVersion"].toString().isEmpty()){c["mcVersion"]=loader["mcVersion"];auto type=loader["loaderType"].toString("vanilla").toLower();if(type!="vanilla"){c["loader"]=type;c["loaderVersion"]=loader["loaderVersion"];}}
+    }
+    if(c["mcVersion"].toString().isEmpty()){ // Modrinth App
+        const auto meta=json(base+"/profile.json")["metadata"].toObject();
+        if(!meta["game_version"].toString().isEmpty()){c["mcVersion"]=meta["game_version"];auto type=meta["loader"].toString("vanilla").toLower();if(type!="vanilla"){c["loader"]=type;c["loaderVersion"]=meta["loader_version"].toObject()["id"];}}
+    }
+    if(c["mcVersion"].toString().isEmpty()){ // Technic
         for(auto path:{"bin/version.json","version.json","pack.json"})if(QFile::exists(stage+"/"+path)){auto profile=ModRepository::read(stage+"/"+path);profileLoader(profile,c);}
         if(QFile::exists(stage+"/bin/modpack.jar")&&c["loader"]=="vanilla"){QTemporaryDir jar;Archive::extract(stage+"/bin/modpack.jar",jar.path());if(QFile::exists(jar.path()+"/version.json"))profileLoader(ModRepository::read(jar.path()+"/version.json"),c);else fail("This legacy pack modifies minecraft.jar directly; its original launcher is required.");}
     }
+    for(auto name:{"instance.cfg","mmc-pack.json","minecraftinstance.json","profile.json"})QFile::remove(stage+"/"+name);
     return c;
 }
 void PackService::components(const QJsonObject &pack,QJsonObject &c){
@@ -117,16 +210,16 @@ QJsonArray PackService::localInstances(){
     QStringList ftbFolders{ftbApp+"/instances"};
     for(auto settings:{ftbApp+"/storage/settings.json",ftbApp+"/bin/settings.json"})try{auto location=ModRepository::read(settings)["instanceLocation"].toString();if(!location.isEmpty())ftbFolders.prepend(location);}catch(...){}
     for(const auto &folder:ftbFolders)for(const auto &dir:QDir(folder).entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)){
-        try{auto o=ModRepository::read(dir.filePath()+"/instance.json");if(o["mcVersion"].toString().isEmpty())continue;QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["mcVersion"]}};auto loader=o["modLoader"].toString();if(!loader.isEmpty()){e["loader"]=loader.section('-',0,0).toLower();e["loaderVersion"]=loader.section('-',1);}entry(dir.filePath(),"FTB App",e);}catch(...){}
+        try{auto o=ModRepository::read(dir.filePath()+"/instance.json");if(o["mcVersion"].toString().isEmpty())continue;QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["mcVersion"]}};loaderId(o["modLoader"].toString(),e);if(e["loader"]=="vanilla")ftbTargets(dir.filePath(),e);entry(dir.filePath(),"FTB App",e);}catch(...){}
     }
     for(const auto &dir:QDir(curse).entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)){
-        try{auto o=ModRepository::read(dir.filePath()+"/minecraftinstance.json");QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["gameVersion"]}};auto loader=o["baseModLoader"].toObject()["name"].toString();if(!loader.isEmpty()){e["loader"]=loader.section('-',0,0).toLower();e["loaderVersion"]=loader.section('-',1);}entry(dir.filePath(),"CurseForge",e);}catch(...){}
+        try{auto o=ModRepository::read(dir.filePath()+"/minecraftinstance.json");QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["gameVersion"]}};auto loader=o["baseModLoader"].toObject()["name"].toString();if(!loader.isEmpty())loaderId(loader,e);entry(dir.filePath(),"CurseForge",e);}catch(...){}
     }
     return out;
 }
 QString PackService::install(const QJsonObject &pack,const QJsonObject &build,const QString &name,const QString &group,int memory){
     auto provider=pack["provider"].toString(),id=pack["id"].toString(),version=build["id"].toString();auto instances=m_root+"/mc/instances";QDir().mkpath(instances);QTemporaryDir temp(m_root+"/mc/.pack-XXXXXX");if(!temp.isValid())fail("Could not prepare pack installation");auto stage=temp.path()+"/instance";QDir().mkpath(stage);QJsonObject c{{"loader","vanilla"}};auto archive=temp.path()+"/pack.zip";
-    if(provider=="import_ftb"){auto from=pack["path"].toString();auto p=ModRepository::read(from+"/instance.json");c["mcVersion"]=p["mcVersion"];auto loader=p["modLoader"].toString();if(!loader.isEmpty()){c["loader"]=loader.section('-',0,0).toLower();c["loaderVersion"]=loader.section('-',1);}for(auto dir:{"mods","config","defaultconfigs","kubejs","scripts","resourcepacks","shaderpacks","saves"})if(QDir(from+"/"+dir).exists())copyTree(from+"/"+dir,stage+"/"+dir);for(auto file:{"options.txt","servers.dat"})if(QFile::exists(from+"/"+file)){QFile f(from+"/"+file);if(f.open(QIODevice::ReadOnly))write(stage+"/"+file,f.readAll());}if(c["loader"]=="vanilla")for(auto path:{".ftbapp/version.json","version.json"})if(QFile::exists(from+"/"+path)){auto meta=ModRepository::read(from+"/"+path);for(auto v:meta["targets"].toArray())if(v.toObject()["type"]=="modloader"){c["loader"]=v.toObject()["name"];c["loaderVersion"]=v.toObject()["version"];}}}
+    if(provider=="import_ftb"){auto from=pack["path"].toString();auto p=ModRepository::read(from+"/instance.json");c["mcVersion"]=p["mcVersion"];loaderId(p["modLoader"].toString(),c);for(auto dir:{"mods","config","defaultconfigs","kubejs","scripts","resourcepacks","shaderpacks","saves"})if(QDir(from+"/"+dir).exists())copyTree(from+"/"+dir,stage+"/"+dir);for(auto file:{"options.txt","servers.dat"})if(QFile::exists(from+"/"+file)){QFile f(from+"/"+file);if(f.open(QIODevice::ReadOnly))write(stage+"/"+file,f.readAll());}if(c["loader"]=="vanilla")ftbTargets(from,c);}
     else if(provider=="import"){auto path=pack["path"].toString();if(path.startsWith("https://",Qt::CaseInsensitive)){download(path,archive);c=unpack(archive,stage);}else if(QFileInfo(path).isDir())c=importFolder(path,stage);else c=unpack(path,stage);}
     else if(provider=="ftb"){c=ftbManifest(get(ftb+"/modpack/"+enc(id)+"/"+enc(version)).object(),stage);}
     else if(provider=="modrinth"){auto files=build["data"].toObject()["files"].toArray();QJsonObject file;for(auto v:files)if(v.toObject()["primary"].toBool()||file.isEmpty())file=v.toObject();download(file["url"].toString(),archive,file["hashes"].toObject());c=unpack(archive,stage);}
@@ -135,6 +228,7 @@ QString PackService::install(const QJsonObject &pack,const QJsonObject &build,co
     else if(provider=="technic"){auto solder=build["solder"].toString();if(solder.isEmpty()){auto p=build["data"].toObject();download(p["url"].toString(),archive);c=unpack(archive,stage);if(c["mcVersion"].toString().isEmpty())c["mcVersion"]=p["minecraft"];}else{auto d=get(solder+"modpack/"+enc(id)+"/"+enc(version)).object();c["mcVersion"]=d["minecraft"];if(!d["forge"].toString().isEmpty()){c["loader"]="forge";c["loaderVersion"]=d["forge"];}for(auto v:d["mods"].toArray()){auto f=v.toObject();download(f["url"].toString(),archive,fileHashes(f));Archive::extract(archive,stage);}for(auto path:{"bin/version.json","version.json"})if(QFile::exists(stage+"/"+path))profileLoader(ModRepository::read(stage+"/"+path),c);if(c["loaderVersion"].toString().size()<5&&QFile::exists(stage+"/bin/modpack.jar"))fail("This Technic pack uses a legacy patched client. Its original launcher is required.");}}
     else if(provider=="atlauncher"){auto base=atl+"packs/"+enc(id)+"/versions/"+enc(version)+"/";auto d=get(base+"Configs.json").object();c["mcVersion"]=d["minecraft"];auto loader=d["loader"].toObject();if(!loader.isEmpty()){c["loader"]=loader["type"];const auto meta=loader["metadata"].toObject();c["loaderVersion"]=meta["version"].toString(meta["loader"].toString());}for(auto v:d["mods"].toArray()){auto f=v.toObject();if(!f["client"].toBool(true)||f["optional"].toBool())continue;auto type=f["type"].toString("mods");QString folder;if(type=="mods")folder="mods";else if(type=="coremods")folder="coremods";else if(type=="resourcepack")folder="resourcepacks";else if(type=="shaderpack")folder="shaderpacks";else if(type=="texturepack")folder="texturepacks";else if(type=="root")folder="";else if(type=="dependency")folder="mods/"+c["mcVersion"].toString();else fail("Unsupported ATLauncher file type: "+type+" · "+f["name"].toString());if(f["download"]=="browser")fail("Manual download required by author: "+f["url"].toString());auto url=f["url"].toString();if(f["download"]=="server")url=atl+url;download(url,stage+"/"+(folder.isEmpty()?QString():folder+"/")+safeName(f["file"].toString()),fileHashes(f));}if(!d["noConfigs"].toBool()){download(base+"Configs.zip",archive,d["configs"].toObject());Archive::extract(archive,stage);}}
     else fail("Unknown pack source");
+    normalizeLoader(c);
     if(!ModRepository::safeName(c["mcVersion"].toString())||!QStringList{"vanilla","forge","neoforge","fabric","quilt"}.contains(c["loader"].toString()))fail("Pack Minecraft version or loader is unsupported");
     // Imported content cannot replace launcher metadata or impersonate a completed installation.
     c["name"]=name.trimmed();if(c["name"].toString().isEmpty())fail("Instance name is required");c["group"]=group;c["xmx"]=qBound(512,memory,65536);c["ready"]=false;c["packProvider"]=provider;c["packId"]=id;c["packVersion"]=version;

@@ -13,6 +13,7 @@
 #include "AccountManager.hpp"
 #include "MsAuth.hpp"
 #include "JavaRunner.hpp"
+#include "LostNative.hpp"
 #include "JavaRuntime.hpp"
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -226,6 +227,8 @@ QWidget *MainWindow::buildSidebar() {
     l->addWidget(m_nav,1);
     connect(m_nav,&QListWidget::currentRowChanged,this,[this](int row){if(row>=0)showPage(row);});
     connect(m_nav,&QListWidget::itemClicked,this,[this](QListWidgetItem *item){if(m_nav->row(item)==Instances)m_library->setCurrentWidget(m_grid);}); // the sidebar entry always leads back to the library
+    m_sidebarUpdate=new QPushButton(Ui::icon("download",Qt::white),{});m_sidebarUpdate->setObjectName("launcherUpdateAvailable");m_sidebarUpdate->setProperty("play",true);m_sidebarUpdate->setCursor(Qt::PointingHandCursor);m_sidebarUpdate->setIconSize(QSize(20,20));m_sidebarUpdate->setMinimumHeight(42);m_sidebarUpdate->hide();
+    connect(m_sidebarUpdate,&QPushButton::clicked,this,[this]{emit installLauncherUpdateRequested();});l->addWidget(m_sidebarUpdate);
     m_navSettings=new QPushButton(Ui::navigationIcon("settings"),"  "+k("Settings"));m_navSettings->setObjectName("navSettings");m_navSettings->setCheckable(true);m_navSettings->setIconSize(QSize(28,28));m_navSettings->setCursor(Qt::PointingHandCursor);
     connect(m_navSettings,&QPushButton::clicked,this,[this]{showPage(Settings);});l->addWidget(m_navSettings);
     auto version=label("EBALIA Launcher "+QCoreApplication::applicationVersion().section('.',0,1),l,"sidebarVersion",false);version->setContentsMargins(12,0,0,0);
@@ -446,6 +449,16 @@ void MainWindow::showPage(int i) {
     {QSignalBlocker block(m_nav);if(i==Settings){m_nav->setCurrentRow(-1);m_nav->clearSelection();}else m_nav->setCurrentRow(i);}
     m_navSettings->setChecked(i==Settings);
 }
+void MainWindow::setLauncherUpdate(LauncherUpdate state,const QString &version){
+    m_launcherUpdate=state;if(!version.isEmpty())m_launcherVersion=version;
+    const bool available=state==LauncherUpdate::Available&&!m_launcherVersion.isEmpty();
+    if(m_sidebarUpdate){
+        const auto title=text("Actualizar a %1","Update to %1","Atualizar para %1").arg(m_launcherVersion);
+        m_sidebarUpdate->setVisible(available||state==LauncherUpdate::Installing);m_sidebarUpdate->setEnabled(available);
+        const bool compact=centralWidget()&&centralWidget()->findChild<QFrame*>("sidebar")&&centralWidget()->findChild<QFrame*>("sidebar")->property("compact").toBool();
+        m_sidebarUpdate->setText(compact?QString():"  "+(state==LauncherUpdate::Installing?text("Actualizando…","Updating…","Atualizando…"):title));m_sidebarUpdate->setToolTip(title);m_sidebarUpdate->setAccessibleName(title);
+    }
+}
 void MainWindow::resizeEvent(QResizeEvent *event){QMainWindow::resizeEvent(event);adaptSidebar();}
 void MainWindow::adaptSidebar(){
     if(!centralWidget()||!m_nav)return;auto sidebar=centralWidget()->findChild<QFrame*>("sidebar");if(!sidebar)return;
@@ -455,6 +468,7 @@ void MainWindow::adaptSidebar(){
     for(int n=0;n<m_nav->count();++n){auto item=m_nav->item(n);item->setText(compact?QString():"  "+item->toolTip());item->setData(Qt::AccessibleTextRole,item->toolTip());}
     m_nav->setStyleSheet(compact?"QListWidget{padding:0;} QListWidget::item{padding:7px 4px;margin:1px 0px;}":QString());
     m_navSettings->setText(compact?QString():"  "+k("Settings"));m_navSettings->setToolTip(k("Settings"));m_navSettings->setAccessibleName(k("Settings"));m_navSettings->setStyleSheet(compact?"padding:8px 4px;":QString());
+    setLauncherUpdate(m_launcherUpdate);
 }
 void MainWindow::error(const QString &e){QMessageBox::warning(this,"EBALIA",Language::message(e));}
 void MainWindow::refreshAccounts(){
@@ -550,7 +564,7 @@ void MainWindow::lostSelection(){
     m_lostPlay->setEnabled(!v.id.isEmpty());m_lostInstall->setEnabled(!v.id.isEmpty());if(v.id.isEmpty()){m_lostTitle->setText(Language::key("No versions match this search."));m_lostInfo->clear();m_lostInstall->setText("  "+text("Instalar","Install","Instalar").toUpper());return;}
     const bool installed=m_versions->isVersionInstalled(v);m_lostTitle->setText(v.name);
     QStringList info{lostCategory(v.category)+"  ·  "+v.description,installed?text("Instalada","Installed","Instalada"):text("Pendiente de instalación","Not installed yet","Ainda não instalada")};
-    if(LostInstaller::windowsPackage(v))info<<Language::key("Original Windows package. Runs with Java 8, which EBALIA prepares automatically. On Linux and macOS it runs in Wine with its own prefix.");
+    if(!LostNative::available(v.native)&&LostInstaller::windowsPackage(v))info<<Language::key("Original Windows package. Runs with Java 8, which EBALIA prepares automatically. On Linux and macOS it runs in Wine with its own prefix.");
     else info<<Language::key("Runs with Java 8, which EBALIA prepares automatically.");
     if(!installed&&v.archiveSize>0)info<<Language::key("The first installation downloads the original archive (%1 MB); later versions reuse it.").arg(v.archiveSize/1024/1024);
     m_lostInfo->setText(info.join("\n\n"));m_lostInstall->setText("  "+(installed?Language::key("Reinstall"):text("Instalar","Install","Instalar")).toUpper());m_lostPlay->setEnabled(installed||running);
@@ -805,13 +819,18 @@ void MainWindow::lostAction(bool launch){
     if(launch){
         if(m_java->isRunning()){if(QMessageBox::question(this,"EBALIA",Language::key("Stop")+" · "+v.name+"?")==QMessageBox::Yes)m_java->stop();return;}
         if(!m_versions->isVersionInstalled(v)){error(text("Primero instalá esta versión.","Install this version first.","Instale esta versão primeiro."));return;}
-        const bool windows=LostInstaller::windowsPackage(v);
+        // Versions with a native description run with Java on every system; the rest keep the original Windows package (Wine elsewhere).
+        const bool native=LostNative::available(v.native);
+        const bool windows=!native&&LostInstaller::windowsPackage(v);
 #ifndef Q_OS_WIN
         if(windows&&LostInstaller::wine().isEmpty()){error(Language::key("This Windows package requires Wine. Install Wine or run it on Windows."));return;}
 #endif
-        auto root=m_root;
-        work(Language::key("Preparing Java 8 for this version…"),[root,windows]{try{return QJsonObject{{"java",LostInstaller::java(root,windows)}};}catch(const std::exception &e){return QJsonObject{{"warning",QString::fromUtf8(e.what())}};}},
-            [this,v,dest](QJsonObject r){if(r.contains("warning"))m_status->setText(Language::message(r["warning"].toString()));m_java->launch(v,dest,r["java"].toString());});
+        auto root=m_root;const auto libraries=m_mc->mcDir()+"/libraries";const auto player=m_accounts->active().name;
+        work(Language::key("Preparing Java 8 for this version…"),[root,windows,native,v,dest,libraries]{
+                QJsonObject r;try{r["java"]=LostInstaller::java(root,windows);}catch(const std::exception &e){r["warning"]=QString::fromUtf8(e.what());}
+                if(native)LostNative::prepare(v.native,dest,libraries); // errors reach the user through work()
+                return r;},
+            [this,v,dest,player,libraries](QJsonObject r){if(r.contains("warning"))m_status->setText(Language::message(r["warning"].toString()));m_java->launch(v,dest,r["java"].toString(),player,libraries);});
         return;
     }
     work(text("Descargando y preparando la versión perdida…","Downloading and preparing the lost version…","Baixando e preparando a versão perdida…"),[v,dest]{

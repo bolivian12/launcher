@@ -23,6 +23,14 @@
 #include <QLockFile>
 #include <QStandardPaths>
 #include <QDirIterator>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+#include <QSet>
+#include <QCoreApplication>
 #include <stdexcept>
 
 namespace {
@@ -59,9 +67,26 @@ QString osName() {
 #endif
 }
 QString mavenPath(const QString &name) {
-    auto parts = name.split(':'); if (parts.size() < 3) fail("Coordenada Maven inválida.");
+    // group:artifact:version[:classifier][@extension]
+    auto coordinate = name; QString extension = "jar";
+    if (auto at = coordinate.lastIndexOf('@'); at > 0) { extension = coordinate.mid(at+1); coordinate.truncate(at); }
+    auto parts = coordinate.split(':'); if (parts.size() < 3 || extension.isEmpty()) fail("Coordenada Maven inválida.");
     QString group = parts[0]; group.replace('.','/');
-    return group + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + (parts.size()>3 ? "-"+parts[3] : "") + ".jar";
+    return group + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + (parts.size()>3 ? "-"+parts[3] : "") + "." + extension;
+}
+// A loader may ship several files of one artifact that differ only by classifier
+// (Forge's universal and client jars, LWJGL's natives), so all three count.
+QString libraryKey(const QString &name) {
+    auto coordinate = name.section('@',0,0); auto parts = coordinate.split(':');
+    return parts.value(0) + ":" + parts.value(1) + ":" + parts.value(3);
+}
+// Like the official launcher's inheritsFrom: the loader's libraries come first and
+// replace the game's copy of the same artifact; every other game library stays.
+QJsonArray mergeLibraryLists(const QJsonArray &game, const QJsonArray &loader) {
+    QJsonArray merged; QSet<QString> keys;
+    for (const auto &l : loader) { const auto key = libraryKey(s(l.toObject(),"name")); if (keys.contains(key)) continue; keys.insert(key); merged.append(l); }
+    for (const auto &l : game) if (!keys.contains(libraryKey(s(l.toObject(),"name")))) merged.append(l);
+    return merged;
 }
 QString safeRelative(const QString &path) {
     if (path.isEmpty() || QDir::isAbsolutePath(path) || path.contains('\\') || path.contains(':') || path.split('/').contains("..")) fail("Ruta de metadatos inválida.");
@@ -144,6 +169,7 @@ void McInstanceManager::exportInstance(const QString &dir, const QString &zip) {
     if (isRunning(dir) || isInstalling(dir)) fail("La instancia está en uso.");
     Archive::compress(dir,zip,{"natives","logs","crash-reports","launcher.log","loader-install.log","launch-profile.json"});
 }
+QJsonArray McInstanceManager::mergeLibraries(const QJsonArray &game, const QJsonArray &loader) { return mergeLibraryLists(game, loader); }
 bool McInstanceManager::allowedByRules(const QJsonObject &object) {
     auto rules = object["rules"].toArray(); if (rules.isEmpty()) return true;
     bool allowed = false;
@@ -151,9 +177,9 @@ bool McInstanceManager::allowedByRules(const QJsonObject &object) {
         auto r = rv.toObject(); auto os = r["os"].toObject(); bool match = true;
         if (os.contains("name") && s(os,"name") != osName()) match = false;
         if (os.contains("arch")) {
-            auto arch = QSysInfo::currentCpuArchitecture();
-            if (arch == "x86_64") arch = "amd64";
-            if (arch != s(os,"arch")) match = false;
+            // Manifests name architectures differently: x86_64/amd64, arm64/aarch64, x86/i386.
+            auto normal = [](QString a){a=a.toLower();if(a=="x86_64"||a=="x64")return QString("amd64");if(a=="aarch64")return QString("arm64");if(a=="i386"||a=="i686")return QString("x86");return a;};
+            if (normal(QSysInfo::currentCpuArchitecture()) != normal(s(os,"arch"))) match = false;
         }
         if (os.contains("version") && !QRegularExpression(s(os,"version")).match(QSysInfo::kernelVersion()).hasMatch()) match = false;
         const auto features = r["features"].toObject();
@@ -204,23 +230,25 @@ void McInstanceManager::install(const QString &dir) {
         if (loader != "fabric" && loader != "quilt") fail("Esta instancia usa un cargador todavía no soportado. Forge y NeoForge requieren un instalador completo.");
         emit installProgress(dir,3,"Resolviendo " + loader + "…");
         const auto base = loader == "fabric" ? "https://meta.fabricmc.net/v2/versions/loader/" : "https://meta.quiltmc.org/v3/versions/loader/";
-        auto list = QJsonDocument::fromJson(ModRepository::fetch(QUrl(base + game))).array();
         QString lv = s(info,"loaderVersion"); bool found = false;
-        for (const auto &v : list) {
-            auto lo = v.toObject()["loader"].toObject();
-            if ((!lv.isEmpty() && s(lo,"version")==lv) || (lv.isEmpty() && lo["stable"].toBool(true))) { lv=s(lo,"version"); found=true; break; }
-        }
+        // Loaders::versions() orders the catalog newest first, releases before betas.
+        const auto available = Loaders::versions(loader, game);
+        if (lv.isEmpty() && !available.isEmpty()) { lv = available.first(); found = true; }
+        else found = available.contains(lv);
         if (!found || !ModRepository::safeName(lv)) fail("No hay una versión compatible de " + loader + " para " + game);
         auto lp = json(base + game + "/" + lv + "/profile/json");
         if (s(lp,"mainClass").isEmpty()) fail("Perfil del cargador incompleto.");
         profile["mainClass"]=lp["mainClass"]; info["loaderVersion"]=lv;
-        auto libs = profile["libraries"].toArray();
+        QJsonArray loaderLibs;
         for (const auto &l : lp["libraries"].toArray()) {
             auto lib=l.toObject(); auto path=mavenPath(s(lib,"name")); auto repo=s(lib,"url");
             if (repo.isEmpty()) repo="https://libraries.minecraft.net/";
-            lib["downloads"]=QJsonObject{{"artifact",QJsonObject{{"path",path},{"url",repo+path}}}}; libs.append(lib);
+            if (!repo.endsWith('/')) repo+='/';
+            QJsonObject artifact{{"path",path},{"url",repo+path}};
+            if (!s(lib,"sha1").isEmpty()) artifact["sha1"]=lib["sha1"];
+            lib["downloads"]=QJsonObject{{"artifact",artifact}}; loaderLibs.append(lib);
         }
-        profile["libraries"]=libs;
+        profile["libraries"]=mergeLibraryLists(profile["libraries"].toArray(),loaderLibs);
         if (lp.contains("arguments")) {
             auto all=profile["arguments"].toObject(), extra=lp["arguments"].toObject();
             for (const auto &kind : {"game","jvm"}) { auto a=all[kind].toArray(); for (const auto &v : extra[kind].toArray()) a.append(v); all[kind]=a; }
@@ -233,7 +261,8 @@ void McInstanceManager::install(const QString &dir) {
         emit installProgress(dir,7,"Preparando instalador oficial de " + loader + "…");
         QString java=javaFor(dir,info,profile);
         auto lv=s(info,"loaderVersion");auto available=Loaders::versions(loader,game);
-        if(loader=="forge"&&!lv.isEmpty()&&!lv.startsWith(game+"-"))lv=game+"-"+lv;
+        // Forge (and NeoForge for 1.20.1) versions carry the game version: modpacks often write only "47.1.106".
+        if((loader=="forge"||(loader=="neoforge"&&game=="1.20.1"))&&!lv.isEmpty()&&!lv.startsWith(game+"-"))lv=game+"-"+lv;
         if(lv.isEmpty()&&!available.isEmpty())lv=available.first();
         if(lv.isEmpty()||!available.contains(lv))fail("No hay una versión compatible de " + loader + " para " + game);
         auto installer=Loaders::installerUrl(loader,game,lv);
@@ -243,9 +272,23 @@ void McInstanceManager::install(const QString &dir) {
         download({{"url",installer},{"sha1",hash.toLower()}},jar);
         QTemporaryDir unpack;Archive::extract(jar,unpack.path());
         QJsonObject loaderProfile;
-        if(QFile::exists(unpack.path()+"/version.json"))loaderProfile=ModRepository::read(unpack.path()+"/version.json");
+        // Forge 1.12.2 and older ship a "simple installer" without --installClient: like Prism and MultiMC,
+        // take the universal jar out of it and use the profile it contains; there are no processors to run.
+        const bool legacy=!QFile::exists(unpack.path()+"/version.json");
+        if(!legacy)loaderProfile=ModRepository::read(unpack.path()+"/version.json");
         else loaderProfile=ModRepository::read(unpack.path()+"/install_profile.json")["versionInfo"].toObject();
         auto profileId=s(loaderProfile,"id");if(!ModRepository::safeName(profileId))fail("Perfil del instalador inválido.");
+        if(legacy) {
+            const auto installInfo=ModRepository::read(unpack.path()+"/install_profile.json")["install"].toObject();
+            const auto universal=s(installInfo,"filePath");
+            if(universal.isEmpty()||universal.contains('/')||universal.contains('\\')||!QFile::exists(unpack.path()+"/"+universal))fail("Perfil del instalador inválido.");
+            const auto target=m_root+"/libraries/"+safeRelative(mavenPath(s(installInfo,"path")));
+            QDir().mkpath(QFileInfo(target).absolutePath());QFile::remove(target);
+            if(!QFile::copy(unpack.path()+"/"+universal,target))fail("No se pudo instalar " + loader + ".");
+            QJsonArray clientLibs;
+            for(const auto &l:loaderProfile["libraries"].toArray())if(l.toObject()["clientreq"].toBool(true))clientLibs.append(l); // clientreq:false = server only
+            loaderProfile["libraries"]=clientLibs;
+        } else {
         ModRepository::write(m_root+"/versions/"+game+"/"+game+".json",profile);
         if(!QFile::exists(m_root+"/launcher_profiles.json"))ModRepository::write(m_root+"/launcher_profiles.json",{{"profiles",QJsonObject{}}});
         emit installProgress(dir,8,"Instalando " + loader + " · procesando bibliotecas…");
@@ -256,20 +299,18 @@ void McInstanceManager::install(const QString &dir) {
         if(!proc.waitForFinished(15*60*1000)){proc.kill();proc.waitForFinished();fail("El instalador excedió el tiempo máximo. Revisá loader-install.log.");}
         if(proc.exitStatus()!=QProcess::NormalExit||proc.exitCode()!=0)fail("Falló el instalador oficial. Revisá loader-install.log.");
         loaderProfile=ModRepository::read(m_root+"/versions/"+profileId+"/"+profileId+".json");
-        auto libs=profile["libraries"].toArray();
+        }
+        QJsonArray loaderLibs;
         for(const auto &lv:loaderProfile["libraries"].toArray()) {
             auto lib=lv.toObject();auto path=mavenPath(s(lib,"name"));
             auto downloads=lib["downloads"].toObject(),art=downloads["artifact"].toObject();
             if(s(art,"path").isEmpty())art["path"]=path;
             if(s(art,"url").isEmpty()&&!QFile::exists(m_root+"/libraries/"+path)) {
-                auto repo=s(lib,"url");if(repo.isEmpty())repo="https://libraries.minecraft.net/";art["url"]=repo+path;
+                auto repo=s(lib,"url");if(repo.isEmpty())repo="https://libraries.minecraft.net/";if(!repo.endsWith('/'))repo+='/';art["url"]=repo+path;
             }
-            downloads["artifact"]=art;lib["downloads"]=downloads;
-            QString coordinate=s(lib,"name").section(':',0,1);
-            for(int n=libs.size()-1;n>=0;--n)if(s(libs[n].toObject(),"name").section(':',0,1)==coordinate)libs.removeAt(n);
-            libs.append(lib);
+            downloads["artifact"]=art;lib["downloads"]=downloads;loaderLibs.append(lib);
         }
-        profile["libraries"]=libs;profile["mainClass"]=loaderProfile["mainClass"];
+        profile["libraries"]=mergeLibraryLists(profile["libraries"].toArray(),loaderLibs);profile["mainClass"]=loaderProfile["mainClass"];
         if(loaderProfile.contains("arguments")) {
             auto all=profile["arguments"].toObject(),extra=loaderProfile["arguments"].toObject();
             for(const auto &kind:{"game","jvm"}){auto a=all[kind].toArray();for(const auto &v:extra[kind].toArray())a.append(v);all[kind]=a;}
@@ -362,6 +403,9 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
             if(e==QProcess::FailedToStart) {m_running.remove(dir);emit launchFailed(dir,proc->errorString());proc->deleteLater();}
         });
         connect(proc,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[this,dir,proc](int code,QProcess::ExitStatus){m_running.remove(dir);proc->deleteLater();emit gameEnded(dir,code);});
+#ifdef Q_OS_WIN
+        proc->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *a){a->flags|=CREATE_NO_WINDOW;}); // no console window next to the game
+#endif
         proc->start(s(plan,"java"),args);
     });
     watcher->setFuture(QtConcurrent::run([this,dir,name,uuid,token,type]() -> QJsonObject {
@@ -387,7 +431,7 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
             {"auth_session",token.isEmpty()?"0":token},{"user_type",type},{"user_properties","{}"},{"version_name",game},
             {"version_type",s(p,"type")},{"game_directory",dir},{"assets_root",m_root+"/assets"},{"assets_index_name",assetsId},
             {"game_assets",m_root+"/assets/virtual/"+assetsId},{"natives_directory",dir+"/natives"},{"classpath",cp.join(sep)},
-            {"classpath_separator",sep},{"library_directory",m_root+"/libraries"},{"launcher_name","EBALIA"},{"launcher_version","4.0.0"},
+            {"classpath_separator",sep},{"library_directory",m_root+"/libraries"},{"launcher_name","EBALIA"},{"launcher_version",QCoreApplication::applicationVersion()},
             {"clientid",""},{"auth_xuid",""}};
         QStringList args{QString("-Xmx%1M").arg(qBound(512,info["xmx"].toInt(4096),65536))};
         if (p.contains("arguments")) args << arguments(p["arguments"].toObject()["jvm"].toArray(),values);

@@ -17,7 +17,10 @@ public:
     QStringList findJava();
 
     // java: Java 8 for the package (a Windows java.exe when the package runs in Wine).
-    void launch(const VersionInfo &version, const QString &installDir, const QString &java = {});
+    // Versions with a native description start Java directly (LostNative); librariesDir holds
+    // the shared LWJGL files that LostNative::prepare() downloaded.
+    void launch(const VersionInfo &version, const QString &installDir, const QString &java = {},
+                const QString &username = {}, const QString &librariesDir = {});
     bool isRunning() const { return m_process && m_process->state() != QProcess::NotRunning; }
     // Under Wine the game is a child of wineserver; the separate prefix is closed as a whole.
     void stop();

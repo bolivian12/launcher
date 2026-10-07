@@ -31,12 +31,18 @@ public:
     void showPage(int index);
     bool canUpdate() const;
     void startTour();
+    // Launcher updates: the sidebar shows "Update to <version>" only while one is available.
+    enum class LauncherUpdate{Unknown,Checking,Current,Available,Installing,Failed};
+    void setLauncherUpdate(LauncherUpdate state,const QString &version={});
+signals:
+    void installLauncherUpdateRequested();
 protected:
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
 private:
     void adaptSidebar();
     void build();
+    LauncherUpdate m_launcherUpdate=LauncherUpdate::Unknown;QString m_launcherVersion;
     QWidget *buildSidebar();
     QWidget *buildHome();
     void openCreatorDialog(bool patreonOnly);
@@ -93,7 +99,7 @@ private:
     QList<McVersion> m_manifest;
     QListWidget *m_packs=nullptr,*m_results=nullptr,*m_lost=nullptr,*m_news=nullptr,*m_nav=nullptr,*m_accountList=nullptr;
     QStackedWidget *m_pages=nullptr;
-    QPushButton *m_navSettings=nullptr,*m_accountButton=nullptr,*m_instancePicker=nullptr;
+    QPushButton *m_navSettings=nullptr,*m_sidebarUpdate=nullptr,*m_accountButton=nullptr,*m_instancePicker=nullptr;
     QLabel *m_accountName=nullptr,*m_accountType=nullptr,*m_accountAvatar=nullptr;
     QLabel *m_playerAvatar=nullptr;
     QLabel *m_pickerIcon=nullptr,*m_pickerName=nullptr,*m_pickerSub=nullptr,*m_playerName=nullptr,*m_playerType=nullptr;

@@ -8,7 +8,7 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network Concurrent)
 find_package(LibArchive REQUIRED)
 add_library(ebalia-core STATIC
   src/JavaDownloader.cpp src/LostInstaller.cpp src/PackService.cpp src/Download.cpp src/JavaRuntime.cpp src/SkinManager.cpp src/ModRepository.cpp src/Loaders.cpp src/McInstanceManager.cpp src/Archive.cpp src/JavaRunner.cpp
-  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp
+  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
 # Configure the key for this build without putting it in the source code.

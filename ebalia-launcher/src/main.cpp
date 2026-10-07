@@ -26,6 +26,7 @@
 #include "JavaRuntime.hpp"
 #include "JavaDownloader.hpp"
 #include "LostInstaller.hpp"
+#include "LostNative.hpp"
 #include "JavaRunner.hpp"
 #include "VersionManager.hpp"
 #include <cstdio>
@@ -99,12 +100,13 @@ int main(int argc,char **argv){
     int javaDownload=cli.indexOf("--javadownload");if(javaDownload>=0&&javaDownload+1<cli.size()){try{auto java=JavaDownloader::install(root+"/mc/java",JavaDownloader::component(cli[javaDownload+1].toInt()),{},[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});auto check=JavaRuntime::inspect(java);fprintf(stdout,"\nJava %s | %s | %s\n",check.version.toUtf8().constData(),check.architecture.toUtf8().constData(),java.toUtf8().constData());return check.major?0:1;}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}}
     int lostLaunch=cli.indexOf("--lost-launchtest");if(lostLaunch>=0&&lostLaunch+1<cli.size()){
         VersionManager vm;vm.loadVersions();VersionInfo version;for(auto v:vm.getVersions())if(v.id==cli[lostLaunch+1])version=v;if(version.id.isEmpty()||!vm.isVersionInstalled(version)){fprintf(stderr,"Version not installed\n");return 1;}
-        QString java;try{java=LostInstaller::java(root,LostInstaller::windowsPackage(version),[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}
+        const bool native=LostNative::available(version.native);const auto libraries=root+"/mc/libraries";
+        QString java;try{java=LostInstaller::java(root,!native&&LostInstaller::windowsPackage(version),[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});if(native)LostNative::prepare(version.native,vm.getInstallPath(version),libraries);}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}
         fprintf(stderr,"\nJava 8: %s\n",java.toUtf8().constData());JavaRunner runner;bool started=false;
-        QObject::connect(&runner,&JavaRunner::processStarted,&app,[&]{started=true;fprintf(stderr,"PROCESS STARTED\n");QTimer::singleShot(40000,&runner,[&]{runner.stop();});});
+        QObject::connect(&runner,&JavaRunner::processStarted,&app,[&]{started=true;fprintf(stderr,"PROCESS STARTED\n");const int seconds=qEnvironmentVariableIntValue("EBALIA_LAUNCHTEST_SECONDS");QTimer::singleShot((seconds>0?seconds:40)*1000,&runner,[&]{runner.stop();});});
         QObject::connect(&runner,&JavaRunner::processFinished,&app,[&](int code){fprintf(stderr,"PROCESS ENDED code=%d\n",code);app.exit(started?0:1);});
         QObject::connect(&runner,&JavaRunner::processError,&app,[&](const QString &e){fprintf(stderr,"ERROR: %s\n",e.toUtf8().constData());if(!started)app.exit(1);});
-        QTimer::singleShot(0,&runner,[&]{runner.launch(version,vm.getInstallPath(version),java);});auto code=app.exec();
+        QTimer::singleShot(0,&runner,[&]{runner.launch(version,vm.getInstallPath(version),java,"EbaliaTest",libraries);});auto code=app.exec();
         QFile log(vm.getInstallPath(version)+"/launcher.log");if(log.open(QIODevice::ReadOnly))fprintf(stderr,"--- launcher.log ---\n%s\n",log.readAll().right(4000).constData());return code;
     }
     int lostTest=cli.indexOf("--lost-installtest");if(lostTest>=0&&lostTest+1<cli.size()){VersionManager vm;vm.loadVersions();for(auto v:vm.getVersions())if(v.id==cli[lostTest+1]){try{LostInstaller::install(v,vm.getInstallPath(v),[](qint64 a,qint64 b){if(b>0)fprintf(stderr,"\rLost archive %lld / %lld MB",(long long)(a/1024/1024),(long long)(b/1024/1024));});fprintf(stderr,"\nInstalled %s\n",vm.getInstallPath(v).toUtf8().constData());return 0;}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}}return 1;}
@@ -122,7 +124,7 @@ int main(int argc,char **argv){
     if(launchTest>=0 && launchTest+1<cli.size()){
         McInstanceManager manager(root);auto dir=cli[launchTest+1];bool timed=false;
         QObject::connect(&manager,&McInstanceManager::launchFailed,&app,[&](const QString &,const QString &e){fprintf(stderr,"LAUNCH FAILED: %s\n",e.toUtf8().constData());app.exit(1);});
-        QObject::connect(&manager,&McInstanceManager::gameStarted,&app,[&](const QString &){fprintf(stderr,"PROCESS STARTED\n");QTimer::singleShot(30000,&manager,[&]{timed=true;manager.killInstance(dir);});});
+        QObject::connect(&manager,&McInstanceManager::gameStarted,&app,[&](const QString &){fprintf(stderr,"PROCESS STARTED\n");const int seconds=qEnvironmentVariableIntValue("EBALIA_LAUNCHTEST_SECONDS");QTimer::singleShot((seconds>0?seconds:30)*1000,&manager,[&]{timed=true;manager.killInstance(dir);});});
         QObject::connect(&manager,&McInstanceManager::gameEnded,&app,[&](const QString &,int code){fprintf(stderr,"PROCESS ENDED code=%d timed=%d\n",code,timed);app.exit(timed?0:1);});
         QTimer::singleShot(0,&manager,[&]{manager.launch(dir,"EbaliaTest","8e952cccdf9b33a495fe23c4bb5427a3",{},"legacy");});return app.exec();
     }
@@ -135,8 +137,6 @@ int main(int argc,char **argv){
     }
     UpdateChecker updater(&window);QTimer updateTimer;updateTimer.setInterval(6*60*60*1000);
     QObject::connect(&updateTimer,&QTimer::timeout,&updater,&UpdateChecker::check);updateTimer.start();
-    auto updateButton=new QPushButton(&window);updateButton->setObjectName("launcherUpdateAvailable");updateButton->hide();
-    window.statusBar()->addPermanentWidget(updateButton);
     auto updateTask=new QWidget(&window);auto updateLayout=new QVBoxLayout(updateTask);updateLayout->setContentsMargins(8,4,8,4);
     auto updateText=new QLabel;updateText->setWordWrap(true);auto updateProgress=new QProgressBar;updateProgress->setRange(0,100);updateProgress->setFixedHeight(10);
     updateLayout->addWidget(updateText);updateLayout->addWidget(updateProgress);updateTask->setMaximumWidth(340);updateTask->hide();window.statusBar()->addPermanentWidget(updateTask);
@@ -144,7 +144,7 @@ int main(int argc,char **argv){
     auto installUpdate=[&] {
         if(window.property("launcherUpdating").toBool())return;
         if(!window.canUpdate()){QMessageBox::information(&window,"EBALIA",Language::text("Cerrá las partidas y esperá a que terminen las instalaciones antes de actualizar.","Close games and wait for installations to finish before updating.","Feche os jogos e aguarde o fim das instalações antes de atualizar."));return;}
-        window.setProperty("launcherUpdating",true);window.centralWidget()->setEnabled(false);updateButton->setEnabled(false);updateTask->show();
+        window.setProperty("launcherUpdating",true);window.centralWidget()->setEnabled(false);window.setLauncherUpdate(MainWindow::LauncherUpdate::Installing);updateTask->show();
         auto release=updater.release();
         watcher->setFuture(QtConcurrent::run([release,root,&window,updateText,updateProgress] {
             try {return LauncherUpdater::prepare(release,root,[&window,updateText,updateProgress](int percent,const QString &message){
@@ -162,15 +162,17 @@ int main(int argc,char **argv){
             }
             error=Language::text("No se pudo reiniciar con la versión nueva. Tu instalación actual no cambió.","Could not restart the new version. Your current installation is unchanged.","Não foi possível reiniciar com a nova versão. Sua instalação atual não mudou.");
         }
-        window.setProperty("launcherUpdating",false);window.centralWidget()->setEnabled(true);updateButton->setEnabled(true);updateTask->hide();
+        window.setProperty("launcherUpdating",false);window.centralWidget()->setEnabled(true);window.setLauncherUpdate(MainWindow::LauncherUpdate::Available);updateTask->hide();
         QMessageBox::warning(&window,"EBALIA",Language::message(error));
     });
     QString promptedVersion;
     QObject::connect(&updater,&UpdateChecker::updateAvailable,&window,[&](const QString &version){
-        updateButton->setText(Language::text("Actualizar a %1","Update to %1","Atualizar para %1").arg(version));updateButton->show();
+        window.setLauncherUpdate(MainWindow::LauncherUpdate::Available,version);
         if(promptedVersion!=version){promptedVersion=version;UpdateChecker::showUpdatePrompt(&window,version,installUpdate);}
     });
-    QObject::connect(updateButton,&QPushButton::clicked,&window,installUpdate);
+    QObject::connect(&updater,&UpdateChecker::upToDate,&window,[&]{window.setLauncherUpdate(MainWindow::LauncherUpdate::Current);});
+    QObject::connect(&updater,&UpdateChecker::checkFailed,&window,[&]{window.setLauncherUpdate(MainWindow::LauncherUpdate::Failed);});
+    QObject::connect(&window,&MainWindow::installLauncherUpdateRequested,&window,installUpdate);
     QTimer::singleShot(5000,&updater,&UpdateChecker::check);
     auto args=app.arguments();int test=args.indexOf("--selftest");
     if(test>=0){if(test+1<args.size())window.showPage(args[test+1].toInt());QTimer::singleShot(700,&window,[&]{auto path=qEnvironmentVariable("EBALIA_SCREENSHOT","/tmp/ebalia-main.png");window.grab().save(path);app.quit();});}

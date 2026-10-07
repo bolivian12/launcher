@@ -4,11 +4,18 @@
 #include <QSettings>
 #include "VersionManager.hpp"
 #include "LostInstaller.hpp"
+#include "LostNative.hpp"
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QDir>
 #include <QProcessEnvironment>
 #include <QStandardPaths>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 JavaRunner::JavaRunner(QObject *parent)
     : QObject(parent)
@@ -36,9 +43,29 @@ void JavaRunner::locateJava()
 
 QStringList JavaRunner::findJava() { return JavaRuntime::candidates(); }
 
-void JavaRunner::launch(const VersionInfo &version, const QString &installDir, const QString &java8)
+void JavaRunner::launch(const VersionInfo &version, const QString &installDir, const QString &java8, const QString &username, const QString &librariesDir)
 {
     if(m_process && m_process->state()!=QProcess::NotRunning){emit processError("A lost version is already running.");return;}
+    if(LostNative::available(version.native)){
+        if(java8.isEmpty()||java8.endsWith(".exe",Qt::CaseInsensitive)!=(LostNative::system()=="windows")){emit processError("Install Java for this version before launching.");return;}
+        LostNative::Command command;
+        try{command=LostNative::command(version.native,installDir,librariesDir,username);}catch(const std::exception &e){emit processError(QString::fromUtf8(e.what()));return;}
+        if(m_process)m_process->deleteLater();m_process=new QProcess(this);
+        auto env=QProcessEnvironment::systemEnvironment();for(auto key:{"JAVA_TOOL_OPTIONS","_JAVA_OPTIONS","JDK_JAVA_OPTIONS"})env.remove(key);
+        for(auto it=command.environment.begin();it!=command.environment.end();++it)env.insert(it.key(),it.value());
+        m_process->setProcessEnvironment(env);m_process->setWorkingDirectory(command.workingDir);m_process->setProcessChannelMode(QProcess::MergedChannels);
+#ifdef Q_OS_WIN
+        m_process->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *a){a->flags|=CREATE_NO_WINDOW;}); // no console window next to the game
+#endif
+        m_process->setStandardOutputFile(installDir+"/launcher.log");
+        connect(m_process,&QProcess::started,this,&JavaRunner::processStarted);
+        connect(m_process,&QProcess::errorOccurred,this,&JavaRunner::onErrorOccurred);
+        connect(m_process,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,&JavaRunner::onFinished);
+        const auto input=command.input;
+        if(!input.isEmpty())connect(m_process,&QProcess::started,m_process,[process=m_process,input]{process->write(input);process->closeWriteChannel();});
+        m_process->start(java8,command.arguments);
+        return;
+    }
     QString target;try{auto saved=ModRepository::read(installDir+"/.installed.json")["launchFile"].toString();if(!saved.isEmpty()&&!QDir::isAbsolutePath(saved)&&!saved.split('/').contains(".."))target=QDir(installDir).filePath(saved);}catch(...){}
     if(target.isEmpty())target=QDir(installDir).filePath(version.workingDir+"/"+version.launchCommand);
     if(!QFileInfo(target).isFile())target=QDir(installDir).filePath(version.launchCommand);

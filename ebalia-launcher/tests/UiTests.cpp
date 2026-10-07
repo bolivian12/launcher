@@ -249,6 +249,20 @@ printf started > launched-marker
         QVERIFY(prompt->escapeButton());QTest::mouseClick(prompt->escapeButton(),Qt::LeftButton);
         QVERIFY(!prompt->isVisible());
     }
+    void launcherUpdateButton(){
+        // The sidebar offers the update only while one is available.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,820);window.show();
+        auto sidebar=window.findChild<QPushButton*>("launcherUpdateAvailable");QVERIFY(sidebar);QSignalSpy install(&window,&MainWindow::installLauncherUpdateRequested);
+        QVERIFY(!sidebar->isVisible());
+        for(auto state:{MainWindow::LauncherUpdate::Checking,MainWindow::LauncherUpdate::Current,MainWindow::LauncherUpdate::Failed}){window.setLauncherUpdate(state);QVERIFY(!sidebar->isVisible());}
+        window.setLauncherUpdate(MainWindow::LauncherUpdate::Available,"9.9.9");QVERIFY(sidebar->isVisible());QVERIFY(sidebar->text().contains("9.9.9"));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);window.grab().save(out+"/update-available.png");}
+        QTest::mouseClick(sidebar,Qt::LeftButton);QCOMPARE(install.size(),1);
+        window.setLauncherUpdate(MainWindow::LauncherUpdate::Installing);QVERIFY(sidebar->isVisible());QVERIFY(!sidebar->isEnabled());
+        window.setLauncherUpdate(MainWindow::LauncherUpdate::Available);QVERIFY(sidebar->isEnabled()); // a failed update can be retried
+        window.resize(900,700);QTest::qWait(30);QVERIFY(sidebar->isVisible());QVERIFY(sidebar->text().isEmpty()); // compact sidebar: icon only
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

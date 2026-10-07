@@ -17,7 +17,7 @@ private:
     QJsonObject importFolder(QString base,const QString &stage);
     QJsonObject ftbManifest(const QJsonObject &data,const QString &stage);
     void download(const QString &url,const QString &destination,const QJsonObject &hashes={});
-    void copyTree(const QString &from,const QString &to);
+    void copyTree(const QString &from,const QString &to,const QStringList &skip={});
     void profileLoader(const QJsonObject &profile,QJsonObject &config);
     QString m_root;
     ModRepository::Transport m_transport;
