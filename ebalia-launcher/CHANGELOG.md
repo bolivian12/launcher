@@ -1,4 +1,4 @@
-# Sin publicar
+# 1.1.0
 
 - Microsoft sign-in is enabled with the EBALIA public application ID (`microsoft-client-id.txt`).
 - Microsoft accounts now show their profile picture (the Xbox gamerpic of the account; the face of the Minecraft skin when there is none) in the sidebar, the Home player card, the account menu and Settings. Pictures are stored in `mc/avatars`.
@@ -15,9 +15,6 @@
 - Lost Versions start with Java directly on Windows, macOS and Linux (no Wine): a1.1.1, Alpha 1.0.16, 1.1 Patch 1, Ghost, 554e, NSSS and every other archived version reach their menus. Archives are checked with SHA-256 and each version keeps its saves inside its own folder.
 - Modpack import from `.mrpack`, CurseForge `.zip`, Prism Launcher / MultiMC / PolyMC, CurseForge app, FTB App, ATLauncher, GDLauncher, Modrinth App and Technic, with Forge, NeoForge, Fabric, Quilt or vanilla. ZIPs wrapped in folders or made on macOS and Windows, file names in any language, Modrinth mirror URLs and optional files, and CurseForge resource packs and shaders are handled.
 - When a new release is available an "Update to …" button appears in the sidebar; it downloads, verifies and installs the update without visiting the website.
-
-# 1.1.0
-
 - Added an experimental external Bedrock manager with background installation. Windows uses BedrockLauncher; Linux/macOS use the Android backend and require Google Play ownership. Windows ownership does not transfer to Android. Real gameplay remains unverified across platforms.
 - Added Lost Version uninstall with confirmation and move-to-trash behavior.
 - Moved operation progress to the bottom status bar.
