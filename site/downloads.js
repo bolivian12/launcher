@@ -29,7 +29,7 @@
   function render() {
     const { t, number } = window.ebaliaI18n;
     document.querySelectorAll('[data-release-version]').forEach(el => {el.textContent=version;});
-    status.textContent = t(state, { count: assets.size, version });
+    status.textContent = t(state, { count: [...assets.values()].reduce((n, list) => n + list.length, 0), version });
     buttons.forEach(button => { button.textContent = t('availability'); });
     close.setAttribute('aria-label', t('close'));
     retry.textContent = t(busy ? 'checking' : 'retry'); retry.disabled = busy;
