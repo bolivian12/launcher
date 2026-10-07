@@ -14,6 +14,7 @@
 #include "MsAuth.hpp"
 #include "JavaRunner.hpp"
 #include "LostNative.hpp"
+#include "SoftwareGl.hpp"
 #include "JavaRuntime.hpp"
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -170,7 +171,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
     connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
     connect(m_mc,&McInstanceManager::gameStarted,this,[this](const QString &){refreshInstances();m_status->setText(text("Minecraft en ejecución","Minecraft is running","Minecraft em execução"));});
-    connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code)error(text("Minecraft se cerró con un error. Abrí el registro de la instancia para ver el motivo.","Minecraft exited with an error. Open the instance log for details.","Minecraft fechou com erro. Abra o registro da instância para ver os detalhes."));});
+    connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code&&offerSoftwareRendering(dir))return;if(code)error(text("Minecraft se cerró con un error. Abrí el registro de la instancia para ver el motivo.","Minecraft exited with an error. Open the instance log for details.","Minecraft fechou com erro. Abra o registro da instância para ver os detalhes."));});
     connect(m_mc,&McInstanceManager::launchFailed,this,[this](const QString &,const QString &e){error(e);refreshInstances();});
     connect(m_accounts,&AccountManager::accountsChanged,this,&MainWindow::refreshAccounts);
     connect(m_java,&JavaRunner::processError,this,&MainWindow::error);
@@ -275,6 +276,7 @@ QWidget *MainWindow::buildInstances() {
     m_detail->back=[this]{m_library->setCurrentWidget(m_grid);refreshInstances();};
     m_detail->play=[this]{play();};m_detail->settings=[this]{editInstance();};m_detail->log=[this]{showLog(selected().dir,this);};
     m_detail->changeIcon=[this](const QString &key,const QImage &custom){setInstanceIcon(m_detail->dir(),key,custom);refreshInstances();};
+    m_detail->changeBackground=[this]{changeBackground(m_detail->dir());};
     m_detail->exportZip=[this]{exportInstance();};m_detail->copy=[this]{copyInstance();};m_detail->remove=[this]{removeInstance();};
     m_detail->mods=[this]{manageMods();};m_detail->savePack=[this]{savePack();};m_detail->changeGroup=[this]{changeGroup();};
     m_detail->findMods=[this]{auto i=selected();if(i.dir.isEmpty())return;if(i.loader=="vanilla"){error(text("Esta instancia es Vanilla. Creá una instancia con Fabric, Quilt, Forge o NeoForge para usar mods.","This is a Vanilla instance. Create an instance with Fabric, Quilt, Forge or NeoForge to use mods.","Esta instância é Vanilla. Crie uma instância com Fabric, Quilt, Forge ou NeoForge para usar mods."));return;}showPage(Explore);m_target->setCurrentIndex(m_target->findData(i.dir));};
@@ -601,6 +603,25 @@ void MainWindow::setInstanceIcon(const QString &dir,const QString &key,const QIm
     if(key=="custom"&&!InstanceIcons::saveCustom(dir,custom)){error(text("No se pudo guardar el icono.","Could not save the icon.","Não foi possível salvar o ícone."));icon="grass";}
     try{auto info=ModRepository::read(dir+"/instance.json");info["icon"]=icon;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());}
 }
+bool MainWindow::offerSoftwareRendering(const QString &dir){
+    // A graphics driver without OpenGL (virtual machines, missing drivers): offer OpenGL drawn by the processor.
+    if(!SoftwareGl::available())return false;
+    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){return false;}
+    if(info["softwareRendering"].toBool())return false;
+    QFile log(dir+"/launcher.log");if(!log.open(QIODevice::ReadOnly))return false;if(log.size()>4*1024*1024)log.seek(log.size()-4*1024*1024);
+    if(!SoftwareGl::openGlFailure(QString::fromUtf8(log.readAll())))return false;
+    if(QMessageBox::question(this,"EBALIA",text("Tu tarjeta gráfica no ofrece OpenGL, que Minecraft necesita. Pasa en máquinas virtuales y en equipos sin el driver de gráficos instalado.\n\n¿Iniciar con gráficos por software? Funciona en cualquier equipo, pero va más lento. Podés desactivarlo en los ajustes de la instancia.","Your graphics card does not provide OpenGL, which Minecraft needs. This happens in virtual machines and on computers without a graphics driver.\n\nStart with software graphics? It works on any computer but runs slower. You can turn it off in the instance settings.","Sua placa de vídeo não oferece OpenGL, que o Minecraft precisa. Isso acontece em máquinas virtuais e em computadores sem o driver de vídeo.\n\nIniciar com gráficos por software? Funciona em qualquer computador, mas é mais lento. Você pode desativar nas configurações da instância."))!=QMessageBox::Yes)return true;
+    try{info["softwareRendering"]=true;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());return true;}
+    for(const auto &i:m_mc->instances())if(i.dir==dir){m_status->setText(text("Iniciando con gráficos por software…","Starting with software graphics…","Iniciando com gráficos por software…"));launchInstance(i);break;}
+    return true;
+}
+void MainWindow::changeBackground(const QString &dir){
+    if(dir.isEmpty())return;QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}
+    QString key;QImage custom;if(!InstanceIcons::chooseBackground(this,dir,info["background"].toString(),key,custom))return;
+    if(key=="custom"&&!custom.isNull()&&!InstanceIcons::saveBackground(dir,custom)){error(text("No se pudo guardar la imagen.","Could not save the picture.","Não foi possível salvar a imagem."));return;}
+    try{info=ModRepository::read(dir+"/instance.json");info["background"]=key;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());}
+    refreshInstances();
+}
 void MainWindow::instanceMenu(){
     auto i=selected();if(i.dir.isEmpty())return;QMenu menu(this);
     const bool running=m_mc->isRunning(i.dir);
@@ -672,11 +693,23 @@ void MainWindow::editInstance(){
     auto i=selected();if(i.dir.isEmpty())return;if(m_installing.contains(i.dir)||m_mc->isRunning(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QJsonObject info;try{info=ModRepository::read(i.dir+"/instance.json");}catch(...){error(exception());return;}
     QDialog d(this);d.setObjectName("instanceSettingsWindow");d.setWindowTitle(i.name+" · "+Language::key("Instance settings"));Ui::fitToScreen(&d,{640,600});QVBoxLayout lay(&d);lay.setContentsMargins(22,20,22,18);lay.setSpacing(12);
-    auto head=new QHBoxLayout;head->setSpacing(14);lay.addLayout(head);auto icon=new QLabel;icon->setPixmap(InstanceIcons::icon(info["icon"].toString(),i.dir).pixmap(48,48));head->addWidget(icon);
+    auto head=new QHBoxLayout;head->setSpacing(14);lay.addLayout(head);
+    // Icon and background are chosen here and saved with the other settings.
+    QString iconKey=info["icon"].toString(),backgroundKey=info["background"].toString();QImage customIcon,customBackground;
+    auto icon=new QToolButton;icon->setObjectName("settingsInstanceIcon");icon->setFixedSize(64,64);icon->setIconSize({48,48});icon->setIcon(InstanceIcons::icon(iconKey,i.dir));icon->setCursor(Qt::PointingHandCursor);icon->setPopupMode(QToolButton::InstantPopup);
+    icon->setToolTip(Language::key("Change icon"));icon->setAccessibleName(icon->toolTip());
+    icon->setMenu(InstanceIcons::menu(icon,[&,icon](const QString &key,const QImage &picture){iconKey=key;customIcon=picture;icon->setIcon(key=="custom"?QIcon(QPixmap::fromImage(picture)):InstanceIcons::icon(key));}));head->addWidget(icon);
     auto titles=new QVBoxLayout;titles->setSpacing(2);head->addLayout(titles,1);label(i.name,titles,"sectionTitle",false);label(InstanceText::loader(i.loader)+" "+i.mcVersion,titles,"muted",false);
     QFormLayout form;form.setHorizontalSpacing(14);form.setVerticalSpacing(10);lay.addLayout(&form);
     QLineEdit name(i.name),java(info["javaPath"].toString());java.setObjectName("javaPath");java.setPlaceholderText(text("Detección automática","Automatic detection","Detecção automática"));QSpinBox memory;memory.setRange(512,65536);memory.setSingleStep(512);memory.setValue(i.xmx);memory.setSuffix(" MB");
     form.addRow(text("Nombre","Name","Nome"),&name);form.addRow(text("Memoria","Memory","Memória"),&memory);
+    auto backgroundRow=new QHBoxLayout;backgroundRow->setSpacing(10);auto preview=new QLabel;preview->setFixedSize(128,72);backgroundRow->addWidget(preview);
+    auto showBackground=[preview](const QString &path,const QImage &picture){if(!picture.isNull()){preview->setPixmap(Ui::cover(QPixmap::fromImage(picture),{128,72},8));return;}Ui::loadArt(path,{256,144},preview,[preview](const QPixmap &p){preview->setPixmap(Ui::cover(p,{128,72},8));});};
+    showBackground(InstanceIcons::background(i.dir),{});
+    auto changeArt=button(text("Cambiar fondo…","Change background…","Mudar fundo…"),backgroundRow,[&,showBackground]{QString key;QImage picture;if(!InstanceIcons::chooseBackground(&d,i.dir,backgroundKey,key,picture))return;backgroundKey=key;customBackground=picture;showBackground(key.startsWith(":/")?key:key=="custom"?i.dir+"/instance-background.jpg":Ui::artFor(i.dir),picture);},&d,false,"image");changeArt->setObjectName("settingsInstanceBackground");
+    backgroundRow->addStretch();form.addRow(text("Fondo","Background","Fundo"),backgroundRow);
+    QCheckBox software(text("Gráficos por software (máquinas virtuales o sin driver de gráficos; más lento)","Software graphics (virtual machines or no graphics driver; slower)","Gráficos por software (máquinas virtuais ou sem driver de vídeo; mais lento)"));software.setObjectName("softwareRendering");software.setChecked(info["softwareRendering"].toBool());
+    if(SoftwareGl::available())form.addRow(text("Gráficos","Graphics","Gráficos"),&software);else software.hide();
     auto javaRow=new QHBoxLayout;javaRow->setSpacing(8);javaRow->addWidget(&java,1);form.addRow("Java",javaRow);
     auto browse=new QToolButton;browse->setIcon(Ui::icon("folder"));browse->setToolTip(text("Elegir ejecutable de Java","Choose Java executable","Escolher executável Java"));browse->setAccessibleName(browse->toolTip());javaRow->addWidget(browse);
     connect(browse,&QToolButton::clicked,&d,[&]{auto f=QFileDialog::getOpenFileName(&d);if(!f.isEmpty())java.setText(f);});
@@ -702,7 +735,10 @@ void MainWindow::editInstance(){
     button(text("Reparar instalación","Repair installation","Reparar instalação"),tools,[&,i]{d.reject();m_installing.insert(i.dir);m_mc->installInstance(i.dir);refreshInstances();},&d,false,"hammer");
     tools->addStretch();auto trash=button({},tools,[&]{d.reject();QTimer::singleShot(0,this,[this]{removeInstance();});},&d,false,"trash-2");trash->setProperty("danger",true);trash->setToolTip(text("Mover instancia a la papelera","Move instance to trash","Mover instância para a lixeira"));trash->setAccessibleName(trash->toolTip());
     QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);lay.addWidget(&buttons);buttons.button(QDialogButtonBox::Save)->setProperty("play",true);
-    connect(&buttons,&QDialogButtonBox::accepted,&d,[&]{if(name.text().trimmed().isEmpty())return;info["name"]=name.text().trimmed();info["javaPath"]=java.text().trimmed();info["xmx"]=memory.value();try{ModRepository::write(i.dir+"/instance.json",info);d.accept();refreshInstances();}catch(...){error(exception());}});connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
+    connect(&buttons,&QDialogButtonBox::accepted,&d,[&]{if(name.text().trimmed().isEmpty())return;info["name"]=name.text().trimmed();info["javaPath"]=java.text().trimmed();info["xmx"]=memory.value();
+        if(iconKey=="custom"&&!customIcon.isNull()&&!InstanceIcons::saveCustom(i.dir,customIcon))iconKey=info["icon"].toString();
+        if(backgroundKey=="custom"&&!customBackground.isNull()&&!InstanceIcons::saveBackground(i.dir,customBackground))backgroundKey=info["background"].toString();
+        info["icon"]=iconKey;info["background"]=backgroundKey;if(SoftwareGl::available())info["softwareRendering"]=software.isChecked();try{ModRepository::write(i.dir+"/instance.json",info);d.accept();refreshInstances();}catch(...){error(exception());}});connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
     Ui::openWindow(d);
 }
 void MainWindow::manageMods(){

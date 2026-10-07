@@ -8,6 +8,7 @@
 #include "JavaDownloader.hpp"
 #include "Language.hpp"
 #include <QtConcurrent>
+#include "SoftwareGl.hpp"
 #include <QFutureWatcher>
 #include <QFile>
 #include <QDir>
@@ -36,6 +37,8 @@
 namespace {
 // Raised when launch-profile.json must be rebuilt: 2 keeps every library classifier (Forge universal + client).
 constexpr int profileFormat=2;
+// Parallel downloads for libraries and assets; each worker keeps its connection open (ModRepository::fetch).
+constexpr int downloadThreads=16;
 const QString manifestUrl = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 [[noreturn]] void fail(const QString &s) { throw std::runtime_error(s.toStdString()); }
 QString s(const QJsonObject &o, const char *k) { return o[QLatin1String(k)].toString(); }
@@ -58,6 +61,11 @@ void download(const QJsonObject &meta, const QString &path) {
     auto data = ModRepository::fetch(QUrl(s(meta,"url")));
     if (data.isEmpty() || (!sha.isEmpty() && QCryptographicHash::hash(data,QCryptographicHash::Sha1).toHex() != sha)) fail("Descarga dañada: " + path);
     save(path, data);
+}
+// Minecraft 1.13 and later (LWJGL 3) can load another opengl32.dll.
+bool usesLwjgl3(const QJsonObject &profile) {
+    for (const auto &l : profile["libraries"].toArray()) if (l.toObject()["name"].toString().startsWith("org.lwjgl:lwjgl:3")) return true;
+    return false;
 }
 QString osName() {
 #ifdef Q_OS_WIN
@@ -329,17 +337,27 @@ void McInstanceManager::install(const QString &dir) {
     }
     auto libs=profile["libraries"].toArray(); int i=0;
     QDir().mkpath(dir+"/natives");
+    // Libraries download in parallel like the assets below; natives are extracted once all of them are present.
+    QList<QPair<QJsonObject,QString>> libraryJobs; QStringList natives;
     for (const auto &l : libs) {
-        auto lib=l.toObject(); ++i; if (!allowedByRules(lib)) continue;
-        emit installProgress(dir,10+int(35.0*i/qMax(1,libs.size())),QString("Bibliotecas %1/%2").arg(i).arg(libs.size()));
+        auto lib=l.toObject(); if (!allowedByRules(lib)) continue;
         auto downloads=lib["downloads"].toObject(), artifact=downloads["artifact"].toObject();
-        if (!artifact.isEmpty()) download(artifact,m_root+"/libraries/"+safeRelative(s(artifact,"path")));
+        if (!artifact.isEmpty()) libraryJobs.append({artifact,m_root+"/libraries/"+safeRelative(s(artifact,"path"))});
         auto key=lib["natives"].toObject()[osName()].toString(); key.replace("${arch}",QSysInfo::WordSize==64?"64":"32");
         if (!key.isEmpty()) {
             auto nat=downloads["classifiers"].toObject()[key].toObject(); if (nat.isEmpty()) fail("Falta una biblioteca nativa para " + osName());
-            auto path=m_root+"/libraries/"+safeRelative(s(nat,"path")); download(nat,path); Archive::extract(path,dir+"/natives");
+            auto path=m_root+"/libraries/"+safeRelative(s(nat,"path")); libraryJobs.append({nat,path}); natives<<path;
         }
     }
+    {
+        QThreadPool pool; pool.setMaxThreadCount(downloadThreads);
+        QList<QFuture<QString>> running;
+        for (const auto &job : libraryJobs) running << QtConcurrent::run(&pool,[job] { try { download(job.first,job.second); return QString(); } catch(const std::exception &e) {return QString::fromUtf8(e.what());} });
+        QString error;
+        for (auto &f : running) { auto e=f.result(); if (!e.isEmpty() && error.isEmpty()) error=e; ++i; emit installProgress(dir,10+int(35.0*i/qMax(1,libraryJobs.size())),QString("Bibliotecas %1/%2").arg(i).arg(libraryJobs.size())); }
+        if (!error.isEmpty()) fail(error);
+    }
+    for (const auto &path : natives) Archive::extract(path,dir+"/natives");
     auto index=profile["assetIndex"].toObject();
     if (!index.isEmpty()) {
         auto id=s(index,"id"); if (!ModRepository::safeName(id)) fail("Índice de recursos inválido.");
@@ -352,7 +370,7 @@ void McInstanceManager::install(const QString &dir) {
             auto dest=m_root+"/assets/objects/"+hash.left(2)+"/"+hash;
             jobs.append({QJsonObject{{"url","https://resources.download.minecraft.net/"+hash.left(2)+"/"+hash},{"sha1",hash}},dest});
         }
-        QThreadPool pool; pool.setMaxThreadCount(8);
+        QThreadPool pool; pool.setMaxThreadCount(downloadThreads);
         QList<QFuture<QString>> downloads;
         for (const auto &job : jobs) downloads << QtConcurrent::run(&pool,[job] { try { download(job.first,job.second); return QString(); } catch(const std::exception &e) {return QString::fromUtf8(e.what());} });
         QString error;
@@ -405,6 +423,7 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
         QStringList args;for(const auto &a:plan["args"].toArray())args<<a.toString();
         auto info=plan["info"].toObject();
         auto *proc=new QProcess(this); m_running[dir]=proc; proc->setWorkingDirectory(dir);
+        if (const auto extra=plan["environment"].toObject(); !extra.isEmpty()) { auto env=QProcessEnvironment::systemEnvironment(); for (auto it=extra.begin();it!=extra.end();++it) env.insert(it.key(),it.value().toString()); proc->setProcessEnvironment(env); }
         proc->setProcessChannelMode(QProcess::MergedChannels); proc->setStandardOutputFile(dir+"/launcher.log",QIODevice::Truncate);
         connect(proc,&QProcess::started,this,[this,dir,info]() mutable {
             info["lastPlayed"]=QDateTime::currentSecsSinceEpoch(); try {ModRepository::write(dir+"/instance.json",info);}catch(...){} emit gameStarted(dir);
@@ -444,13 +463,25 @@ void McInstanceManager::launch(const QString &dir,const QString &name,const QStr
             {"classpath_separator",sep},{"library_directory",m_root+"/libraries"},{"launcher_name","EBALIA"},{"launcher_version",QCoreApplication::applicationVersion()},
             {"clientid",""},{"auth_xuid",""}};
         QStringList args{QString("-Xmx%1M").arg(qBound(512,info["xmx"].toInt(4096),65536))};
+        // Software OpenGL (virtual machines, missing drivers): LWJGL 3 loads Mesa's opengl32.dll.
+        QJsonObject environment;
+        if (info["softwareRendering"].toBool() && SoftwareGl::available()) {
+#ifdef Q_OS_WIN
+            if (usesLwjgl3(p)) {
+                const auto mesa=SoftwareGl::prepare(m_root);args << SoftwareGl::javaArguments(mesa);
+                environment["PATH"]=QDir::toNativeSeparators(mesa)+QDir::listSeparator()+qEnvironmentVariable("PATH");environment["GALLIUM_DRIVER"]="llvmpipe";
+            }
+#else
+            environment["LIBGL_ALWAYS_SOFTWARE"]="1";environment["GALLIUM_DRIVER"]="llvmpipe";
+#endif
+        }
         if (p.contains("arguments")) args << arguments(p["arguments"].toObject()["jvm"].toArray(),values);
         else args << "-Djava.library.path="+dir+"/natives" << "-cp" << cp.join(sep);
         auto logging=p["logging"].toObject()["client"].toObject(); if (!logging.isEmpty()) { auto arg=s(logging,"argument");arg.replace("${path}",m_root+"/assets/log_configs/"+s(logging["file"].toObject(),"id"));args<<arg; }
         args << s(p,"mainClass");
         if (p.contains("arguments")) args << arguments(p["arguments"].toObject()["game"].toArray(),values);
         else { QJsonArray legacy; for (const auto &a : QProcess::splitCommand(s(p,"minecraftArguments"))) legacy.append(a); args << arguments(legacy,values); }
-        return QJsonObject{{"java",java},{"args",QJsonArray::fromStringList(args)},{"info",info}};
+        return QJsonObject{{"java",java},{"args",QJsonArray::fromStringList(args)},{"info",info},{"environment",environment}};
       } catch(const std::exception &e) { return QJsonObject{{"error",QString::fromUtf8(e.what())}}; }
     }));
 }

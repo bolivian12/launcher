@@ -12,6 +12,7 @@
 #include <QEventLoop>
 #include <QTimer>
 #include <QThread>
+#include <QThreadStorage>
 #include <QUrlQuery>
 #include <QTemporaryDir>
 #include <QSettings>
@@ -51,7 +52,11 @@ QJsonObject ModRepository::read(const QString &path) {
 void ModRepository::write(const QString &path, const QJsonObject &o) { bytes(path, QJsonDocument(o).toJson()); }
 QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArray> &headers) {
     if (url.scheme() != "https") fail("La descarga requiere HTTPS: " + url.host());
-    QNetworkAccessManager nam;
+    // One manager per thread keeps connections open between requests (keep-alive and HTTP/2), as Prism Launcher does:
+    // thousands of small game assets no longer pay a new TLS handshake each.
+    static QThreadStorage<QNetworkAccessManager *> managers;
+    if (!managers.hasLocalData()) managers.setLocalData(new QNetworkAccessManager);
+    auto &nam = *managers.localData();
     QString lastError;
     // Mojang occasionally closes the metadata connection while the launcher is
     // starting. Retry transient transport failures before falling back to the
@@ -67,9 +72,9 @@ QByteArray ModRepository::fetch(const QUrl &url, const QMap<QByteArray,QByteArra
         QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
         QObject::connect(&timer, &QTimer::timeout, reply, &QNetworkReply::abort);
         timer.start(70000); loop.exec();
-        if (reply->error() == QNetworkReply::NoError) return reply->readAll();
+        if (reply->error() == QNetworkReply::NoError) { auto data = reply->readAll(); delete reply; return data; }
         lastError = reply->errorString();
-        reply->deleteLater();
+        delete reply;
         if (attempt < 2) QThread::msleep(400 * (attempt + 1));
     }
     fail("Error de red (" + url.host() + "): " + lastError);

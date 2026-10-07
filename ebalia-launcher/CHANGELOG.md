@@ -1,3 +1,10 @@
+# 1.1.1
+
+- Virtual machines and computers without a graphics driver: when Minecraft closes because there is no OpenGL, the launcher offers to start it with software graphics (OpenGL drawn by the processor; Mesa on Windows, the system Mesa on Linux). It can also be turned on in the instance settings. Windows uses it for Minecraft 1.13 and later.
+- Faster game downloads: connections to Mojang's servers are reused and libraries download in parallel. A fresh Minecraft 1.21.1 (3,900 files, 850 MB) went from 143 to 28 seconds in our test.
+- Instance backgrounds: choose any launcher picture or one from your computer, from the instance page or its settings.
+- The instance icon can be changed from the instance settings too.
+
 # 1.1.0
 
 - Microsoft sign-in is enabled with the EBALIA public application ID (`microsoft-client-id.txt`).

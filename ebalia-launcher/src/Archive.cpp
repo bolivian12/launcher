@@ -79,6 +79,25 @@ void Archive::extract(const QString &file, const QString &destination, const QSt
     }
     if (status != ARCHIVE_EOF) fail("ZIP dañado.");
 }
+void Archive::extractFiles(const QString &file, const QString &destination, const QStringList &names) {
+    auto fail = [](const QString &s) { throw std::runtime_error(s.toStdString()); };
+    Utf8Names utf8;
+    std::unique_ptr<archive, decltype(&archive_read_free)> a(archive_read_new(), archive_read_free);
+    archive_read_support_filter_all(a.get()); archive_read_support_format_zip(a.get()); archive_read_support_format_7zip(a.get());
+    if (openRead(a.get(), file) != ARCHIVE_OK) fail("No se pudo abrir el archivo comprimido.");
+    QDir().mkpath(destination); archive_entry *entry = nullptr; int status; int found = 0;
+    while ((status = archive_read_next_header(a.get(), &entry)) == ARCHIVE_OK || status == ARCHIVE_WARN) {
+        auto name = entryName(entry); name.replace('\\','/');
+        if (!names.contains(name) || archive_entry_filetype(entry) != AE_IFREG) { archive_read_data_skip(a.get()); continue; }
+        QSaveFile out(QDir(destination).filePath(QFileInfo(name).fileName()));
+        if (!out.open(QIODevice::WriteOnly)) fail("No se puede extraer " + name);
+        char buffer[65536]; la_ssize_t size;
+        while ((size = archive_read_data(a.get(), buffer, sizeof(buffer))) > 0) if (out.write(buffer, size) != size) fail("Sin espacio al extraer " + name);
+        if (size < 0 || !out.commit()) fail("Archivo incompleto: " + name);
+        if (++found == names.size()) return;
+    }
+    if (status != ARCHIVE_EOF) fail("Archivo comprimido dañado.");
+}
 void Archive::compress(const QString &folder, const QString &file, const QStringList &skip) {
     auto fail = [](const QString &s) { throw std::runtime_error(s.toStdString()); };
     Utf8Names utf8;

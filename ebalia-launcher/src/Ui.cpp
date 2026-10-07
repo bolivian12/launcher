@@ -1,9 +1,11 @@
+#include <QFileInfo>
 #include "Ui.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
 namespace {
 int windowsOpen=0;
-QString artKey(const QString &path,QSize bounds){return path+QString(":%1x%2").arg(bounds.width()).arg(bounds.height());}
+// Files on disk (an instance background) can be replaced under the same name: their time is part of the key.
+QString artKey(const QString &path,QSize bounds){auto key=path+QString(":%1x%2").arg(bounds.width()).arg(bounds.height());if(!path.startsWith(':'))key+=":"+QString::number(QFileInfo(path).lastModified().toMSecsSinceEpoch());return key;}
 struct ArtRequest {QPointer<QObject> receiver;std::function<void(const QPixmap &)> ready;};
 class ArtCache:public QObject {
 public:

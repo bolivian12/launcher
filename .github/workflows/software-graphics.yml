@@ -1,0 +1,83 @@
+name: Software graphics check
+# GitHub's Windows runners have no graphics card, like a virtual machine: Minecraft must fail with the system OpenGL
+# and start with the launcher's software graphics (Mesa).
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Run of "EBALIA Launcher" whose ebalia-windows-x64-unsigned artifact is tested
+        required: true
+      version:
+        description: Minecraft version
+        default: '1.21.1'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ebalia-windows-x64-unsigned
+          path: app
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install Minecraft ${{ inputs.version }}
+        shell: pwsh
+        env:
+          EBALIA_DATA_DIR: ${{ runner.temp }}/ebalia
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--installtest','${{ inputs.version }}' -RedirectStandardError install.log -Wait -PassThru -NoNewWindow
+          Get-Content install.log -Tail 5
+          if ($p.ExitCode -ne 0) { throw "Installation failed" }
+          $dir = (Get-Content install.log -Tail 1).Trim()
+          "INSTANCE=$dir" >> $env:GITHUB_ENV
+      - name: Start with the system OpenGL (expected to fail without a graphics card)
+        shell: pwsh
+        continue-on-error: true
+        env:
+          EBALIA_DATA_DIR: ${{ runner.temp }}/ebalia
+          EBALIA_LAUNCHTEST_SECONDS: '60'
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -RedirectStandardError hardware.log -Wait -PassThru -NoNewWindow
+          Get-Content hardware.log -Tail 3
+          Copy-Item "$env:INSTANCE/launcher.log" hardware-game.log
+          Select-String -Path hardware-game.log -Pattern 'OpenGL|WGL|No context is current|GLFW' | Select-Object -First 5
+      - name: Start with software graphics
+        shell: pwsh
+        env:
+          EBALIA_DATA_DIR: ${{ runner.temp }}/ebalia
+          EBALIA_LAUNCHTEST_SECONDS: '90'
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $info = Get-Content "$env:INSTANCE/instance.json" -Raw | ConvertFrom-Json
+          $info | Add-Member -NotePropertyName softwareRendering -NotePropertyValue $true -Force
+          $info | ConvertTo-Json -Depth 20 | Set-Content "$env:INSTANCE/instance.json" -Encoding utf8
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -RedirectStandardError software.log -PassThru -NoNewWindow
+          Start-Sleep -Seconds 75
+          Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+          $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
+          $bmp.Save("$PWD/software-graphics.png")
+          $p.WaitForExit()
+          Get-Content software.log -Tail 3
+          Copy-Item "$env:INSTANCE/launcher.log" software-game.log
+          if (Select-String -Path software-game.log -Pattern 'No context is current|does not appear to support OpenGL|GLFW error 6554') { throw "OpenGL still failed with software graphics" }
+          if (-not (Select-String -Path software.log -Pattern 'timed=1')) { throw "Minecraft closed before the test ended" }
+          if (-not (Select-String -Path software-game.log -Pattern 'Reloading ResourceManager|Sound engine started|Created: ')) { throw "Minecraft did not reach its resources" }
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: software-graphics-results
+          path: |
+            install.log
+            hardware.log
+            hardware-game.log
+            software.log
+            software-game.log
+            software-graphics.png

@@ -18,6 +18,7 @@
 #include "PackService.hpp"
 #include "ServerList.hpp"
 #include "LostNative.hpp"
+#include "SoftwareGl.hpp"
 #include <stdexcept>
 #include <clocale>
 #include <functional>
@@ -73,6 +74,21 @@ QByteArray profile(const QString &id,const QString &inherits,const QStringList &
 class CoreTests:public QObject {
     Q_OBJECT
 private slots:
+    void softwareGraphics(){
+        // Lines from real crashes on a virtual machine (Forge 26.3) and on a PC without a graphics driver (1.20.1).
+        QVERIFY(SoftwareGl::openGlFailure("FATAL ERROR in native method: [LWJGL] Thread[#3,Render thread,5,main]: No context is current or a function that is not available in the current context was called. The JVM will abort execution."));
+        QVERIFY(SoftwareGl::openGlFailure("[LWJGL] GLFW_API_UNAVAILABLE error\nDescription : WGL: The driver does not appear to support OpenGL"));
+        QVERIFY(!SoftwareGl::openGlFailure("Caused by: java.lang.IllegalStateException: Failed to find system mod: forge"));
+        QVERIFY(SoftwareGl::javaArguments("C:/mesa").first().startsWith("-Dorg.lwjgl.opengl.libname="));
+        // Only the requested entries of a 7z archive are written, flat in the destination.
+        QTemporaryDir t;const auto archive=t.path()+"/mesa.7z";
+        {auto a=archive_write_new();archive_write_set_format_7zip(a);QCOMPARE(archive_write_open_filename(a,QFile::encodeName(archive).constData()),ARCHIVE_OK);
+         for(const auto &[name,data]:QList<QPair<QString,QByteArray>>{{"x64/opengl32.dll","gl"},{"x64/libgallium_wgl.dll","gallium"},{"x86/opengl32.dll","32"},{"x64/clon12compiler.dll","big"}}){auto e=archive_entry_new();archive_entry_set_pathname(e,name.toUtf8().constData());archive_entry_set_filetype(e,AE_IFREG);archive_entry_set_perm(e,0644);archive_entry_set_size(e,data.size());archive_write_header(a,e);archive_write_data(a,data.constData(),size_t(data.size()));archive_entry_free(e);}
+         archive_write_close(a);archive_write_free(a);}
+        Archive::extractFiles(archive,t.path()+"/out",{"x64/opengl32.dll","x64/libgallium_wgl.dll"});
+        QCOMPARE(QDir(t.path()+"/out").entryList(QDir::Files),QStringList({"libgallium_wgl.dll","opengl32.dll"}));QCOMPARE(readFile(t.path()+"/out/opengl32.dll"),QByteArray("gl"));
+        if(qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS")){QTemporaryDir root;auto folder=SoftwareGl::prepare(root.path());QVERIFY(QFileInfo(folder+"/opengl32.dll").size()>100000);QVERIFY(QFileInfo(folder+"/libgallium_wgl.dll").size()>10000000);QCOMPARE(SoftwareGl::prepare(root.path()),folder);}
+    }
     void staleLoaderProfilesInstallAgain(){
         // Forge instances prepared before 1.1.0 lost forge:universal: they must install again instead of crashing.
         QTemporaryDir t;McInstanceManager manager(t.path());

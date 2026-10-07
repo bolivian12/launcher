@@ -17,4 +17,11 @@ QIcon provider(const QString &provider);
 QMenu *menu(QWidget *parent,std::function<void(const QString &key,const QImage &custom)> chosen);
 QImage chooseImage(QWidget *parent);
 bool saveCustom(const QString &instanceDir,const QImage &picture);
+// Card and page background: a launcher picture (key ":/art/…"), a picture from the computer ("custom",
+// stored as instance-background.jpg) or, with an empty key, one picked from the instance folder name.
+QStringList backgrounds();
+QString background(const QString &instanceDir);
+// Every launcher picture plus "Choose an image from your computer…"; false when cancelled.
+bool chooseBackground(QWidget *parent,const QString &instanceDir,const QString &current,QString &key,QImage &custom);
+bool saveBackground(const QString &instanceDir,const QImage &picture);
 }

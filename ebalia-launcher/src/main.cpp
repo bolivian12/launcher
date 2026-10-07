@@ -115,6 +115,7 @@ int main(int argc,char **argv){
         McInstanceManager manager(root);auto version=cli[installTest+1];auto loader=installTest+2<cli.size()?cli[installTest+2]:QString("vanilla");
         auto dir=manager.createInstance("Integration "+version+" "+loader,version,loader);
         auto java=qEnvironmentVariable("EBALIA_TEST_JAVA");if(!java.isEmpty()){auto info=ModRepository::read(dir+"/instance.json");info["javaPath"]=java;ModRepository::write(dir+"/instance.json",info);}
+        if(qEnvironmentVariableIsSet("EBALIA_TEST_SOFTWARE_GL")){auto info=ModRepository::read(dir+"/instance.json");info["softwareRendering"]=true;ModRepository::write(dir+"/instance.json",info);}
         int last=-1;
         QObject::connect(&manager,&McInstanceManager::installProgress,&app,[&](const QString &,int pct,const QString &stage){if(last!=pct){fprintf(stderr,"%d%% %s\n",pct,stage.toUtf8().constData());last=pct;}});
         QObject::connect(&manager,&McInstanceManager::installDone,&app,[&](const QString &path,bool ok,const QString &error){fprintf(stderr,"DONE %s %s\n%s\n",ok?"OK":"FAILED",error.toUtf8().constData(),path.toUtf8().constData());app.exit(ok?0:1);});

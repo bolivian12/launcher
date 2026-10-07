@@ -263,6 +263,24 @@ printf started > launched-marker
         window.setLauncherUpdate(MainWindow::LauncherUpdate::Available);QVERIFY(sidebar->isEnabled()); // a failed update can be retried
         window.resize(900,700);QTest::qWait(30);QVERIFY(sidebar->isVisible());QVERIFY(sidebar->text().isEmpty()); // compact sidebar: icon only
     }
+    void instanceBackgrounds(){
+        // A launcher picture, a picture from the computer, or the automatic one; anything else falls back to automatic.
+        QTemporaryDir t;McInstanceManager manager(t.path());auto dir=manager.createInstance("Art","1.21.1","vanilla");
+        const auto automatic=Ui::artFor(dir);QCOMPARE(InstanceIcons::background(dir),automatic);
+        QVERIFY(InstanceIcons::backgrounds().size()>=20);for(const auto &art:InstanceIcons::backgrounds())QVERIFY2(!QImage(art).isNull(),qPrintable(art));
+        auto set=[&](const QString &key){auto info=ModRepository::read(dir+"/instance.json");info["background"]=key;ModRepository::write(dir+"/instance.json",info);};
+        set(":/art/backgrounds/nether.png");QCOMPARE(InstanceIcons::background(dir),QString(":/art/backgrounds/nether.png"));
+        set(":/art/../icon.png");QCOMPARE(InstanceIcons::background(dir),automatic);
+        set("custom");QCOMPARE(InstanceIcons::background(dir),automatic); // no picture saved yet
+        QImage picture(320,180,QImage::Format_RGB32);picture.fill(Qt::red);QVERIFY(InstanceIcons::saveBackground(dir,picture));
+        QCOMPARE(InstanceIcons::background(dir),dir+"/instance-background.jpg");QCOMPARE(QImage(dir+"/instance-background.jpg").size(),QSize(320,180));
+        // The picker lists every picture and returns the one chosen.
+        QString key;QImage custom;
+        QTimer::singleShot(1500,[&]{QDialog *d=nullptr;for(auto w:QApplication::topLevelWidgets())if(w->objectName()=="instanceBackgroundWindow"&&w->isVisible())d=qobject_cast<QDialog*>(w);if(!d){QFAIL("picker not shown");return;}auto list=d->findChild<QListWidget*>("backgroundList");QCOMPARE(list->count(),InstanceIcons::backgrounds().size()+2);
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);d->grab().save(out+"/background-picker.png");}
+            for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toString()==":/art/backgrounds/warden.png")list->setCurrentRow(n);d->accept();});
+        QVERIFY(InstanceIcons::chooseBackground(nullptr,dir,"custom",key,custom));QCOMPARE(key,QString(":/art/backgrounds/warden.png"));QVERIFY(custom.isNull());
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

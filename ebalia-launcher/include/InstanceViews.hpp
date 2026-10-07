@@ -33,7 +33,7 @@ public:
     explicit InstanceDetail(QWidget *parent=nullptr);
     void showInstance(const InstanceInfo &instance);
     QString dir() const {return m_dir;}
-    std::function<void()> back,play,settings,log,exportZip,copy,remove,mods,findMods,savePack,changeGroup;
+    std::function<void()> back,play,settings,log,exportZip,copy,remove,mods,findMods,savePack,changeGroup,changeBackground;
     std::function<void(const QString &folder)> openFolder;
     std::function<void(const QString &key,const QImage &custom)> changeIcon;
 protected:
@@ -42,7 +42,7 @@ protected:
 private:
     void arrange();
     QGridLayout *m_cardGrid;QList<QWidget*> m_cards,m_cardIcons;QList<QPair<QPushButton*,QString>> m_actions;bool m_compact=false;int m_cardColumns=0;
-    QPixmap m_backdrop,m_scaled;QString m_dir;QToolButton *m_icon;QLabel *m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
+    QPixmap m_backdrop,m_scaled;QString m_dir,m_art;QToolButton *m_icon;QLabel *m_name,*m_state;QWidget *m_chips;QPushButton *m_play;
     QList<QLabel*> m_counts;
     // Screenshots gallery and multiplayer servers, below the actions.
     void showScreenshots();

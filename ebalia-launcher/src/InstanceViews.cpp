@@ -105,7 +105,7 @@ void InstanceGrid::rebuild(){
             auto card=new Card;card->setObjectName("instanceCard");card->setProperty("dir",dir);card->setProperty("selected",dir==m_selected);card->setFixedWidth(cardWidth);card->setCursor(Qt::PointingHandCursor);
             card->setToolTip(info.base.name);card->clicked=[this,dir]{if(open)open(dir);};card->context=[this,dir]{if(menu)menu(dir);};
             auto l=new QVBoxLayout(card);l->setContentsMargins(1,1,1,12);l->setSpacing(6);
-            l->addWidget(new Banner(Ui::artFor(dir),InstanceIcons::icon(info.icon,dir),qBound(100,cardWidth*9/20,150)));
+            l->addWidget(new Banner(InstanceIcons::background(dir),InstanceIcons::icon(info.icon,dir),qBound(100,cardWidth*9/20,150)));
             auto body=new QVBoxLayout;body->setContentsMargins(14,4,14,0);body->setSpacing(5);l->addLayout(body);
             auto title=new QLabel;title->setObjectName("cardTitle");title->setText(title->fontMetrics().elidedText(info.base.name,Qt::ElideRight,cardWidth-28));body->addWidget(title);
             auto sub=new QLabel(InstanceText::loader(info.base.loader)+" "+info.base.mcVersion+(info.modpack?"  ·  "+t("Modpack"):QString()));sub->setObjectName("muted");body->addWidget(sub);
@@ -144,6 +144,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     auto tool=[this,tools](const QString &icon,const QString &tip,const char *name,std::function<void()> InstanceDetail::*action){auto b=toolButton(icon,tip,name);tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this,action]{if(this->*action)(this->*action)();});};
     tool("share-2",t("Export instance"),"exportInstance",&InstanceDetail::exportZip);tool("file-text",t("Log"),"showLog",&InstanceDetail::log);
     auto folderButton=toolButton("folder",t("Open instance folder"),"openFolder");tools->addWidget(folderButton);connect(folderButton,&QToolButton::clicked,this,[this]{if(openFolder)openFolder({});});
+    tool("image",Language::text("Cambiar fondo","Change background","Mudar fundo"),"changeBackground",&InstanceDetail::changeBackground);
     tool("settings",t("Instance settings"),"instanceSettings",&InstanceDetail::settings);
     l->addSpacing(28); // the artwork shows above the title, like the instance page of the Minecraft Launcher
     auto titleRow=new Ui::ResponsiveRow(740);l->addWidget(titleRow);auto header=new QHBoxLayout;header->setSpacing(18);titleRow->box()->addLayout(header,1);
@@ -256,7 +257,7 @@ void InstanceDetail::paintEvent(QPaintEvent *){
     QLinearGradient fade(0,0,0,height);fade.setColorAt(0,QColor(20,20,22,120));fade.setColorAt(0.55,QColor(20,20,22,200));fade.setColorAt(1,QColor(20,20,22,255));p.fillRect(QRect(QPoint(0,0),area),fade);
 }
 void InstanceDetail::showInstance(const InstanceInfo &i){
-    if(m_dir!=i.base.dir){const auto dir=i.base.dir;m_dir=dir;m_backdrop={};m_scaled={};Ui::loadArt(Ui::artFor(dir),{1920,1080},this,[this,dir](const QPixmap &p){if(m_dir==dir){m_backdrop=p;m_scaled={};update();}});}
+    if(const auto art=InstanceIcons::background(i.base.dir);m_dir!=i.base.dir||m_art!=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch())){const auto dir=i.base.dir;m_dir=dir;m_art=art+QString::number(QFileInfo(art).lastModified().toMSecsSinceEpoch());m_backdrop={};m_scaled={};Ui::loadArt(art,{1920,1080},this,[this,dir](const QPixmap &p){if(m_dir==dir){m_backdrop=p;m_scaled={};update();}});}
     m_dir=i.base.dir;m_icon->setIcon(InstanceIcons::icon(i.icon,i.base.dir));m_name->setText(i.base.name);
     auto chips=static_cast<QBoxLayout*>(m_chips->layout());while(auto item=chips->takeAt(0)){if(item->widget())item->widget()->deleteLater();delete item;}
     auto chip=[chips](const QString &text,bool accent=false){auto c=new QLabel(text);c->setWordWrap(true);c->setObjectName("chip");c->setProperty("accent",accent);chips->addWidget(c);};
