@@ -34,6 +34,8 @@
 #include <stdexcept>
 
 namespace {
+// Raised when launch-profile.json must be rebuilt: 2 keeps every library classifier (Forge universal + client).
+constexpr int profileFormat=2;
 const QString manifestUrl = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 [[noreturn]] void fail(const QString &s) { throw std::runtime_error(s.toStdString()); }
 QString s(const QJsonObject &o, const char *k) { return o[QLatin1String(k)].toString(); }
@@ -126,6 +128,13 @@ QList<McInstance> McInstanceManager::instances() const {
         if (entry.isSymLink()) continue;
         try {
             auto o = ModRepository::read(entry.filePath()+"/instance.json");
+            // Loader instances prepared by launchers before 1.1.0 lost libraries that share a coordinate (Forge's universal jar):
+            // they install again, which reuses every downloaded file, so Play never starts a broken profile.
+            if (o["ready"].toBool() && s(o,"loader")!="vanilla") {
+                const auto profile = entry.filePath()+"/launch-profile.json";
+                int format=0; try { format=ModRepository::read(profile)["ebaliaProfile"].toInt(); } catch (...) {}
+                if (format < profileFormat) { o["ready"]=false; try { ModRepository::write(entry.filePath()+"/instance.json",o); } catch (...) {} }
+            }
             out.append({s(o,"name"),entry.filePath(),s(o,"mcVersion"),s(o,"loader"),o["ready"].toBool(),o["xmx"].toInt(4096),o["lastPlayed"].toInteger(),o["totalSecs"].toInteger()});
         } catch (...) { /* A damaged instance never prevents the other instances from opening. */ }
     }
@@ -361,6 +370,7 @@ void McInstanceManager::install(const QString &dir) {
     auto logging=profile["logging"].toObject()["client"].toObject();
     if (!logging.isEmpty()) { auto f=logging["file"].toObject(); download(f,m_root+"/assets/log_configs/"+safeRelative(s(f,"id"))); }
     javaFor(dir,info,profile); // Download the official runtime now rather than when the player presses Play.
+    profile["ebaliaProfile"]=profileFormat;
     ModRepository::write(dir+"/launch-profile.json",profile);
     info["ready"]=true; ModRepository::write(dir+"/instance.json",info); emit installProgress(dir,100,"Instalación completa");
 }

@@ -73,6 +73,16 @@ QByteArray profile(const QString &id,const QString &inherits,const QStringList &
 class CoreTests:public QObject {
     Q_OBJECT
 private slots:
+    void staleLoaderProfilesInstallAgain(){
+        // Forge instances prepared before 1.1.0 lost forge:universal: they must install again instead of crashing.
+        QTemporaryDir t;McInstanceManager manager(t.path());
+        auto forge=manager.createInstance("Old Forge","26.3","forge","66.0.9"),vanilla=manager.createInstance("Vanilla","26.3","vanilla");
+        for(const auto &dir:{forge,vanilla}){auto info=ModRepository::read(dir+"/instance.json");info["ready"]=true;ModRepository::write(dir+"/instance.json",info);ModRepository::write(dir+"/launch-profile.json",QJsonObject{{"id","old"}});}
+        QMap<QString,bool> ready;for(const auto &i:manager.instances())ready[i.name]=i.ready;
+        QVERIFY(!ready["Old Forge"]);QVERIFY(ready["Vanilla"]);QVERIFY(!ModRepository::read(forge+"/instance.json")["ready"].toBool());
+        auto info=ModRepository::read(forge+"/instance.json");info["ready"]=true;ModRepository::write(forge+"/instance.json",info);ModRepository::write(forge+"/launch-profile.json",QJsonObject{{"ebaliaProfile",2}});
+        for(const auto &i:manager.instances())if(i.name=="Old Forge")QVERIFY(i.ready);
+    }
     void loaderLibrariesKeepEveryClassifier(){
         // Regression: Forge 26.x ships forge:...:universal and forge:...:client; dropping one gave "Failed to find system mod: forge".
         auto lib=[](const QString &name){return QJsonObject{{"name",name}};};
