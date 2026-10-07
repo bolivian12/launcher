@@ -59,8 +59,11 @@ static void setEnvironment(const char *name,const QString &value){
 }
 class ButtonTranslator:public QTranslator { public: QString translate(const char *,const char *s,const char *,int) const override {return Language::standard(QString::fromUtf8(s));} bool isEmpty() const override {return false;} };
 int main(int argc,char **argv){
+    // Command-line test modes: on Windows the launcher is a GUI program whose standard error may not reach the caller.
+    if(const char *testLog=std::getenv("EBALIA_TEST_LOG");testLog&&*testLog){if(std::freopen(testLog,"a",stderr))std::setvbuf(stderr,nullptr,_IONBF,0);}
+    auto checkpoint=[](const char *step){if(std::getenv("EBALIA_TEST_LOG"))std::fprintf(stderr,"[start] %s\n",step);};
     QApplication::setOrganizationName("EBALIA");QApplication::setApplicationName("EBALIA Launcher");QApplication::setApplicationVersion(EBALIA_APP_VERSION);
-    QApplication app(argc,argv);
+    checkpoint("application");QApplication app(argc,argv);checkpoint("application ready");
     if(const auto portable=portableRoot();!portable.isEmpty()&&QDir().mkpath(portable)) {
         setEnvironment("EBALIA_DATA_DIR",portable);setEnvironment("EBALIA_PORTABLE","1");
         QSettings::setDefaultFormat(QSettings::IniFormat);QSettings::setPath(QSettings::IniFormat,QSettings::UserScope,portable+"/settings");
@@ -69,6 +72,7 @@ int main(int argc,char **argv){
     app.setDesktopFileName("ebalia-launcher");
     if(app.arguments().contains("--update-probe")) {fprintf(stdout,"{\"version\":\"%s\"}\n",EBALIA_APP_VERSION);return 0;}
     auto root=qEnvironmentVariable("EBALIA_DATA_DIR");if(root.isEmpty())root=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);QDir().mkpath(root);
+    checkpoint("data folder");
     const int applying=app.arguments().indexOf("--apply-update"),finishing=app.arguments().indexOf("--finish-update");
     const int updateArg=applying>=0?applying:finishing;
     QJsonObject pending;
@@ -77,10 +81,10 @@ int main(int argc,char **argv){
         pending=LauncherUpdater::readPending(app.arguments()[updateArg+1],root);
         if(pending.isEmpty()||!LauncherUpdater::waitForParent(pending))return 1;
     }else if(!app.arguments().contains("--selftest")&&LauncherUpdater::forwardToInstalled(root))return 0;
-    Language::current=QSettings().value("ui/language",QLocale::system().name().left(2)).toString();
+    checkpoint("update check");Language::current=QSettings().value("ui/language",QLocale::system().name().left(2)).toString();
     if(qEnvironmentVariableIsSet("EBALIA_LANGUAGE"))Language::current=qEnvironmentVariable("EBALIA_LANGUAGE");
     if(!Language::available().contains(Language::current))Language::current="en";
-    QLockFile lock(root+"/launcher.lock");if(!lock.tryLock(updateArg>=0?30000:0)){QMessageBox::information(nullptr,"EBALIA",Language::text("EBALIA ya está abierto con esta carpeta de datos.","EBALIA is already running with this data folder.","O EBALIA já está aberto com esta pasta de dados."));return 1;}
+    checkpoint("lock");QLockFile lock(root+"/launcher.lock");if(!lock.tryLock(updateArg>=0?30000:0)){QMessageBox::information(nullptr,"EBALIA",Language::text("EBALIA ya está abierto con esta carpeta de datos.","EBALIA is already running with this data folder.","O EBALIA já está aberto com esta pasta de dados."));return 1;}
     if(applying>=0&&!pending["nix"].toBool()) {
         try {return LauncherUpdater::applyPrepared(pending,root)?0:1;}
         catch(const std::exception &e){
@@ -96,9 +100,7 @@ int main(int argc,char **argv){
             QProcess::startDetached(old,{});return 1;
         }
     }
-    // Command-line test modes: on Windows the launcher is a GUI program whose standard error may not reach the caller.
-    if(const auto testLog=qEnvironmentVariable("EBALIA_TEST_LOG");!testLog.isEmpty()){if(std::freopen(QFile::encodeName(testLog).constData(),"a",stderr))std::setvbuf(stderr,nullptr,_IONBF,0);}
-    auto cli=app.arguments();if(cli.contains("--javatest")){for(auto j:JavaRuntime::discover())fprintf(stdout,"Java %s | %s | %s\n",j.version.toUtf8().constData(),j.architecture.toUtf8().constData(),j.path.toUtf8().constData());return 0;}
+    checkpoint("command line");auto cli=app.arguments();if(cli.contains("--javatest")){for(auto j:JavaRuntime::discover())fprintf(stdout,"Java %s | %s | %s\n",j.version.toUtf8().constData(),j.architecture.toUtf8().constData(),j.path.toUtf8().constData());return 0;}
     int javaDownload=cli.indexOf("--javadownload");if(javaDownload>=0&&javaDownload+1<cli.size()){try{auto java=JavaDownloader::install(root+"/mc/java",JavaDownloader::component(cli[javaDownload+1].toInt()),{},[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});auto check=JavaRuntime::inspect(java);fprintf(stdout,"\nJava %s | %s | %s\n",check.version.toUtf8().constData(),check.architecture.toUtf8().constData(),java.toUtf8().constData());return check.major?0:1;}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}}
     int lostLaunch=cli.indexOf("--lost-launchtest");if(lostLaunch>=0&&lostLaunch+1<cli.size()){
         VersionManager vm;vm.loadVersions();VersionInfo version;for(auto v:vm.getVersions())if(v.id==cli[lostLaunch+1])version=v;if(version.id.isEmpty()||!vm.isVersionInstalled(version)){fprintf(stderr,"Version not installed\n");return 1;}
