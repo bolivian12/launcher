@@ -10,6 +10,11 @@
 - Translation pass: the interactive tour, Patreon and creations pages, Lost Versions uninstall, Microsoft sign-in messages and the launcher updater are translated into all ten languages.
 - Website: installer and portable downloads side by side, SHA-256 of every package with a copy button and the command to verify it, and a reworked phone layout where every link stays visible.
 - New packages: Linux AppImage for any glibc 2.35+ distribution (Qt, libarchive and OpenSSL bundled; tested on Debian, Fedora, Arch and openSUSE in CI) with in-app updates, portable Windows `.zip`, Linux portable `.tar.gz`, and macOS Intel builds alongside Apple Silicon, each with a portable `.zip`.
+- Fixed Forge and NeoForge instances: loader libraries are merged by artifact and classifier, so Forge keeps its universal jar ("Failed to find system mod: forge"). Verified in game with Forge 26.3, 1.20.1, 1.16.5, 1.12.2, 1.8.9 and 1.7.10, NeoForge 26.3 and 1.21.1, Fabric and Quilt 26.3.
+- NeoForge 26.x and NeoForge for 1.20.1 are available; Fabric and Quilt pick the newest stable loader; Forge 1.7.10–1.12.2 installs through its legacy installer.
+- Lost Versions start with Java directly on Windows, macOS and Linux (no Wine): a1.1.1, Alpha 1.0.16, 1.1 Patch 1, Ghost, 554e, NSSS and every other archived version reach their menus. Archives are checked with SHA-256 and each version keeps its saves inside its own folder.
+- Modpack import from `.mrpack`, CurseForge `.zip`, Prism Launcher / MultiMC / PolyMC, CurseForge app, FTB App, ATLauncher, GDLauncher, Modrinth App and Technic, with Forge, NeoForge, Fabric, Quilt or vanilla. ZIPs wrapped in folders or made on macOS and Windows, file names in any language, Modrinth mirror URLs and optional files, and CurseForge resource packs and shaders are handled.
+- When a new release is available an "Update to …" button appears in the sidebar; it downloads, verifies and installs the update without visiting the website.
 
 # 1.1.0
 
