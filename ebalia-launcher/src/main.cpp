@@ -96,6 +96,8 @@ int main(int argc,char **argv){
             QProcess::startDetached(old,{});return 1;
         }
     }
+    // Command-line test modes: on Windows the launcher is a GUI program whose standard error may not reach the caller.
+    if(const auto testLog=qEnvironmentVariable("EBALIA_TEST_LOG");!testLog.isEmpty()){if(std::freopen(QFile::encodeName(testLog).constData(),"a",stderr))std::setvbuf(stderr,nullptr,_IONBF,0);}
     auto cli=app.arguments();if(cli.contains("--javatest")){for(auto j:JavaRuntime::discover())fprintf(stdout,"Java %s | %s | %s\n",j.version.toUtf8().constData(),j.architecture.toUtf8().constData(),j.path.toUtf8().constData());return 0;}
     int javaDownload=cli.indexOf("--javadownload");if(javaDownload>=0&&javaDownload+1<cli.size()){try{auto java=JavaDownloader::install(root+"/mc/java",JavaDownloader::component(cli[javaDownload+1].toInt()),{},[](int done,int total){fprintf(stderr,"\rJava %d / %d",done,total);});auto check=JavaRuntime::inspect(java);fprintf(stdout,"\nJava %s | %s | %s\n",check.version.toUtf8().constData(),check.architecture.toUtf8().constData(),java.toUtf8().constData());return check.major?0:1;}catch(const std::exception &e){fprintf(stderr,"%s\n",e.what());return 1;}}
     int lostLaunch=cli.indexOf("--lost-launchtest");if(lostLaunch>=0&&lostLaunch+1<cli.size()){

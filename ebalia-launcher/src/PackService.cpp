@@ -1,6 +1,7 @@
 #include "PackService.hpp"
 #include "Archive.hpp"
 #include "Download.hpp"
+#include "ModCompat.hpp"
 #include <QtCore>
 #include <QImage>
 #include <QXmlStreamReader>
@@ -46,6 +47,9 @@ void loaderId(QString id,QJsonObject &c){
     if(m.hasMatch()){c["loader"]=m.captured(1).toLower();c["loaderVersion"]=m.captured(2);}else{c["loader"]=id.section('-',0,0).toLower();c["loaderVersion"]=id.section('-',1);}
     normalizeLoader(c);
 }
+// Files of the official Minecraft Launcher: what it downloads again, and account files that are never copied.
+const QStringList launcherFiles{"versions","libraries","assets","runtime","webcache2","logs","crash-reports","launcher_profiles.json","launcher_settings.json","launcher_ui_state.json","launcher_log.txt","launcher_cef_log.txt","launcher_entitlements.json","launcher_gamer_pics.json","launcher_product_state.json","launcher_skins.json","treatment_tags.json","usercache.json"};
+const QStringList accountFiles{"launcher_accounts.json","launcher_accounts_microsoft_store.json","launcher_msa_credentials.bin","launcher_msa_credentials_microsoft_store.bin","launcher_msa_credentials.json"};
 // FTB App instances keep the loader target in .ftbapp/version.json (older ones in version.json).
 void ftbTargets(const QString &dir,QJsonObject &c){
     for(auto path:{".ftbapp/version.json","version.json"})for(auto v:json(dir+"/"+path)["targets"].toArray())if(v.toObject()["type"]=="modloader"){c["loader"]=v.toObject()["name"].toString().toLower();c["loaderVersion"]=v.toObject()["version"];return;}
@@ -91,12 +95,21 @@ void PackService::profileLoader(const QJsonObject &profile,QJsonObject &config){
     QStringList args;for(auto v:profile["arguments"].toObject()["game"].toArray())if(v.isString())args<<v.toString();
     args<<profile["minecraftArguments"].toString().split(' ',Qt::SkipEmptyParts);
     auto value=[&](const QString &key){auto i=args.indexOf(key);return i>=0&&i+1<args.size()?args[i+1]:QString();};
+    if(config["mcVersion"].toString().isEmpty()&&!value("--fml.mcVersion").isEmpty())config["mcVersion"]=value("--fml.mcVersion");
+    if(config["mcVersion"].toString().isEmpty())for(auto v:profile["libraries"].toArray()){const auto name=v.toObject()["name"].toString();if(name.startsWith("net.fabricmc:intermediary:")||name.startsWith("org.quiltmc:hashed:")){config["mcVersion"]=name.section(':',2,2);break;}}
     if(!value("--fml.neoForgeVersion").isEmpty()){config["loader"]="neoforge";config["loaderVersion"]=value("--fml.neoForgeVersion");}
     else if(!value("--fml.forgeVersion").isEmpty()){config["loader"]=neoforged||value("--fml.forgeGroup")=="net.neoforged"?"neoforge":"forge";config["loaderVersion"]=value("--fml.forgeVersion");}
 }
 QJsonObject PackService::ftbManifest(const QJsonObject &d,const QString &stage){
     QJsonObject c{{"loader","vanilla"}};for(auto v:d["targets"].toArray()){auto t=v.toObject();if(t["type"]=="game")c["mcVersion"]=t["version"];if(t["type"]=="modloader"){c["loader"]=t["name"].toString().toLower();c["loaderVersion"]=t["version"];}}
     for(auto v:d["files"].toArray()){auto f=v.toObject();if(f["serveronly"].toBool()||f["optional"].toBool())continue;auto path=f["path"].toString();while(path.startsWith("./"))path=path.mid(2);if(path==".")path.clear();path=(path.isEmpty()?QString():path+"/")+safeName(f["name"].toString());download(f["url"].toString(),stage+"/"+safePath(path),fileHashes(f));}return c;
+}
+QStringList PackService::releases(){
+    // Mojang's release list, newest first, as McInstanceManager keeps it; downloaded when the launcher has not yet.
+    QJsonObject manifest=json(m_root+"/mc/manifest.json");
+    if(manifest.isEmpty())try{manifest=QJsonDocument::fromJson(bytes("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")).object();}catch(...){}
+    QStringList out;for(const auto &v:manifest["versions"].toArray())if(v.toObject()["type"]=="release")out<<v.toObject()["id"].toString();
+    return out;
 }
 QJsonObject PackService::unpack(const QString &archive,const QString &stage){QTemporaryDir temp;Archive::extract(archive,temp.path());return importFolder(temp.path(),stage);}
 QJsonObject PackService::importFolder(QString base,const QString &stage){
@@ -140,7 +153,40 @@ QJsonObject PackService::importFolder(QString base,const QString &stage){
         if(!QDir(base+"/jarmods").isEmpty()&&QDir(base+"/jarmods").exists())fail("This legacy pack modifies minecraft.jar directly; its original launcher is required.");
     }
     QString game=base;if(QDir(base+"/minecraft").exists())game+="/minecraft";else if(QDir(base+"/.minecraft").exists())game+="/.minecraft";
-    copyTree(game,stage,junkNames);
+    QStringList skip=junkNames+accountFiles;
+    // A version folder of TLauncher (and other launchers built on the official format): "<name>.json" with the
+    // libraries and main class next to "<name>.jar" and the game folders.
+    if(c["mcVersion"].toString().isEmpty()&&!QFile::exists(base+"/instance.json")&&!QFile::exists(base+"/minecraftinstance.json")){
+        QString chosen;QJsonObject profile;
+        for(const auto &file:QDir(game).entryList({"*.json"},QDir::Files,QDir::Name)){
+            const auto o=json(game+"/"+file);if(o["mainClass"].toString().isEmpty()||!o["libraries"].isArray())continue;
+            // Prefer the profile that has its game jar beside it, then one that names a loader.
+            const bool jar=QFile::exists(game+"/"+QFileInfo(file).completeBaseName()+".jar");
+            if(chosen.isEmpty()||jar||(!o["inheritsFrom"].toString().isEmpty()&&profile["inheritsFrom"].toString().isEmpty())){chosen=file;profile=o;if(jar)break;}
+        }
+        if(!chosen.isEmpty()){
+            profileLoader(profile,c);
+            if(c["mcVersion"].toString().isEmpty())c["mcVersion"]=profile["inheritsFrom"].toString(profile["jar"].toString());
+            if(c["mcVersion"].toString().isEmpty()&&QRegularExpression(R"(^\d+\.\d+(\.\d+)?$)").match(profile["id"].toString()).hasMatch())c["mcVersion"]=profile["id"];
+            const auto name=QFileInfo(chosen).completeBaseName();
+            skip<<chosen<<name+".jar"<<"TLauncherAdditional.json"<<"natives"<<"logs"<<"crash-reports"<<"usercache.json"<<"usernamecache.json";
+        }
+    }
+    // A .minecraft folder of the official Minecraft Launcher: the version played last (or the newest, loaders first).
+    if(c["mcVersion"].toString().isEmpty()&&QDir(game+"/versions").exists()&&!QFile::exists(base+"/instance.json")&&!QFile::exists(base+"/minecraftinstance.json")){
+        const QDir versions(game+"/versions");QString chosen;QDateTime newest;
+        for(const auto &v:json(game+"/launcher_profiles.json")["profiles"].toObject()){
+            const auto p=v.toObject();const auto id=p["lastVersionId"].toString();const auto used=QDateTime::fromString(p["lastUsed"].toString(),Qt::ISODateWithMs);
+            if(!ModRepository::safeName(id)||!QFile::exists(versions.filePath(id+"/"+id+".json")))continue;
+            if(chosen.isEmpty()||used>newest){chosen=id;newest=used;}
+        }
+        if(chosen.isEmpty()){QDateTime time;bool loader=false;
+            for(const auto &id:versions.entryList(QDir::Dirs|QDir::NoDotAndDotDot)){const auto file=versions.filePath(id+"/"+id+".json");if(!QFile::exists(file))continue;
+                const bool isLoader=!json(file)["inheritsFrom"].toString().isEmpty();const auto modified=QFileInfo(file).lastModified();
+                if(chosen.isEmpty()||(isLoader&&!loader)||(isLoader==loader&&modified>time)){chosen=id;time=modified;loader=isLoader;}}}
+        if(!chosen.isEmpty()){const auto profile=json(versions.filePath(chosen+"/"+chosen+".json"));profileLoader(profile,c);if(c["mcVersion"].toString().isEmpty())c["mcVersion"]=profile["inheritsFrom"].toString(profile["id"].toString(chosen));skip<<launcherFiles;}
+    }
+    copyTree(game,stage,skip);
     if(c["mcVersion"].toString().isEmpty()&&QFile::exists(base+"/minecraftinstance.json")){ // CurseForge app instance folder
         const auto o=ModRepository::read(base+"/minecraftinstance.json");const auto loader=o["baseModLoader"].toObject();
         c["mcVersion"]=o["gameVersion"].toString(loader["minecraftVersion"].toString());if(!loader["name"].toString().isEmpty())loaderId(loader["name"].toString(),c);
@@ -168,6 +214,10 @@ QJsonObject PackService::importFolder(QString base,const QString &stage){
     if(c["mcVersion"].toString().isEmpty()){ // Technic
         for(auto path:{"bin/version.json","version.json","pack.json"})if(QFile::exists(stage+"/"+path)){auto profile=ModRepository::read(stage+"/"+path);profileLoader(profile,c);}
         if(QFile::exists(stage+"/bin/modpack.jar")&&c["loader"]=="vanilla"){QTemporaryDir jar;Archive::extract(stage+"/bin/modpack.jar",jar.path());if(QFile::exists(jar.path()+"/version.json"))profileLoader(ModRepository::read(jar.path()+"/version.json"),c);else fail("This legacy pack modifies minecraft.jar directly; its original launcher is required.");}
+    }
+    if(c["mcVersion"].toString().isEmpty()){ // only mods: the version and loader every mod accepts
+        const auto mods=ModCompat::scan(stage+"/mods");const auto found=ModCompat::detect(mods,releases());
+        if(!found.minecraft.isEmpty()){c["mcVersion"]=found.minecraft;c["loader"]=found.loader;c.remove("loaderVersion");}
     }
     for(auto name:{"instance.cfg","mmc-pack.json","minecraftinstance.json","profile.json"})QFile::remove(stage+"/"+name);
     return c;
@@ -212,6 +262,29 @@ QJsonArray PackService::localInstances(){
     for(const auto &folder:ftbFolders)for(const auto &dir:QDir(folder).entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)){
         try{auto o=ModRepository::read(dir.filePath()+"/instance.json");if(o["mcVersion"].toString().isEmpty())continue;QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["mcVersion"]}};loaderId(o["modLoader"].toString(),e);if(e["loader"]=="vanilla")ftbTargets(dir.filePath(),e);entry(dir.filePath(),"FTB App",e);}catch(...){}
     }
+    // The official Minecraft Launcher and launchers that share its .minecraft format (TLauncher, SKLauncher…):
+    // the .minecraft folder itself when it has mods, and versions with a game folder of their own.
+#ifdef Q_OS_WIN
+    const QString dotMinecraft=qEnvironmentVariable("APPDATA")+"/.minecraft";
+#elif defined(Q_OS_MACOS)
+    const QString dotMinecraft=home+"/Library/Application Support/minecraft";
+#else
+    const QString dotMinecraft=home+"/.minecraft";
+#endif
+    auto describeProfile=[](const QString &file){QJsonObject e{{"loader","vanilla"}};const auto p=json(file);profileLoader(p,e);if(e["mcVersion"].toString().isEmpty())e["mcVersion"]=p["inheritsFrom"].toString(p["jar"].toString(p["id"].toString()));normalizeLoader(e);return e;};
+    const bool tlauncher=QFileInfo::exists(dotMinecraft+"/TlauncherProfiles.json")||QFileInfo::exists(dotMinecraft+"/tlauncher_profiles.json");
+    for(const auto &dir:QDir(dotMinecraft+"/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)){
+        const auto file=dir.filePath()+"/"+dir.fileName()+".json";
+        if(!QFile::exists(file)||!(QDir(dir.filePath()+"/mods").exists()||QDir(dir.filePath()+"/saves").exists()))continue;
+        try{auto e=describeProfile(file);if(e["mcVersion"].toString().isEmpty())continue;e["name"]=dir.fileName();entry(dir.filePath(),tlauncher?"TLauncher":"Minecraft Launcher",e);}catch(...){}
+    }
+    if(QDir(dotMinecraft+"/mods").exists()&&!QDir(dotMinecraft+"/mods").isEmpty()){
+        // Same choice as the import: the version played last.
+        QString chosen;QDateTime newest;
+        for(const auto &v:json(dotMinecraft+"/launcher_profiles.json")["profiles"].toObject()){const auto p=v.toObject();const auto id=p["lastVersionId"].toString();const auto used=QDateTime::fromString(p["lastUsed"].toString(),Qt::ISODateWithMs);
+            if(ModRepository::safeName(id)&&QFile::exists(dotMinecraft+"/versions/"+id+"/"+id+".json")&&(chosen.isEmpty()||used>newest)){chosen=id;newest=used;}}
+        if(!chosen.isEmpty())try{auto e=describeProfile(dotMinecraft+"/versions/"+chosen+"/"+chosen+".json");e["name"]=QString(".minecraft · ")+chosen;entry(dotMinecraft,tlauncher?"TLauncher":"Minecraft Launcher",e);}catch(...){}
+    }
     for(const auto &dir:QDir(curse).entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot,QDir::Name)){
         try{auto o=ModRepository::read(dir.filePath()+"/minecraftinstance.json");QJsonObject e{{"name",o["name"].toString(dir.fileName())},{"mcVersion",o["gameVersion"]}};auto loader=o["baseModLoader"].toObject()["name"].toString();if(!loader.isEmpty())loaderId(loader,e);entry(dir.filePath(),"CurseForge",e);}catch(...){}
     }
@@ -229,6 +302,9 @@ QString PackService::install(const QJsonObject &pack,const QJsonObject &build,co
     else if(provider=="atlauncher"){auto base=atl+"packs/"+enc(id)+"/versions/"+enc(version)+"/";auto d=get(base+"Configs.json").object();c["mcVersion"]=d["minecraft"];auto loader=d["loader"].toObject();if(!loader.isEmpty()){c["loader"]=loader["type"];const auto meta=loader["metadata"].toObject();c["loaderVersion"]=meta["version"].toString(meta["loader"].toString());}for(auto v:d["mods"].toArray()){auto f=v.toObject();if(!f["client"].toBool(true)||f["optional"].toBool())continue;auto type=f["type"].toString("mods");QString folder;if(type=="mods")folder="mods";else if(type=="coremods")folder="coremods";else if(type=="resourcepack")folder="resourcepacks";else if(type=="shaderpack")folder="shaderpacks";else if(type=="texturepack")folder="texturepacks";else if(type=="root")folder="";else if(type=="dependency")folder="mods/"+c["mcVersion"].toString();else fail("Unsupported ATLauncher file type: "+type+" · "+f["name"].toString());if(f["download"]=="browser")fail("Manual download required by author: "+f["url"].toString());auto url=f["url"].toString();if(f["download"]=="server")url=atl+url;download(url,stage+"/"+(folder.isEmpty()?QString():folder+"/")+safeName(f["file"].toString()),fileHashes(f));}if(!d["noConfigs"].toBool()){download(base+"Configs.zip",archive,d["configs"].toObject());Archive::extract(archive,stage);}}
     else fail("Unknown pack source");
     normalizeLoader(c);
+    if(c["mcVersion"].toString().isEmpty())fail("Could not detect the Minecraft version of this pack: it has no launcher data and no mods that name a version.");
+    // Mods that do not match the pack's Minecraft version or loader are reported (the pack's own choice is kept).
+    if(c["loader"].toString()!="vanilla"||QDir(stage+"/mods").exists()){QJsonArray warnings;for(const auto &p:ModCompat::problems(ModCompat::scan(stage+"/mods"),c["mcVersion"].toString(),c["loader"].toString()=="vanilla"?QString("vanilla"):c["loader"].toString()))warnings.append(p);if(!warnings.isEmpty())c["compatibilityWarnings"]=warnings;}
     if(!ModRepository::safeName(c["mcVersion"].toString())||!QStringList{"vanilla","forge","neoforge","fabric","quilt"}.contains(c["loader"].toString()))fail("Pack Minecraft version or loader is unsupported");
     // Imported content cannot replace launcher metadata or impersonate a completed installation.
     c["name"]=name.trimmed();if(c["name"].toString().isEmpty())fail("Instance name is required");c["group"]=group;c["xmx"]=qBound(512,memory,65536);c["ready"]=false;c["packProvider"]=provider;c["packId"]=id;c["packVersion"]=version;

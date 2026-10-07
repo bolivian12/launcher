@@ -281,6 +281,20 @@ printf started > launched-marker
             for(int n=0;n<list->count();++n)if(list->item(n)->data(Qt::UserRole).toString()==":/art/backgrounds/warden.png")list->setCurrentRow(n);d->accept();});
         QVERIFY(InstanceIcons::chooseBackground(nullptr,dir,"custom",key,custom));QCOMPARE(key,QString(":/art/backgrounds/warden.png"));QVERIFY(custom.isNull());
     }
+    void crashSummaryWindow(){
+        // A friend's real Forge 26.3 crash: a missing dependency and an AMD driver crash, explained with a button each.
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,820);window.show();auto manager=window.findChild<McInstanceManager*>();
+        auto dir=manager->createInstance("Biomes","26.3","forge","66.0.9");
+        {QFile f(dir+"/launcher.log");QVERIFY(f.open(QIODevice::WriteOnly));f.write("Missing or unsupported mandatory dependencies:\n\tMod ID: 'terrablender', Requested by: 'biomesoplenty', Expected range: '[26.3.0.0.6,)', Actual version: '[MISSING]'\n#\n# Problematic frame:\n# C  [atio6axx.dll+0x192b60]\n");}
+        bool shown=false;
+        QTimer::singleShot(800,&window,[&]{QDialog *d=nullptr;for(auto w:QApplication::topLevelWidgets())if(w->objectName()=="crashSummaryWindow"&&w->isVisible())d=qobject_cast<QDialog*>(w);
+            if(!d)return;shown=true;QCOMPARE(d->findChildren<QFrame*>("crashFinding").size(),2);QVERIFY(d->findChild<QPushButton*>("installMissingMod"));
+            QStringList texts;for(auto l:d->findChildren<QLabel*>())texts<<l->text();const auto all=texts.join("\n");QVERIFY(all.contains("terrablender"));QVERIFY(all.contains("biomesoplenty"));QVERIFY(all.contains("AMD"));
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);d->grab().save(out+"/crash-summary.png");}
+            d->reject();});
+        emit manager->gameEnded(dir,1);QTRY_VERIFY_WITH_TIMEOUT(shown,5000);
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

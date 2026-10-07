@@ -4,6 +4,9 @@
 - Faster game downloads: connections to Mojang's servers are reused and libraries download in parallel. A fresh Minecraft 1.21.1 (3,900 files, 850 MB) went from 143 to 28 seconds in our test.
 - Instance backgrounds: choose any launcher picture or one from your computer, from the instance page or its settings.
 - The instance icon can be changed from the instance settings too.
+- When Minecraft closes with an error, a summary says what failed with a button to fix it: a missing mod (installed from Modrinth for the instance's version and loader), a graphics driver crash (link to the AMD, NVIDIA or Intel driver, or software graphics), no OpenGL, the wrong Java or too little memory. The full log is one click away.
+- Import .minecraft folders: the official Minecraft Launcher's, and version folders of launchers that use its format (TLauncher, SKLauncher…), zipped or not. The Minecraft version and loader come from the version profile or, when there is none, from the mods themselves. These folders also appear in the list of instances found on the computer, ready to import. Account files are never copied.
+- Every import checks that its mods match the pack's Minecraft version and loader and names the ones that do not.
 
 # 1.1.0
 

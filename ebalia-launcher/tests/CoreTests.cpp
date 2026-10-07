@@ -19,6 +19,8 @@
 #include "ServerList.hpp"
 #include "LostNative.hpp"
 #include "SoftwareGl.hpp"
+#include "ModCompat.hpp"
+#include "CrashReport.hpp"
 #include <stdexcept>
 #include <clocale>
 #include <functional>
@@ -564,6 +566,85 @@ private slots:
         // Windows keeps narrow file names in the ANSI code page: emulate a C library locale that is not UTF-8.
         struct Restore{QByteArray saved=setlocale(LC_CTYPE,nullptr);~Restore(){setlocale(LC_CTYPE,saved.constData());}}restore;
         QVERIFY(setlocale(LC_CTYPE,"C"));check("C locale");
+    }
+    void importLauncherFoldersAndMods(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &url)->QByteArray{throw std::runtime_error(("offline: "+url.toString()).toStdString());});
+        QDir().mkpath(root.path()+"/mc");writeFile(root.path()+"/mc/manifest.json",encode(QJsonObject{{"versions",QJsonArray{QJsonObject{{"id","1.21.1"},{"type","release"}},QJsonObject{{"id","1.20.4"},{"type","release"}},QJsonObject{{"id","1.20.1"},{"type","release"}},QJsonObject{{"id","1.20"},{"type","release"}}}}}));
+        auto fabricJar=[](QString id,QString mc){return zipBytes({{"fabric.mod.json",encode(QJsonObject{{"schemaVersion",1},{"id",id},{"name",id},{"depends",QJsonObject{{"minecraft",mc},{"fabricloader",">=0.15"}}}})}});};
+        auto forgeJar=[](QString name,QString range){return zipBytes({{"META-INF/mods.toml",QString("modLoader=\"javafml\"\n[[mods]]\nmodId=\"x\"\ndisplayName=\"%1\"\n[[dependencies.x]]\nmodId=\"forge\"\nversionRange=\"[47,)\"\n[[dependencies.x]]\nmodId=\"minecraft\"\nmandatory=true\nversionRange=\"%2\"\n").arg(name,range).toUtf8()}});};
+        // TLauncher version folder, zipped as is: merged Forge profile without inheritsFrom.
+        auto tlauncher=encode(QJsonObject{{"id","EsquizosMineZ"},{"mainClass","cpw.mods.bootstraplauncher.BootstrapLauncher"},{"libraries",QJsonArray{QJsonObject{{"name","net.minecraftforge:fmlloader:1.20.1-47.2.0"}}}},{"arguments",QJsonObject{{"game",QJsonArray{"--launchTarget","forgeclient","--fml.forgeVersion","47.2.0","--fml.mcVersion","1.20.1","--fml.forgeGroup","net.minecraftforge"}}}}});
+        auto path=root.path()+"/tlauncher.zip";zipEntries(path,prefixed("Ebalia Prueba/",{{"EsquizosMineZ.json",tlauncher},{"EsquizosMineZ.jar","client"},{"TLauncherAdditional.json","{}"},{"options.txt","fov:0"},{"mods/journeymap.jar",forgeJar("JourneyMap","[1.20.1,1.20.2)")},{"config/a.toml","cfg"},{"saves/World/level.dat","level"},{"natives/lwjgl.dll","dll"}}));
+        auto info=importPath(service,path);auto dir=info["dir"].toString();QCOMPARE(describe(info),QString("1.20.1 forge 47.2.0"));
+        QCOMPARE(readFile(dir+"/saves/World/level.dat"),QByteArray("level"));QCOMPARE(readFile(dir+"/options.txt"),QByteArray("fov:0"));QVERIFY(QFile::exists(dir+"/mods/journeymap.jar"));
+        for(auto name:{"EsquizosMineZ.json","EsquizosMineZ.jar","TLauncherAdditional.json","natives"})QVERIFY2(!QFile::exists(dir+"/"+name),name);
+        QVERIFY(info["compatibilityWarnings"].toArray().isEmpty());
+        // Official Minecraft Launcher .minecraft: the profile played last; game files and accounts stay out.
+        auto profiles=encode(QJsonObject{{"profiles",QJsonObject{{"a",QJsonObject{{"lastVersionId","1.20.1"},{"lastUsed","2026-01-01T10:00:00.000Z"}}},{"b",QJsonObject{{"lastVersionId","fabric-loader-0.15.11-1.20.1"},{"lastUsed","2026-05-01T10:00:00.000Z"}}}}}});
+        path=root.path()+"/official.zip";zipEntries(path,prefixed(".minecraft/",{{"launcher_profiles.json",profiles},{"launcher_accounts.json","{\"accessToken\":\"secret\"}"},{"versions/1.20.1/1.20.1.json",encode(QJsonObject{{"id","1.20.1"},{"mainClass","x"}})},{"versions/fabric-loader-0.15.11-1.20.1/fabric-loader-0.15.11-1.20.1.json",profile("fabric-loader-0.15.11-1.20.1","1.20.1",{"net.fabricmc:intermediary:1.20.1","net.fabricmc:fabric-loader:0.15.11"})},{"assets/indexes/5.json","{}"},{"mods/sodium.jar",fabricJar("sodium","~1.20.1")},{"saves/W/level.dat","level"}}));
+        info=importPath(service,path);dir=info["dir"].toString();QCOMPARE(describe(info),QString("1.20.1 fabric 0.15.11"));
+        for(auto name:{"launcher_accounts.json","launcher_profiles.json","versions","assets"})QVERIFY2(!QFile::exists(dir+"/"+name),name);QCOMPARE(readFile(dir+"/saves/W/level.dat"),QByteArray("level"));
+        // Only mods: the newest release every mod accepts.
+        path=root.path()+"/mods.zip";zipEntries(path,{{"mods/sodium.jar",fabricJar("sodium",">=1.20 <1.21")},{"mods/lithium.jar",fabricJar("lithium","~1.20.1")},{"config/x.json","{}"}});
+        QCOMPARE(describe(importPath(service,path)),QString("1.20.1 fabric"));
+        path=root.path()+"/forge-mods.zip";zipEntries(path,{{"mods/create.jar",forgeJar("Create","[1.20.1,1.20.2)")},{"mods/jei.jar",forgeJar("JEI","[1.20,1.21)")}});
+        QCOMPARE(describe(importPath(service,path)),QString("1.20.1 forge"));
+        // A pack's own version is kept and mods that do not fit are reported.
+        path=root.path()+"/mixed.mrpack";zipEntries(path,{{"modrinth.index.json",mrIndex({{"minecraft","1.20.1"},{"forge","47.2.0"}})},{"overrides/mods/sodium.jar",fabricJar("Sodium","~1.20.1")},{"overrides/mods/create.jar",forgeJar("Create","[1.21,1.22)")}});
+        info=importPath(service,path);QCOMPARE(describe(info),QString("1.20.1 forge 47.2.0"));
+        const auto warnings=info["compatibilityWarnings"].toArray();QCOMPARE(warnings.size(),2);
+        QVERIFY(warnings[0].toString().contains("Create")||warnings[1].toString().contains("Create"));QVERIFY(warnings[0].toString().contains("Sodium")||warnings[1].toString().contains("Sodium"));
+        // Nothing that names a version.
+        path=root.path()+"/world.zip";zipEntries(path,{{"saves/W/level.dat","level"}});QVERIFY(describe(importPath(service,path)).startsWith("error: Could not detect"));
+    }
+    void minecraftFoldersAreFoundAndImported(){
+#ifdef Q_OS_LINUX
+        // ~/.minecraft as TLauncher leaves it: versions with their own game folder (mods, saves) and a shared one.
+        QTemporaryDir home;const auto previous=qgetenv("HOME");qputenv("HOME",home.path().toUtf8());auto restore=qScopeGuard([&]{qputenv("HOME",previous);});
+        const auto mc=home.path()+"/.minecraft";
+        auto forgeJar=zipBytes({{"META-INF/mods.toml",QByteArray("[[mods]]\nmodId=\"journeymap\"\ndisplayName=\"JourneyMap\"\n[[dependencies.journeymap]]\nmodId=\"minecraft\"\nversionRange=\"[1.20.1,1.20.2)\"\n")}});
+        writeTree(mc,{{"TlauncherProfiles.json","{}"},
+            {"versions/EsquizosMineZ/EsquizosMineZ.json",encode(QJsonObject{{"id","EsquizosMineZ"},{"mainClass","cpw.mods.bootstraplauncher.BootstrapLauncher"},{"libraries",QJsonArray{QJsonObject{{"name","net.minecraftforge:fmlloader:1.20.1-47.2.0"}}}},{"arguments",QJsonObject{{"game",QJsonArray{"--fml.forgeVersion","47.2.0","--fml.mcVersion","1.20.1"}}}}})},
+            {"versions/EsquizosMineZ/EsquizosMineZ.jar","client"},{"versions/EsquizosMineZ/mods/journeymap.jar",forgeJar},{"versions/EsquizosMineZ/saves/W/level.dat","level"},
+            {"versions/1.21.1/1.21.1.json",encode(QJsonObject{{"id","1.21.1"},{"mainClass","x"},{"libraries",QJsonArray{}}})},
+            {"versions/fabric-loader-0.16.7-1.21.1/fabric-loader-0.16.7-1.21.1.json",profile("fabric-loader-0.16.7-1.21.1","1.21.1",{"net.fabricmc:intermediary:1.21.1","net.fabricmc:fabric-loader:0.16.7"})},
+            {"launcher_profiles.json",encode(QJsonObject{{"profiles",QJsonObject{{"f",QJsonObject{{"lastVersionId","fabric-loader-0.16.7-1.21.1"},{"lastUsed","2026-09-01T00:00:00.000Z"}}}}}})},
+            {"mods/sodium.jar",zipBytes({{"fabric.mod.json",encode(QJsonObject{{"id","sodium"},{"depends",QJsonObject{{"minecraft","~1.21.1"}}}})}})}});
+        QMap<QString,QJsonObject> found;for(const auto &v:PackService::localInstances()){auto o=v.toObject();found[o["path"].toString()]=o;}
+        QVERIFY(found.contains(mc+"/versions/EsquizosMineZ"));QVERIFY(found.contains(mc));QVERIFY(!found.contains(mc+"/versions/1.21.1")); // no game folder of its own
+        auto version=found[mc+"/versions/EsquizosMineZ"];QCOMPARE(version["source"].toString(),QString("TLauncher"));QCOMPARE(describe(version),QString("1.20.1 forge 47.2.0"));
+        QCOMPARE(describe(found[mc]),QString("1.21.1 fabric 0.16.7"));
+        // Importing the listed folder creates the instance with that version and loader.
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &u)->QByteArray{throw std::runtime_error(u.toString().toStdString());});
+        auto info=importPath(service,mc+"/versions/EsquizosMineZ");QCOMPARE(describe(info),QString("1.20.1 forge 47.2.0"));QVERIFY(QFile::exists(info["dir"].toString()+"/mods/journeymap.jar"));QVERIFY(!QFile::exists(info["dir"].toString()+"/EsquizosMineZ.jar"));
+        info=importPath(service,mc);QCOMPARE(describe(info),QString("1.21.1 fabric 0.16.7"));QVERIFY(QFile::exists(info["dir"].toString()+"/mods/sodium.jar"));QVERIFY(!QFile::exists(info["dir"].toString()+"/versions"));
+#else
+        QSKIP("Uses the Linux location of .minecraft");
+#endif
+    }
+    void modVersionRanges(){
+        ModCompat::Mod fabric;fabric.loader="fabric";
+        auto fits=[&](QStringList ranges,QString mc,bool maven=false){fabric.ranges=ranges;fabric.maven=maven;return ModCompat::accepts(fabric,mc);};
+        QVERIFY(fits({"~1.20.1"},"1.20.4"));QVERIFY(!fits({"~1.20.1"},"1.21"));QVERIFY(!fits({"~1.20.1"},"1.20"));
+        QVERIFY(fits({">=1.20 <1.21"},"1.20.6"));QVERIFY(!fits({">=1.20 <1.21"},"1.21.1"));QVERIFY(fits({"1.20.x"},"1.20.2"));QVERIFY(fits({"*"},"26.3"));
+        QVERIFY(fits({"1.20.1","1.20.2"},"1.20.2"));QVERIFY(!fits({"1.20.1"},"1.20.2"));QVERIFY(fits({">=1.21.2-alpha.24.38.a"},"1.21.4"));QVERIFY(fits({"^1.20"},"1.21"));
+        QVERIFY(fits({"[1.20.1,1.21)"},"1.20.6",true));QVERIFY(!fits({"[1.20.1,1.21)"},"1.21",true));QVERIFY(fits({"[1.20.1]"},"1.20.1",true));QVERIFY(!fits({"[1.20.1]"},"1.20.2",true));
+        QVERIFY(fits({"[1.18,1.19),[1.20,1.21)"},"1.20.1",true));QVERIFY(!fits({"[1.18,1.19),[1.20,1.21)"},"1.19.2",true));QVERIFY(fits({"[26.3,)"},"26.3",true));QVERIFY(fits({"1.20.1"},"1.19",true)); // bare: a preference
+        QList<ModCompat::Mod> mods;ModCompat::Mod a;a.name="A";a.loader="fabric";a.ranges={"~1.20.1"};ModCompat::Mod b;b.name="B";b.loader="fabric";b.ranges={"1.21.1"};mods<<a<<b;
+        auto r=ModCompat::detect(mods,{"1.21.1","1.20.4","1.20.1"});QVERIFY(!r.compatible());QCOMPARE(r.problems.size(),1);
+    }
+    void crashSummaries(){
+        // Lines from real crash logs (Forge 26.3 with Biomes O' Plenty, an AMD driver crash, a virtual machine, Fabric).
+        auto f=CrashReport::analyze("[log4j] Missing or unsupported mandatory dependencies:\n\tMod ID: 'terrablender', Requested by: 'biomesoplenty', Expected range: '[26.3.0.0.6,)', Actual version: '[MISSING]'\n\tMod ID: 'minecraft', Requested by: 'x', Expected range: '[1.0]', Actual version: '26.3'");
+        QCOMPARE(f.size(),1);QCOMPARE(f[0].kind,CrashReport::Finding::MissingMod);QCOMPARE(f[0].mod,QString("terrablender"));QCOMPARE(f[0].requiredBy,QString("biomesoplenty"));QCOMPARE(f[0].versions,QString("[26.3.0.0.6,)"));
+        f=CrashReport::analyze("# Problematic frame:\n# C  [atio6axx.dll+0x192b60]\n");QCOMPARE(f.size(),1);QCOMPARE(f[0].kind,CrashReport::Finding::GraphicsDriver);QCOMPARE(f[0].vendor,QString("AMD"));
+        f=CrashReport::analyze("# C  [nvoglv64.dll+0x1]");QVERIFY(f.isEmpty()); // without "Problematic frame" it is not the crash site
+        f=CrashReport::analyze("# Problematic frame:\n# C  [nvoglv64.dll+0xabc]");QCOMPARE(f[0].vendor,QString("NVIDIA"));
+        f=CrashReport::analyze("FATAL ERROR in native method: [LWJGL] Thread[#3,Render thread,5,main]: No context is current or a function that is not available in the current context was called.");QCOMPARE(f[0].kind,CrashReport::Finding::NoOpenGL);
+        f=CrashReport::analyze("\t - Mod 'Sodium Extra' (sodium-extra) 0.5.1 requires any version of fabric-api, which is missing!\n\t - Mod 'Iris' (iris) 1.7 requires version 0.5.0 or later of mod 'Sodium' (sodium), which is missing!");
+        QCOMPARE(f.size(),2);QCOMPARE(f[0].mod,QString("fabric-api"));QCOMPARE(f[0].requiredBy,QString("sodium-extra"));QCOMPARE(f[1].mod,QString("sodium"));QCOMPARE(f[1].versions,QString("0.5.0 or later"));
+        f=CrashReport::analyze("java.lang.UnsupportedClassVersionError: x has been compiled by a more recent version of the Java Runtime (class file version 65.0), this version of the Java Runtime only recognizes class file versions up to 61.0");QCOMPARE(f[0].kind,CrashReport::Finding::JavaVersion);QCOMPARE(f[0].versions,QString("21"));
+        QVERIFY(CrashReport::analyze("Caused by: java.lang.IllegalStateException: Failed to find system mod: forge").isEmpty());
     }
     void importRejectsUnsafePaths(){
         QTemporaryDir root;PackService service(root.path(),[](const QUrl &){return QByteArray("evil");});

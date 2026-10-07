@@ -30,7 +30,9 @@ jobs:
           EBALIA_DATA_DIR: ${{ runner.temp }}/ebalia
           QT_QPA_PLATFORM: offscreen
         run: |
-          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--installtest','${{ inputs.version }}' -RedirectStandardError install.log -Wait -PassThru -NoNewWindow
+          $env:EBALIA_TEST_LOG = "$PWD/install.log"
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--installtest','${{ inputs.version }}' -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(900000)) { Get-Content install.log -Tail 40; Stop-Process -Id $p.Id -Force; throw "Installation did not finish in 15 minutes" }
           Get-Content install.log -Tail 5
           if ($p.ExitCode -ne 0) { throw "Installation failed" }
           $dir = (Get-Content install.log -Tail 1).Trim()
@@ -43,7 +45,9 @@ jobs:
           EBALIA_LAUNCHTEST_SECONDS: '60'
           QT_QPA_PLATFORM: offscreen
         run: |
-          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -RedirectStandardError hardware.log -Wait -PassThru -NoNewWindow
+          $env:EBALIA_TEST_LOG = "$PWD/hardware.log"
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force }
           Get-Content hardware.log -Tail 3
           Copy-Item "$env:INSTANCE/launcher.log" hardware-game.log
           Select-String -Path hardware-game.log -Pattern 'OpenGL|WGL|No context is current|GLFW' | Select-Object -First 5
@@ -57,14 +61,15 @@ jobs:
           $info = Get-Content "$env:INSTANCE/instance.json" -Raw | ConvertFrom-Json
           $info | Add-Member -NotePropertyName softwareRendering -NotePropertyValue $true -Force
           $info | ConvertTo-Json -Depth 20 | Set-Content "$env:INSTANCE/instance.json" -Encoding utf8
-          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -RedirectStandardError software.log -PassThru -NoNewWindow
+          $env:EBALIA_TEST_LOG = "$PWD/software.log"
+          $p = Start-Process app/ebalia-launcher.exe -ArgumentList '--launchtest',"`"$env:INSTANCE`"" -PassThru -NoNewWindow
           Start-Sleep -Seconds 75
           Add-Type -AssemblyName System.Windows.Forms,System.Drawing
           $b = [System.Windows.Forms.SystemInformation]::VirtualScreen
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
           [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
           $bmp.Save("$PWD/software-graphics.png")
-          $p.WaitForExit()
+          if (-not $p.WaitForExit(600000)) { Stop-Process -Id $p.Id -Force }
           Get-Content software.log -Tail 3
           Copy-Item "$env:INSTANCE/launcher.log" software-game.log
           if (Select-String -Path software-game.log -Pattern 'No context is current|does not appear to support OpenGL|GLFW error 6554') { throw "OpenGL still failed with software graphics" }

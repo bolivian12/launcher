@@ -15,6 +15,7 @@
 #include "JavaRunner.hpp"
 #include "LostNative.hpp"
 #include "SoftwareGl.hpp"
+#include "CrashReport.hpp"
 #include "JavaRuntime.hpp"
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -171,7 +172,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
     connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
     connect(m_mc,&McInstanceManager::gameStarted,this,[this](const QString &){refreshInstances();m_status->setText(text("Minecraft en ejecución","Minecraft is running","Minecraft em execução"));});
-    connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code&&offerSoftwareRendering(dir))return;if(code)error(text("Minecraft se cerró con un error. Abrí el registro de la instancia para ver el motivo.","Minecraft exited with an error. Open the instance log for details.","Minecraft fechou com erro. Abra o registro da instância para ver os detalhes."));});
+    connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code)showCrash(dir);});
     connect(m_mc,&McInstanceManager::launchFailed,this,[this](const QString &,const QString &e){error(e);refreshInstances();});
     connect(m_accounts,&AccountManager::accountsChanged,this,&MainWindow::refreshAccounts);
     connect(m_java,&JavaRunner::processError,this,&MainWindow::error);
@@ -588,7 +589,7 @@ void MainWindow::createInstance(bool copy,int page){
     CreateInstanceDialog dialog(m_mc,m_manifest,m_packData,source,copy,this);if(page)dialog.showPage(page);Ui::fitToScreen(&dialog,{1060,760});
     if(Ui::openWindow(dialog)!=QDialog::Accepted)return;auto c=dialog.configuration();
     auto reveal=[this](const QString &dir){m_selectedDir=dir;showPage(Instances);m_library->setCurrentWidget(m_detail);refreshInstances();};
-    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));auto info=ModRepository::read(dir+"/instance.json");if(info["icon"].toString()!="custom"){info["icon"]=c["icon"];ModRepository::write(dir+"/instance.json",info);}return QJsonObject{{"dir",dir}};},[this,reveal,custom=c["icon"].toString()=="custom"?dialog.customIcon():QImage()](QJsonObject result){if(!custom.isNull())setInstanceIcon(result["dir"].toString(),"custom",custom);reveal(result["dir"].toString());m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
+    if(!c["providerPack"].toObject().isEmpty()){auto root=m_root;work(Language::key("Installing modpack…"),[root,c]{auto dir=PackService(root).install(c["providerPack"].toObject(),c["providerVersion"].toObject(),c["name"].toString(),c["group"].toString(),c["xmx"].toInt(4096));auto info=ModRepository::read(dir+"/instance.json");if(info["icon"].toString()!="custom"){info["icon"]=c["icon"];ModRepository::write(dir+"/instance.json",info);}return QJsonObject{{"dir",dir}};},[this,reveal,custom=c["icon"].toString()=="custom"?dialog.customIcon():QImage()](QJsonObject result){if(!custom.isNull())setInstanceIcon(result["dir"].toString(),"custom",custom);reveal(result["dir"].toString());showImportWarnings(result["dir"].toString());m_status->setText(Language::key("Modpack ready. Press Install to prepare Minecraft."));});return;}
     try{auto dir=m_mc->createInstance(c["name"].toString(),c["mcVersion"].toString(),c["loader"].toString(),c["loaderVersion"].toString());auto info=ModRepository::read(dir+"/instance.json");for(auto key:{"xmx","group","icon"})info[key]=c[key];ModRepository::write(dir+"/instance.json",info);
         if(c["icon"].toString()=="custom")setInstanceIcon(dir,"custom",dialog.customIcon());
         reveal(dir);
@@ -603,17 +604,104 @@ void MainWindow::setInstanceIcon(const QString &dir,const QString &key,const QIm
     if(key=="custom"&&!InstanceIcons::saveCustom(dir,custom)){error(text("No se pudo guardar el icono.","Could not save the icon.","Não foi possível salvar o ícone."));icon="grass";}
     try{auto info=ModRepository::read(dir+"/instance.json");info["icon"]=icon;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());}
 }
-bool MainWindow::offerSoftwareRendering(const QString &dir){
-    // A graphics driver without OpenGL (virtual machines, missing drivers): offer OpenGL drawn by the processor.
-    if(!SoftwareGl::available())return false;
-    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){return false;}
-    if(info["softwareRendering"].toBool())return false;
-    QFile log(dir+"/launcher.log");if(!log.open(QIODevice::ReadOnly))return false;if(log.size()>4*1024*1024)log.seek(log.size()-4*1024*1024);
-    if(!SoftwareGl::openGlFailure(QString::fromUtf8(log.readAll())))return false;
-    if(QMessageBox::question(this,"EBALIA",text("Tu tarjeta gráfica no ofrece OpenGL, que Minecraft necesita. Pasa en máquinas virtuales y en equipos sin el driver de gráficos instalado.\n\n¿Iniciar con gráficos por software? Funciona en cualquier equipo, pero va más lento. Podés desactivarlo en los ajustes de la instancia.","Your graphics card does not provide OpenGL, which Minecraft needs. This happens in virtual machines and on computers without a graphics driver.\n\nStart with software graphics? It works on any computer but runs slower. You can turn it off in the instance settings.","Sua placa de vídeo não oferece OpenGL, que o Minecraft precisa. Isso acontece em máquinas virtuais e em computadores sem o driver de vídeo.\n\nIniciar com gráficos por software? Funciona em qualquer computador, mas é mais lento. Você pode desativar nas configurações da instância."))!=QMessageBox::Yes)return true;
-    try{info["softwareRendering"]=true;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());return true;}
+void MainWindow::showImportWarnings(const QString &dir){
+    // The pack keeps its Minecraft version and loader; mods that do not fit them are named before the first start.
+    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){return;}
+    const auto warnings=info["compatibilityWarnings"].toArray();if(warnings.isEmpty())return;
+    QStringList lines;for(const auto &w:warnings)lines<<"• "+w.toString();
+    QMessageBox box(QMessageBox::Warning,"EBALIA",text("El pack se importó para Minecraft %1 con %2, pero estos mods no coinciden:","The pack was imported for Minecraft %1 with %2, but these mods do not match:","O pack foi importado para Minecraft %1 com %2, mas estes mods não combinam:").arg(info["mcVersion"].toString(),InstanceText::loader(info["loader"].toString())),QMessageBox::Ok,this);
+    box.setInformativeText(lines.join("\n")+"\n\n"+text("Puede que el juego no arranque hasta que los quites o los cambies por la versión correcta en Administrar mods.","The game may not start until you remove them or replace them with the right version in Manage mods.","O jogo pode não abrir até você removê-los ou trocá-los pela versão certa em Gerenciar mods."));
+    box.exec();
+}
+void MainWindow::useSoftwareRendering(const QString &dir){
+    try{auto info=ModRepository::read(dir+"/instance.json");info["softwareRendering"]=true;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());return;}
     for(const auto &i:m_mc->instances())if(i.dir==dir){m_status->setText(text("Iniciando con gráficos por software…","Starting with software graphics…","Iniciando com gráficos por software…"));launchInstance(i);break;}
-    return true;
+}
+void MainWindow::installDependency(const QString &dir,const QString &mod,std::function<void(bool)> done){
+    QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());done(false);return;}
+    const auto game=info["mcVersion"].toString(),loader=info["loader"].toString();auto root=m_root;
+    work(text("Instalando %1…","Installing %1…","Instalando %1…").arg(mod),[root,dir,mod,game,loader]{
+        ModRepository repo(root);
+        // The mod id is usually the Modrinth project; otherwise the search result with the same name.
+        auto normal=[](QString s){return s.toLower().remove(QRegularExpression("[^a-z0-9]"));};
+        QJsonObject plan;
+        try{plan=repo.plan(QJsonArray{QJsonObject{{"project_id",mod},{"name",mod}}},game,loader);}catch(...){}
+        if(plan["versions"].toArray().isEmpty()){
+            QString project;
+            for(const auto &h:repo.search(mod,game,loader)){auto o=h.toObject();if(normal(o["slug"].toString())==normal(mod)||normal(o["title"].toString())==normal(mod)){project=o["project_id"].toString();break;}}
+            if(project.isEmpty())for(const auto &h:repo.search(mod,game,loader)){auto o=h.toObject();if(normal(o["slug"].toString()).startsWith(normal(mod))||normal(o["title"].toString()).startsWith(normal(mod))){project=o["project_id"].toString();break;}}
+            if(project.isEmpty())throw std::runtime_error(Language::text("No encontramos %1 en Modrinth para Minecraft %2 con %3.","%1 was not found on Modrinth for Minecraft %2 with %3.","%1 não foi encontrado no Modrinth para Minecraft %2 com %3.").arg(mod,game,loader).toStdString());
+            plan=repo.plan(QJsonArray{QJsonObject{{"project_id",project},{"name",mod}}},game,loader);
+        }
+        if(plan["versions"].toArray().isEmpty())throw std::runtime_error(Language::text("%1 no tiene una versión para Minecraft %2 con %3.","%1 has no version for Minecraft %2 with %3.","%1 não tem versão para Minecraft %2 com %3.").arg(mod,game,loader).toStdString());
+        repo.apply(dir,plan);return QJsonObject{{"ok",true}};
+    },[done](QJsonObject r){done(r["ok"].toBool());});
+}
+// "[26.3.0.0.6,)" → "version 26.3.0.0.6 or later"; Fabric's own wording is kept.
+static QString readableRange(const QString &range){
+    static const QRegularExpression maven(R"(^\s*([\[\(])\s*([^,\]\)]*)\s*(,\s*([^\]\)]*))?\s*([\]\)])\s*$)");auto m=maven.match(range);if(!m.hasMatch())return range.trimmed();
+    const auto low=m.captured(2).trimmed(),high=m.captured(4).trimmed();
+    if(m.captured(3).isEmpty())return Language::text("versión %1","version %1","versão %1").arg(low);
+    if(high.isEmpty())return Language::text("versión %1 o mayor","version %1 or later","versão %1 ou maior").arg(low);
+    if(low.isEmpty())return Language::text("versión anterior a %1","version before %1","versão anterior a %1").arg(high);
+    return Language::text("versión %1 a %2","version %1 to %2","versão %1 a %2").arg(low,high);
+}
+void MainWindow::showCrash(const QString &dir){
+    QString log;{QFile f(dir+"/launcher.log");if(f.open(QIODevice::ReadOnly)){if(f.size()>4*1024*1024)f.seek(f.size()-4*1024*1024);log=QString::fromUtf8(f.readAll());}}
+    const auto findings=CrashReport::analyze(log);QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){}
+    const auto instanceName=info["name"].toString();
+    QDialog d(this);d.setObjectName("crashSummaryWindow");d.setWindowTitle(text("Minecraft se cerró","Minecraft closed","Minecraft fechou")+" · "+instanceName);Ui::fitToScreen(&d,{620,420});
+    QVBoxLayout lay(&d);lay.setContentsMargins(22,20,22,18);lay.setSpacing(12);
+    label(findings.isEmpty()?text("Minecraft se cerró con un error","Minecraft closed with an error","Minecraft fechou com um erro"):text("Minecraft se cerró. Esto es lo que falló:","Minecraft closed. This is what failed:","Minecraft fechou. Isto é o que falhou:"),&lay,"sectionTitle");
+    if(findings.isEmpty())label(text("No reconocimos la causa. El registro tiene los detalles; si pedís ayuda, compartilo.","The cause was not recognised. The log has the details; share it if you ask for help.","A causa não foi reconhecida. O registro tem os detalhes; compartilhe-o se pedir ajuda."),&lay,"muted");
+    auto replay=[this,dir,&d]{d.accept();for(const auto &i:m_mc->instances())if(i.dir==dir){launchInstance(i);break;}};
+    for(const auto &f:findings){
+        auto card=new QFrame;card->setObjectName("crashFinding");card->setStyleSheet("#crashFinding{background:#1f1f24;border:1px solid #34343c;border-radius:12px;}");
+        auto cl=new QVBoxLayout(card);cl->setContentsMargins(16,12,16,12);cl->setSpacing(6);lay.addWidget(card);
+        QString title,body;auto actions=new QHBoxLayout;actions->setSpacing(8);
+        switch(f.kind){
+        case CrashReport::Finding::MissingMod:{
+            title=text("Falta el mod %1","The mod %1 is missing","Falta o mod %1").arg(f.mod);
+            body=text("%1 lo necesita para funcionar%2.","%1 needs it to work%2.","%1 precisa dele para funcionar%2.").arg(f.requiredBy,readableRange(f.versions).isEmpty()?QString():" ("+readableRange(f.versions)+")");
+            auto install=button(text("Instalar %1","Install %1","Instalar %1").arg(f.mod),actions,{},&d,true,"download");install->setObjectName("installMissingMod");
+            connect(install,&QPushButton::clicked,&d,[this,dir,mod=f.mod,install,replay]{install->setEnabled(false);install->setText(text("Instalando…","Installing…","Instalando…"));
+                installDependency(dir,mod,[install,replay](bool ok){if(!ok){install->setEnabled(true);install->setText(text("Reintentar","Retry","Tentar de novo"));return;}
+                    install->setText(text("Instalado · Jugar","Installed · Play","Instalado · Jogar"));install->setEnabled(true);QObject::disconnect(install,nullptr,nullptr,nullptr);QObject::connect(install,&QPushButton::clicked,install,replay);});});
+            break;}
+        case CrashReport::Finding::WrongModVersion:
+            title=text("%1 no tiene la versión que pide %2","%1 is not the version %2 needs","%1 não tem a versão que %2 pede").arg(f.mod,f.requiredBy);
+            body=text("%1 necesita %2 (%3). Actualizá o quitá uno de los dos.","%1 needs %2 (%3). Update or remove one of them.","%1 precisa de %2 (%3). Atualize ou remova um deles.").arg(f.requiredBy,f.mod,readableRange(f.versions));
+            button(text("Administrar mods","Manage mods","Gerenciar mods"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;manageMods();},&d,false,"puzzle");break;
+        case CrashReport::Finding::IncompatibleMods:
+            title=text("Mods incompatibles","Incompatible mods","Mods incompatíveis");body=f.detail;
+            button(text("Administrar mods","Manage mods","Gerenciar mods"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;manageMods();},&d,false,"puzzle");break;
+        case CrashReport::Finding::GraphicsDriver:
+            title=text("Falló el driver de gráficos %1","The %1 graphics driver crashed","O driver de vídeo %1 falhou").arg(f.vendor);
+            body=text("El juego se cerró dentro del driver de tu tarjeta %1 (no es un problema de Minecraft ni del launcher). Instalá el driver más reciente desde la página oficial y reiniciá el equipo.","The game closed inside your %1 graphics driver (not a Minecraft or launcher problem). Install the latest driver from the official page and restart the computer.","O jogo fechou dentro do driver da sua placa %1 (não é um problema do Minecraft nem do launcher). Instale o driver mais recente pela página oficial e reinicie o computador.").arg(f.vendor);
+            button(text("Descargar driver %1","Download %1 driver","Baixar driver %1").arg(f.vendor),actions,[url=CrashReport::driverPage(f.vendor)]{QDesktopServices::openUrl(QUrl(url));},&d,true,"external-link");
+            if(SoftwareGl::available()&&!info["softwareRendering"].toBool())button(text("Probar con gráficos por software","Try software graphics","Tentar gráficos por software"),actions,[this,dir,&d]{d.accept();useSoftwareRendering(dir);},&d,false,"refresh-cw");
+            break;
+        case CrashReport::Finding::NoOpenGL:
+            title=text("Tu tarjeta gráfica no ofrece OpenGL","Your graphics card does not provide OpenGL","Sua placa de vídeo não oferece OpenGL");
+            body=text("Minecraft lo necesita. Pasa en máquinas virtuales y en equipos sin el driver de gráficos instalado. Los gráficos por software funcionan en cualquier equipo, pero van más lentos.","Minecraft needs it. This happens in virtual machines and on computers without a graphics driver. Software graphics work on any computer but run slower.","O Minecraft precisa dele. Isso acontece em máquinas virtuais e em computadores sem driver de vídeo. Os gráficos por software funcionam em qualquer computador, mas são mais lentos.");
+            if(SoftwareGl::available()&&!info["softwareRendering"].toBool())button(text("Usar gráficos por software y jugar","Use software graphics and play","Usar gráficos por software e jogar"),actions,[this,dir,&d]{d.accept();useSoftwareRendering(dir);},&d,true,"play");
+            break;
+        case CrashReport::Finding::JavaVersion:
+            title=text("Hace falta Java %1","Java %1 is needed","É preciso Java %1").arg(f.versions);
+            body=text("Un mod o el juego necesita Java %1 o más nuevo. Elegí \"Automático\" en los ajustes de la instancia para que el launcher use el correcto.","A mod or the game needs Java %1 or newer. Choose \"Automatic\" in the instance settings so the launcher uses the right one.","Um mod ou o jogo precisa do Java %1 ou mais novo. Escolha \"Automático\" nas configurações da instância para o launcher usar o correto.").arg(f.versions);
+            button(Language::key("Instance settings"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;editInstance();},&d,false,"settings");break;
+        case CrashReport::Finding::OutOfMemory:
+            title=text("Minecraft se quedó sin memoria","Minecraft ran out of memory","O Minecraft ficou sem memória");
+            body=text("Tiene %1 MB. Subí la memoria en los ajustes de la instancia (6144 MB o más para packs grandes).","It has %1 MB. Raise the memory in the instance settings (6144 MB or more for large packs).","Ele tem %1 MB. Aumente a memória nas configurações da instância (6144 MB ou mais para packs grandes).").arg(info["xmx"].toInt(4096));
+            button(Language::key("Instance settings"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;editInstance();},&d,false,"settings");break;
+        }
+        auto t=label(title,cl,"",true);t->setStyleSheet("font-weight:800;font-size:15px;");label(body,cl,"muted");actions->addStretch();cl->addLayout(actions);
+    }
+    lay.addStretch();
+    auto bottom=new QHBoxLayout;lay.addLayout(bottom);
+    button(text("Ver registro completo","View full log","Ver registro completo"),bottom,[this,dir,&d]{showLog(dir,&d);},&d,false,"file-text");bottom->addStretch();
+    button(text("Cerrar","Close","Fechar"),bottom,[&d]{d.reject();},&d);
+    Ui::openWindow(d);
 }
 void MainWindow::changeBackground(const QString &dir){
     if(dir.isEmpty())return;QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}

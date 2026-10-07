@@ -67,7 +67,10 @@ private:
     McInstance selected() const;
     void setInstanceIcon(const QString &dir,const QString &key,const QImage &custom);
     void changeBackground(const QString &dir);
-    bool offerSoftwareRendering(const QString &dir);
+    void showCrash(const QString &dir);
+    void showImportWarnings(const QString &dir);
+    void useSoftwareRendering(const QString &dir);
+    void installDependency(const QString &dir,const QString &mod,std::function<void(bool)> done);
     void createInstance(bool copy=false,int page=0);
     void instanceMenu();
     void groupMenu(const QString &group);

@@ -15,10 +15,11 @@ private:
     QByteArray bytes(const QString &url,bool curse=false);
     QJsonObject unpack(const QString &archive,const QString &stage);
     QJsonObject importFolder(QString base,const QString &stage);
+    QStringList releases();
     QJsonObject ftbManifest(const QJsonObject &data,const QString &stage);
     void download(const QString &url,const QString &destination,const QJsonObject &hashes={});
     void copyTree(const QString &from,const QString &to,const QStringList &skip={});
-    void profileLoader(const QJsonObject &profile,QJsonObject &config);
+    static void profileLoader(const QJsonObject &profile,QJsonObject &config);
     QString m_root;
     ModRepository::Transport m_transport;
 };

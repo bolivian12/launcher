@@ -98,6 +98,22 @@ void Archive::extractFiles(const QString &file, const QString &destination, cons
     }
     if (status != ARCHIVE_EOF) fail("Archivo comprimido dañado.");
 }
+QByteArray Archive::readEntry(const QString &file, const QString &name, qint64 limit) {
+    Utf8Names utf8;
+    std::unique_ptr<archive, decltype(&archive_read_free)> a(archive_read_new(), archive_read_free);
+    archive_read_support_filter_all(a.get()); archive_read_support_format_zip(a.get()); archive_read_support_format_7zip(a.get());
+    if (openRead(a.get(), file) != ARCHIVE_OK) throw std::runtime_error("No se pudo abrir el archivo comprimido.");
+    archive_entry *entry = nullptr; int status;
+    while ((status = archive_read_next_header(a.get(), &entry)) == ARCHIVE_OK || status == ARCHIVE_WARN) {
+        auto entryPath = entryName(entry); entryPath.replace('\\','/');
+        if (entryPath != name || archive_entry_filetype(entry) != AE_IFREG) { archive_read_data_skip(a.get()); continue; }
+        QByteArray data; char buffer[65536]; la_ssize_t size;
+        while ((size = archive_read_data(a.get(), buffer, sizeof(buffer))) > 0) { data.append(buffer, size); if (data.size() > limit) throw std::runtime_error("Entrada demasiado grande."); }
+        if (size < 0) throw std::runtime_error("Archivo comprimido dañado.");
+        return data;
+    }
+    return {};
+}
 void Archive::compress(const QString &folder, const QString &file, const QStringList &skip) {
     auto fail = [](const QString &s) { throw std::runtime_error(s.toStdString()); };
     Utf8Names utf8;
