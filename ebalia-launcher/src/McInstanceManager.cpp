@@ -150,9 +150,42 @@ QList<McInstance> McInstanceManager::instances() const {
 }
 QString McInstanceManager::createInstance(const QString &name, const QString &version, const QString &loader, const QString &lv) {
     if (name.trimmed().isEmpty() || !ModRepository::safeName(version) || !QStringList{"vanilla","fabric","quilt","forge","neoforge"}.contains(loader)) fail("Nombre, versión o cargador inválido.");
-    auto dir = instancesRoot()+"/"+QUuid::createUuid().toString(QUuid::WithoutBraces);
+    auto dir = folderFor(instancesRoot(), name);
     ModRepository::write(dir+"/instance.json",{{"name",name.trimmed()},{"mcVersion",version},{"loader",loader},{"loaderVersion",lv},{"ready",false},{"xmx",4096}});
     QDir().mkpath(dir+"/mods"); return dir;
+}
+QString McInstanceManager::folderFor(const QString &parent, const QString &name, const QString &current) {
+    QString base;
+    for (const auto ch : name.simplified()) base += (ch.unicode() < 32 || QString("<>:\"/\\|?*").contains(ch)) ? QChar('_') : ch;
+    while (base.endsWith('.') || base.endsWith(' ')) base.chop(1);
+    while (base.startsWith('.') || base.startsWith(' ')) base.remove(0, 1);
+    if (base.size() > 60) base = base.left(60).trimmed();
+    static const QRegularExpression reserved("^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?$", QRegularExpression::CaseInsensitiveOption);
+    if (base.isEmpty()) base = "Instance"; else if (reserved.match(base).hasMatch()) base += "_";
+    const auto own = current.isEmpty() ? QString() : QFileInfo(current).absoluteFilePath();
+    for (int n = 1;; ++n) {
+        const auto candidate = QDir(parent).absoluteFilePath(n == 1 ? base : QString("%1 (%2)").arg(base).arg(n));
+        // Folder names compare without case on Windows and macOS.
+        if (candidate.compare(own, Qt::CaseInsensitive) == 0) return own;
+        if (!QFileInfo::exists(candidate)) return candidate;
+    }
+}
+QString McInstanceManager::renameFolder(const QString &dir) {
+    if (isRunning(dir) || isInstalling(dir)) return dir;
+    QString name; try { name = s(ModRepository::read(dir+"/instance.json"),"name"); } catch (...) { return dir; }
+    if (name.trimmed().isEmpty()) return dir;
+    const auto target = folderFor(QFileInfo(dir).absolutePath(), name, dir);
+    if (target == QFileInfo(dir).absoluteFilePath()) return dir;
+    // A folder that a program keeps open (Windows) keeps its old name and goes on working.
+    if (target.compare(QFileInfo(dir).absoluteFilePath(), Qt::CaseInsensitive) == 0) {
+        const auto step = dir + ".renaming"; if (!QDir().rename(dir, step)) return dir;
+        if (QDir().rename(step, target)) return target; QDir().rename(step, dir); return dir;
+    }
+    return QDir().rename(dir, target) ? target : dir;
+}
+void McInstanceManager::nameFolders() {
+    static const QRegularExpression uuid("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
+    for (const auto &i : instances()) if (uuid.match(QFileInfo(i.dir).fileName()).hasMatch()) renameFolder(i.dir);
 }
 void McInstanceManager::deleteInstance(const QString &dir) {
     if (isRunning(dir) || isInstalling(dir)) fail("La instancia está en uso.");
@@ -178,7 +211,7 @@ QString McInstanceManager::copyInstance(const QString &dir, const QString &name)
     }
     auto info=ModRepository::read(target+"/instance.json"); info["name"]=name.trimmed(); info["lastPlayed"]=0; info["totalSecs"]=0;
     ModRepository::write(target+"/instance.json",info);
-    const auto destination=instancesRoot()+"/"+QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const auto destination=folderFor(instancesRoot(),name);
     if (!QDir().rename(target,destination)) fail("No se pudo guardar la copia.");
     return destination;
 }

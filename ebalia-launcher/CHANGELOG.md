@@ -6,6 +6,8 @@
 - The instance icon can be changed from the instance settings too.
 - When Minecraft closes with an error, a summary says what failed with a button to fix it: a missing mod (installed from Modrinth for the instance's version and loader), a graphics driver crash (link to the AMD, NVIDIA or Intel driver, or software graphics), no OpenGL, the wrong Java or too little memory. The full log is one click away.
 - Import .minecraft folders: the official Minecraft Launcher's, and version folders of launchers that use its format (TLauncher, SKLauncher…), zipped or not. The Minecraft version and loader come from the version profile or, when there is none, from the mods themselves. These folders also appear in the list of instances found on the computer, ready to import. Account files are never copied.
+- Instance folders carry the instance name instead of a random number; renaming an instance renames its folder. Instances from earlier versions are renamed on start and keep working (a folder in use keeps its old name).
+- Paste instances of other launchers straight into the instances folder (Prism Launcher, MultiMC, CurseForge app, FTB App, ATLauncher, GDLauncher, Modrinth App, TLauncher or .minecraft version folders, .zip and .mrpack files): the launcher turns them into instances with their Minecraft version and loader, also while it is open. The original goes to the instance trash only when that worked.
 - Every import checks that its mods match the pack's Minecraft version and loader and names the ones that do not.
 
 # 1.1.0

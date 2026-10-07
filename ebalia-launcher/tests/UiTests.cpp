@@ -295,6 +295,16 @@ printf started > launched-marker
             d->reject();});
         emit manager->gameEnded(dir,1);QTRY_VERIFY_WITH_TIMEOUT(shown,5000);
     }
+    void pastedInstanceAppearsWhileOpen(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,820);window.show();auto manager=window.findChild<McInstanceManager*>();QTest::qWait(200);
+        const auto prism=manager->instancesRoot()+"/Copied From Prism";QDir().mkpath(prism+"/minecraft/mods");
+        {QFile f(prism+"/mmc-pack.json");QVERIFY(f.open(QIODevice::WriteOnly));f.write(QJsonDocument(QJsonObject{{"formatVersion",1},{"components",QJsonArray{QJsonObject{{"uid","net.minecraft"},{"version","1.21.1"}},QJsonObject{{"uid","net.fabricmc.fabric-loader"},{"version","0.16.7"}}}}}).toJson());}
+        {QFile f(prism+"/instance.cfg");QVERIFY(f.open(QIODevice::WriteOnly));f.write("[General]\nname=Copied From Prism\n");}
+        {QFile f(prism+"/minecraft/mods/a.jar");QVERIFY(f.open(QIODevice::WriteOnly));f.write("mod");}
+        QTRY_VERIFY_WITH_TIMEOUT([&]{for(const auto &i:manager->instances())if(i.name=="Copied From Prism"&&i.loader=="fabric"&&i.mcVersion=="1.21.1")return true;return false;}(),20000);
+        QVERIFY(QFile::exists(manager->instancesRoot()+"/Copied From Prism/mods/a.jar"));
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

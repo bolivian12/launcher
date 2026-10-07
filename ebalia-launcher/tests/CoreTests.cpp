@@ -91,6 +91,24 @@ private slots:
         QCOMPARE(QDir(t.path()+"/out").entryList(QDir::Files),QStringList({"libgallium_wgl.dll","opengl32.dll"}));QCOMPARE(readFile(t.path()+"/out/opengl32.dll"),QByteArray("gl"));
         if(qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS")){QTemporaryDir root;auto folder=SoftwareGl::prepare(root.path());QVERIFY(QFileInfo(folder+"/opengl32.dll").size()>100000);QVERIFY(QFileInfo(folder+"/libgallium_wgl.dll").size()>10000000);QCOMPARE(SoftwareGl::prepare(root.path()),folder);}
     }
+    void instanceFoldersCarryTheirNames(){
+        QTemporaryDir t;McInstanceManager manager(t.path());const auto root=t.path()+"/mc/instances";
+        auto a=manager.createInstance("Mi Survival","1.21.1","vanilla");QCOMPARE(QFileInfo(a).fileName(),QString("Mi Survival"));
+        QCOMPARE(QFileInfo(manager.createInstance("Mi Survival","1.21.1","vanilla")).fileName(),QString("Mi Survival (2)"));
+        QCOMPARE(QFileInfo(manager.createInstance("a/b:c*?","1.21.1","vanilla")).fileName(),QString("a_b_c__"));
+        QCOMPARE(QFileInfo(manager.createInstance("con","1.21.1","vanilla")).fileName(),QString("con_"));
+        QCOMPARE(QFileInfo(manager.createInstance("...","1.21.1","vanilla")).fileName(),QString("Instance"));
+        QCOMPARE(QFileInfo(manager.copyInstance(a,"Copia")).fileName(),QString("Copia"));
+        // A folder from an earlier launcher (random number) keeps working and gets its name.
+        const auto old=root+"/4525036e-42bc-4122-aa9d-a8281160c65d";QDir().mkpath(old+"/saves/W");ModRepository::write(old+"/instance.json",QJsonObject{{"name","npsoewe"},{"mcVersion","26.3"},{"loader","forge"},{"ready",true}});
+        ModRepository::write(old+"/launch-profile.json",QJsonObject{{"ebaliaProfile",2}});
+        bool listed=false;for(const auto &i:manager.instances())listed|=i.name=="npsoewe"&&i.ready;QVERIFY(listed);
+        manager.nameFolders();QVERIFY(!QFile::exists(old));QVERIFY(QFile::exists(root+"/npsoewe/saves/W"));
+        bool renamed=false;for(const auto &i:manager.instances())renamed|=i.name=="npsoewe"&&i.dir.endsWith("/npsoewe")&&i.ready;QVERIFY(renamed);
+        // Renaming the instance renames its folder; the same name keeps it.
+        auto info=ModRepository::read(a+"/instance.json");info["name"]="Hardcore";ModRepository::write(a+"/instance.json",info);
+        const auto moved=manager.renameFolder(a);QCOMPARE(QFileInfo(moved).fileName(),QString("Hardcore"));QCOMPARE(manager.renameFolder(moved),moved);
+    }
     void staleLoaderProfilesInstallAgain(){
         // Forge instances prepared before 1.1.0 lost forge:universal: they must install again instead of crashing.
         QTemporaryDir t;McInstanceManager manager(t.path());
@@ -621,6 +639,26 @@ private slots:
 #else
         QSKIP("Uses the Linux location of .minecraft");
 #endif
+    }
+    void pastedInstancesBecomeInstances(){
+        QTemporaryDir root;PackService service(root.path(),[](const QUrl &u)->QByteArray{throw std::runtime_error(u.toString().toStdString());});McInstanceManager manager(root.path());
+        const auto instances=manager.instancesRoot();
+        const auto ebalia=manager.createInstance("Mine","1.21.1","vanilla");
+        QDir().mkpath(instances+"/Broken");writeFile(instances+"/Broken/instance.json","{not json");
+        writeTree(instances+"/Prism Pack",{{"instance.cfg","[General]\nname=Prism Survival\nOverrideMemory=true\nMaxMemAlloc=6144\n"},{"mmc-pack.json",mmcPack("1.20.1","net.fabricmc.fabric-loader","0.15.11")},{".minecraft/mods/a.jar","mod"},{".minecraft/saves/W/level.dat","level"}});
+        writeTree(instances+"/EsquizosMineZ",{{"EsquizosMineZ.json",encode(QJsonObject{{"id","EsquizosMineZ"},{"mainClass","x"},{"libraries",QJsonArray{QJsonObject{{"name","net.minecraftforge:fmlloader:1.20.1-47.2.0"}}}},{"arguments",QJsonObject{{"game",QJsonArray{"--fml.forgeVersion","47.2.0","--fml.mcVersion","1.20.1"}}}}})},{"mods/b.jar","mod"}});
+        zipEntries(instances+"/Pack.mrpack",{{"modrinth.index.json",mrIndex({{"minecraft","1.21.1"},{"neoforge","21.1.77"}})},{"overrides/config/c.toml","cfg"}});
+        auto pasted=PackService::pastedEntries(instances);std::sort(pasted.begin(),pasted.end());
+        QCOMPARE(pasted,QStringList({instances+"/EsquizosMineZ",instances+"/Pack.mrpack",instances+"/Prism Pack"}));
+        QMap<QString,QJsonObject> made;for(const auto &p:pasted){auto dir=service.adopt(p);auto info=ModRepository::read(dir+"/instance.json");info["dir"]=dir;made[QFileInfo(dir).fileName()]=info;}
+        QCOMPARE(made.keys(),QStringList({"EsquizosMineZ","Pack","Prism Survival"}));
+        QCOMPARE(describe(made["Prism Survival"]),QString("1.20.1 fabric 0.15.11"));QCOMPARE(made["Prism Survival"]["xmx"].toInt(),6144);QCOMPARE(readFile(made["Prism Survival"]["dir"].toString()+"/saves/W/level.dat"),QByteArray("level"));
+        QCOMPARE(describe(made["EsquizosMineZ"]),QString("1.20.1 forge 47.2.0"));QCOMPARE(describe(made["Pack"]),QString("1.21.1 neoforge 21.1.77"));
+        QVERIFY(!QFile::exists(instances+"/Prism Pack"));QVERIFY(!QFile::exists(instances+"/Pack.mrpack"));QVERIFY(QDir(root.path()+"/mc/trash").entryList(QDir::Dirs|QDir::Files|QDir::NoDotAndDotDot).size()==3);
+        QVERIFY(PackService::pastedEntries(instances).isEmpty());QVERIFY(QFile::exists(ebalia+"/instance.json"));QVERIFY(QFile::exists(instances+"/Broken/instance.json"));
+        // Something that cannot become an instance stays where it is.
+        QDir().mkpath(instances+"/Fotos");writeFile(instances+"/Fotos/a.png","png");
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,service.adopt(instances+"/Fotos"));QVERIFY(QFile::exists(instances+"/Fotos/a.png"));
     }
     void modVersionRanges(){
         ModCompat::Mod fabric;fabric.loader="fabric";

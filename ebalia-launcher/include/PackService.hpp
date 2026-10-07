@@ -9,6 +9,11 @@ public:
     static QString safePath(QString path);
     // Instances of Prism Launcher, PolyMC, MultiMC, CurseForge and the FTB App found on this computer.
     static QJsonArray localInstances();
+    // Folders and pack files pasted into the instances folder by hand (an instance of another launcher, a .minecraft
+    // version folder, a .zip or .mrpack): everything there without EBALIA's instance.json.
+    static QStringList pastedEntries(const QString &instancesDir);
+    // Turns one into an EBALIA instance named after it; the original goes to mc/trash only when that worked.
+    QString adopt(const QString &path);
     static void components(const QJsonObject &pack,QJsonObject &config);
 private:
     QJsonDocument get(const QString &url,bool curse=false);

@@ -162,7 +162,10 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     QDir().mkpath(m_root);Language::current=QSettings().value("ui/language",QLocale::system().name().left(2)).toString();
     if(qEnvironmentVariableIsSet("EBALIA_LANGUAGE"))Language::current=qEnvironmentVariable("EBALIA_LANGUAGE");
     if(!Language::available().contains(Language::current))Language::current="en";
-    m_mc=new McInstanceManager(m_root,this);m_versions=new VersionManager(this);m_versions->loadVersions();
+    m_mc=new McInstanceManager(m_root,this);m_mc->nameFolders();
+    // Instances of other launchers pasted into the instances folder become EBALIA instances, also while the launcher is open.
+    {auto watcher=new QFileSystemWatcher({m_mc->instancesRoot()},this);m_pasteTimer=new QTimer(this);m_pasteTimer->setSingleShot(true);m_pasteTimer->setInterval(3000);
+     connect(watcher,&QFileSystemWatcher::directoryChanged,m_pasteTimer,qOverload<>(&QTimer::start));connect(m_pasteTimer,&QTimer::timeout,this,[this]{adoptPastedInstances();});m_pasteTimer->start(1500);}m_versions=new VersionManager(this);m_versions->loadVersions();
     m_patreon=new PatreonAuth(this);
     m_accounts=new AccountManager(m_mc->mcDir(),this);m_java=new JavaRunner(this);
     qApp->setStyleSheet(Ui::styleSheet()); // application-wide, so separate windows (new instance, settings, logs) share the look
@@ -613,6 +616,24 @@ void MainWindow::showImportWarnings(const QString &dir){
     box.setInformativeText(lines.join("\n")+"\n\n"+text("Puede que el juego no arranque hasta que los quites o los cambies por la versión correcta en Administrar mods.","The game may not start until you remove them or replace them with the right version in Manage mods.","O jogo pode não abrir até você removê-los ou trocá-los pela versão certa em Gerenciar mods."));
     box.exec();
 }
+void MainWindow::adoptPastedInstances(){
+    QStringList pasted;for(const auto &p:PackService::pastedEntries(m_mc->instancesRoot()))if(!m_pasteFailed.contains(p))pasted<<p;
+    if(pasted.isEmpty()){m_pasteSnapshot.clear();return;}
+    // Explorer may still be copying: wait until the files stop changing.
+    QString snapshot;for(const auto &p:pasted){qint64 size=0,count=0;QDirIterator it(p,QDir::Files|QDir::Hidden,QDirIterator::Subdirectories);while(it.hasNext()){it.next();size+=it.fileInfo().size();++count;}if(QFileInfo(p).isFile())size=QFileInfo(p).size();snapshot+=p+":"+QString::number(size)+":"+QString::number(count)+";";}
+    if(snapshot!=m_pasteSnapshot||m_jobs){m_pasteSnapshot=snapshot;m_pasteTimer->start();return;}
+    m_pasteSnapshot.clear();auto root=m_root;
+    work(text("Importando instancias pegadas…","Importing pasted instances…","Importando instâncias coladas…"),[root,pasted]{
+        QJsonArray done,failed;
+        for(const auto &p:pasted){try{done.append(PackService(root).adopt(p));}catch(const std::exception &e){failed.append(QJsonObject{{"path",p},{"error",QString::fromUtf8(e.what())}});}}
+        return QJsonObject{{"done",done},{"failed",failed}};
+    },[this](QJsonObject r){
+        refreshInstances();QStringList names;for(const auto &d:r["done"].toArray()){names<<QFileInfo(d.toString()).fileName();showImportWarnings(d.toString());}
+        if(!names.isEmpty())m_status->setText(text("Instancias importadas desde la carpeta: %1","Instances imported from the folder: %1","Instâncias importadas da pasta: %1").arg(names.join(", ")));
+        QStringList problems;for(const auto &f:r["failed"].toArray()){const auto o=f.toObject();m_pasteFailed.insert(o["path"].toString());problems<<"• "+QFileInfo(o["path"].toString()).fileName()+": "+Language::message(o["error"].toString());}
+        if(!problems.isEmpty())QMessageBox::warning(this,"EBALIA",text("Estas carpetas de la carpeta de instancias no se pudieron convertir en instancias (quedaron sin cambios):","These items in the instances folder could not become instances (they were left unchanged):","Estes itens da pasta de instâncias não puderam virar instâncias (ficaram sem alterações):")+"\n\n"+problems.join("\n"));
+    });
+}
 void MainWindow::useSoftwareRendering(const QString &dir){
     try{auto info=ModRepository::read(dir+"/instance.json");info["softwareRendering"]=true;ModRepository::write(dir+"/instance.json",info);}catch(...){error(exception());return;}
     for(const auto &i:m_mc->instances())if(i.dir==dir){m_status->setText(text("Iniciando con gráficos por software…","Starting with software graphics…","Iniciando com gráficos por software…"));launchInstance(i);break;}
@@ -826,7 +847,7 @@ void MainWindow::editInstance(){
     connect(&buttons,&QDialogButtonBox::accepted,&d,[&]{if(name.text().trimmed().isEmpty())return;info["name"]=name.text().trimmed();info["javaPath"]=java.text().trimmed();info["xmx"]=memory.value();
         if(iconKey=="custom"&&!customIcon.isNull()&&!InstanceIcons::saveCustom(i.dir,customIcon))iconKey=info["icon"].toString();
         if(backgroundKey=="custom"&&!customBackground.isNull()&&!InstanceIcons::saveBackground(i.dir,customBackground))backgroundKey=info["background"].toString();
-        info["icon"]=iconKey;info["background"]=backgroundKey;if(SoftwareGl::available())info["softwareRendering"]=software.isChecked();try{ModRepository::write(i.dir+"/instance.json",info);d.accept();refreshInstances();}catch(...){error(exception());}});connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
+        info["icon"]=iconKey;info["background"]=backgroundKey;if(SoftwareGl::available())info["softwareRendering"]=software.isChecked();try{ModRepository::write(i.dir+"/instance.json",info);d.accept();const auto moved=m_mc->renameFolder(i.dir);if(m_selectedDir==i.dir)m_selectedDir=moved;refreshInstances();}catch(...){error(exception());}});connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
     Ui::openWindow(d);
 }
 void MainWindow::manageMods(){

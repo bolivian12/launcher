@@ -2,6 +2,8 @@
 #include <QMainWindow>
 #include <QJsonArray>
 #include <QHash>
+#include <QSet>
+#include <QTimer>
 #include <QPixmap>
 #include <functional>
 #include "McInstanceManager.hpp"
@@ -43,6 +45,7 @@ private:
     void adaptSidebar();
     void build();
     LauncherUpdate m_launcherUpdate=LauncherUpdate::Unknown;QString m_launcherVersion;
+    QTimer *m_pasteTimer=nullptr;QString m_pasteSnapshot;QSet<QString> m_pasteFailed;
     QWidget *buildSidebar();
     QWidget *buildHome();
     void openCreatorDialog(bool patreonOnly);
@@ -68,6 +71,7 @@ private:
     void setInstanceIcon(const QString &dir,const QString &key,const QImage &custom);
     void changeBackground(const QString &dir);
     void showCrash(const QString &dir);
+    void adoptPastedInstances();
     void showImportWarnings(const QString &dir);
     void useSoftwareRendering(const QString &dir);
     void installDependency(const QString &dir,const QString &mod,std::function<void(bool)> done);

@@ -2,6 +2,7 @@
 #include "Archive.hpp"
 #include "Download.hpp"
 #include "ModCompat.hpp"
+#include "McInstanceManager.hpp"
 #include <QtCore>
 #include <QImage>
 #include <QXmlStreamReader>
@@ -103,6 +104,31 @@ void PackService::profileLoader(const QJsonObject &profile,QJsonObject &config){
 QJsonObject PackService::ftbManifest(const QJsonObject &d,const QString &stage){
     QJsonObject c{{"loader","vanilla"}};for(auto v:d["targets"].toArray()){auto t=v.toObject();if(t["type"]=="game")c["mcVersion"]=t["version"];if(t["type"]=="modloader"){c["loader"]=t["name"].toString().toLower();c["loaderVersion"]=t["version"];}}
     for(auto v:d["files"].toArray()){auto f=v.toObject();if(f["serveronly"].toBool()||f["optional"].toBool())continue;auto path=f["path"].toString();while(path.startsWith("./"))path=path.mid(2);if(path==".")path.clear();path=(path.isEmpty()?QString():path+"/")+safeName(f["name"].toString());download(f["url"].toString(),stage+"/"+safePath(path),fileHashes(f));}return c;
+}
+QStringList PackService::pastedEntries(const QString &instancesDir){
+    QStringList out;
+    for(const auto &e:QDir(instancesDir).entryInfoList(QDir::Dirs|QDir::Files|QDir::NoDotAndDotDot,QDir::Name)){
+        if(e.fileName().startsWith('.')||e.isSymLink())continue; // the launcher's own temporary folders start with a dot
+        // An EBALIA instance with a damaged instance.json is not someone else's folder.
+        if(e.isDir()&&(QFile::exists(e.filePath()+"/launch-profile.json")||(QFile::exists(e.filePath()+"/instance.json")&&json(e.filePath()+"/instance.json").isEmpty())))continue;
+        // EBALIA always writes "loader" in instance.json; FTB App and ATLauncher instance.json files do not.
+        if(e.isDir()?!json(e.filePath()+"/instance.json").contains("loader"):QStringList{"zip","mrpack"}.contains(e.suffix().toLower()))out<<e.filePath();
+    }
+    return out;
+}
+QString PackService::adopt(const QString &path){
+    const QFileInfo source(path);QString name=source.isDir()?source.fileName():source.completeBaseName();int memory=4096;
+    // Prism Launcher, MultiMC and PolyMC keep the name and memory in instance.cfg.
+    if(QFile::exists(path+"/instance.cfg")){QSettings cfg(path+"/instance.cfg",QSettings::IniFormat);name=cfg.value("name",name).toString();if(cfg.value("OverrideMemory").toBool())memory=cfg.value("MaxMemAlloc",memory).toInt();}
+    else if(const auto o=json(path+"/instance.json");!o["name"].toString().isEmpty())name=o["name"].toString();
+    else if(const auto o=json(path+"/minecraftinstance.json");!o["name"].toString().isEmpty())name=o["name"].toString();
+    auto dir=install(QJsonObject{{"provider","import"},{"path",path}},{},name,{},memory);
+    const auto trash=m_root+"/mc/trash";QDir().mkpath(trash);
+    if(!QDir().rename(path,trash+"/pasted-"+source.fileName()+"-"+QString::number(QDateTime::currentMSecsSinceEpoch())))
+        if(!QFile::moveToTrash(path)){QDir(dir).removeRecursively();fail("The pasted folder is in use by another program. Close it and the launcher will try again.");}
+    // The pasted folder held the name: take it now that it is free.
+    const auto named=McInstanceManager::folderFor(QFileInfo(dir).absolutePath(),name,dir);
+    return named!=QFileInfo(dir).absoluteFilePath()&&QDir().rename(dir,named)?named:dir;
 }
 QStringList PackService::releases(){
     // Mojang's release list, newest first, as McInstanceManager keeps it; downloaded when the launcher has not yet.
@@ -309,5 +335,5 @@ QString PackService::install(const QJsonObject &pack,const QJsonObject &build,co
     // Imported content cannot replace launcher metadata or impersonate a completed installation.
     c["name"]=name.trimmed();if(c["name"].toString().isEmpty())fail("Instance name is required");c["group"]=group;c["xmx"]=qBound(512,memory,65536);c["ready"]=false;c["packProvider"]=provider;c["packId"]=id;c["packVersion"]=version;
     auto icon=pack["icon"].toString();if(icon.startsWith("https://")){try{QImage image;auto data=bytes(icon);if(data.size()<4*1024*1024&&image.loadFromData(data)&&image.scaled(128,128,Qt::KeepAspectRatio,Qt::SmoothTransformation).save(stage+"/instance-icon.png"))c["icon"]="custom";}catch(...){}} // decorative: a missing icon never blocks the pack
-    ModRepository::write(stage+"/instance.json",c);QFile::remove(stage+"/launch-profile.json");QFile::remove(stage+"/mods.json");auto destination=instances+"/"+QUuid::createUuid().toString(QUuid::WithoutBraces);if(!QDir().rename(stage,destination))fail("Could not commit modpack instance");return destination;
+    ModRepository::write(stage+"/instance.json",c);QFile::remove(stage+"/launch-profile.json");QFile::remove(stage+"/mods.json");auto destination=McInstanceManager::folderFor(instances,c["name"].toString());if(!QDir().rename(stage,destination))fail("Could not commit modpack instance");return destination;
 }

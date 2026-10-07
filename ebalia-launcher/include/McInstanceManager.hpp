@@ -33,6 +33,13 @@ public:
     void killInstance(const QString &dir);
     static bool allowedByRules(const QJsonObject &object);
     // inheritsFrom-style merge: loader libraries first, replacing the game's copy of the same group:artifact:classifier.
+    // A free folder in parent named after the instance: characters Windows rejects become "_", " (2)" when taken.
+    // current is the instance's own folder, which may keep its name.
+    static QString folderFor(const QString &parent, const QString &name, const QString &current = {});
+    // Renames the folder to the instance name when it is not in use; returns the folder the instance is in.
+    QString renameFolder(const QString &dir);
+    // Instances from launchers before 1.1.1 live in random-number folders: give them their names.
+    void nameFolders();
     static QJsonArray mergeLibraries(const QJsonArray &game, const QJsonArray &loader);
     static QStringList arguments(const QJsonArray &list, const QMap<QString,QString> &values);
 signals:
