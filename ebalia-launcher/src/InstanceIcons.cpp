@@ -122,7 +122,7 @@ QMenu *InstanceIcons::menu(QWidget *parent,std::function<void(const QString &,co
     return menu;
 }
 QIcon InstanceIcons::provider(const QString &provider){
-    if(provider=="custom")return icons::alpha(48);if(provider=="import")return icons::folder(48);
+    if(provider=="custom")return icon("grass");if(provider=="import")return Ui::icon("download",Ui::accent());
     static const QHash<QString,QString> artwork{{"atlauncher","atlauncher"},{"curseforge","curseforge"},{"ftb","ftb"},
         {"legacy_ftb","ftb-legacy"},{"import_ftb","ftb"},{"modrinth","modrinth"},{"technic","technic"}};
     auto name=artwork.value(provider);if(name.isEmpty())return icons::mods(48);

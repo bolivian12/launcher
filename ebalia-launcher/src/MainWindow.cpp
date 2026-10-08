@@ -541,7 +541,10 @@ QWidget *MainWindow::buildSettings() {
         auto choice=new QPushButton(t.name);choice->setObjectName("themeChoice");choice->setProperty("theme",t.id);choice->setCheckable(true);choice->setChecked(Ui::theme()==t.id);choice->setCursor(Qt::PointingHandCursor);
         QPixmap dot(14,14);dot.fill(Qt::transparent);{QPainter p(&dot);p.setRenderHint(QPainter::Antialiasing);p.setBrush(QColor::fromHslF(t.accentHue/360.0f,0.55f,0.5f));p.setPen(Qt::NoPen);p.drawEllipse(0,0,14,14);}choice->setIcon(QIcon(dot));
         themeRow->addWidget(choice,themeIndex/3,themeIndex%3);++themeIndex;
-        connect(choice,&QPushButton::clicked,this,[this,id=t.id]{Ui::setTheme(id);qApp->setStyleSheet(Ui::styleSheet());QTimer::singleShot(0,this,[this]{build();showPage(Settings);});});
+        connect(choice,&QPushButton::clicked,this,[id=t.id,themeRow]{
+            // Only the stylesheet changes: rebuilding every page made switching slow.
+            Ui::setTheme(id);qApp->setStyleSheet(Ui::styleSheet());
+            for(int n=0;n<themeRow->count();++n)if(auto b=qobject_cast<QPushButton*>(themeRow->itemAt(n)->widget()))b->setChecked(b->property("theme").toString()==id);});
     }
     // Java and diagnostics
     auto java=settingsCard(column,"wrench",k("Setup & diagnostics"),k("Java, OpenGL, OpenAL and Wine checks for every version. EBALIA downloads the Java each version needs."));

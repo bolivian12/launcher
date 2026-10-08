@@ -1,3 +1,8 @@
+# 1.1.4
+
+- Changing the theme is instant: only the colours are reapplied instead of rebuilding every page.
+- New instance: Custom shows the Minecraft grass block and Import a clean import icon.
+
 # 1.1.3
 
 - Themes: EBALIA (green), Deep Dark (teal), Nether (red), End (purple), Ocean (blue) and Cherry (pink), in Settings, applied at once.
