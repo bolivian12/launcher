@@ -542,5 +542,7 @@
   "Show less": "閉じる",
   "Memberships": "メンバーシップ",
   "Edit": "編集",
-  "Edit server": "サーバーを編集"
+  "Edit server": "サーバーを編集",
+  "Current skin": "現在のスキン",
+  "No premium: in-game default skin. Apply a skin locally to change it.": "No premium: in-game default skin. Apply a skin locally to change it."
 }

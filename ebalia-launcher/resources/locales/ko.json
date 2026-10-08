@@ -542,5 +542,7 @@
   "Show less": "접기",
   "Memberships": "멤버십",
   "Edit": "편집",
-  "Edit server": "서버 편집"
+  "Edit server": "서버 편집",
+  "Current skin": "현재 스킨",
+  "No premium: in-game default skin. Apply a skin locally to change it.": "No premium: in-game default skin. Apply a skin locally to change it."
 }

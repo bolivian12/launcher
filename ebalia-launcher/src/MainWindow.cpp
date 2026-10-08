@@ -17,6 +17,7 @@
 #include "SoftwareGl.hpp"
 #include "CrashReport.hpp"
 #include "GpuInfo.hpp"
+#include "ModCompat.hpp"
 #include "JavaRuntime.hpp"
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -1008,7 +1009,26 @@ void MainWindow::manageMods(){
     auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QDialog d(this);d.setObjectName("modsWindow");d.setWindowTitle(i.name+" · Mods");Ui::fitToScreen(&d,{820,580});QVBoxLayout lay(&d);lay.setContentsMargins(20,18,20,18);lay.setSpacing(12);
     label(i.name+" · Mods",&lay,"sectionTitle",false);QListWidget list;list.setObjectName("modList");list.setIconSize(QSize(22,22));lay.addWidget(&list,1);
-    auto refresh=[&]{list.clear();for(const auto &f:QDir(i.dir+"/mods").entryList({"*.jar","*.jar.disabled"},QDir::Files)){auto item=new QListWidgetItem(Ui::icon("puzzle",f.endsWith(".disabled")?QColor(110,110,118):Ui::accent()),f,&list);if(f.endsWith(".disabled"))item->setForeground(QColor(130,130,138));}};refresh();
+    auto refresh=[&]{list.clear();list.setIconSize({32,32});
+        for(const auto &f:QDir(i.dir+"/mods").entryList({"*.jar","*.jar.disabled"},QDir::Files)){
+            const bool off=f.endsWith(".disabled");auto item=new QListWidgetItem(Ui::icon("puzzle",off?QColor(110,110,118):Ui::accent()),f,&list);if(off)item->setForeground(QColor(130,130,138));
+            // Each mod's own picture, read from its jar in the background.
+            auto watcher=new QFutureWatcher<QImage>(&list);const auto file=f;
+            connect(watcher,&QFutureWatcher<QImage>::finished,&list,[watcher,&list,file,off]{auto image=watcher->result();watcher->deleteLater();if(image.isNull())return;
+                if(off)image=image.convertToFormat(QImage::Format_Grayscale8);
+                for(int n=0;n<list.count();++n)if(list.item(n)->text()==file)list.item(n)->setIcon(QIcon(QPixmap::fromImage(image.scaled(64,64,Qt::KeepAspectRatio,image.width()<=32?Qt::FastTransformation:Qt::SmoothTransformation))));});
+            watcher->setFuture(QtConcurrent::run([path=i.dir+"/mods/"+f,cache=m_mc->mcDir()+"/cache/mod-icons"]{
+                QImage image;image.loadFromData(ModCompat::iconData(path));if(!image.isNull())return image;
+                // No picture inside the jar: the project's icon on Modrinth, found by the file's SHA-1 (cached, also when there is none).
+                QFile jar(path);if(!jar.open(QIODevice::ReadOnly))return image;QCryptographicHash sha(QCryptographicHash::Sha1);sha.addData(&jar);const auto hash=QString::fromLatin1(sha.result().toHex());
+                const auto cached=cache+"/"+hash+".png";if(QFile::exists(cached)){image.load(cached);return image;}if(QFile::exists(cached+".none"))return image;
+                QDir().mkpath(cache);
+                try{const auto version=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/version_file/"+hash+"?algorithm=sha1"))).object();
+                    const auto project=QJsonDocument::fromJson(ModRepository::fetch(QUrl("https://api.modrinth.com/v2/project/"+version["project_id"].toString()))).object();
+                    const QUrl icon(project["icon_url"].toString());if(icon.scheme()=="https"&&image.loadFromData(ModRepository::fetch(icon))){image=image.scaled(64,64,Qt::KeepAspectRatio,Qt::SmoothTransformation);image.save(cached,"PNG");return image;}
+                }catch(...){}
+                QFile none(cached+".none");none.open(QIODevice::WriteOnly);return image;}));
+        }};refresh();
     auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);
     button(text("Activar / desactivar","Enable / disable","Ativar / desativar"),row,[&]{if(!list.currentItem())return;auto name=list.currentItem()->text();auto to=name.endsWith(".disabled")?name.chopped(9):name+".disabled";if(!QFile::rename(i.dir+"/mods/"+name,i.dir+"/mods/"+to))error(text("No se pudo cambiar el archivo.","Could not change the file.","Não foi possível alterar o arquivo."));refresh();},&d,false,"square");
     button(text("Agregar JAR local","Add local JAR","Adicionar JAR local"),row,[&]{for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"Mods (*.jar)")){QDir().mkpath(i.dir+"/mods");if(!QFile::copy(f,i.dir+"/mods/"+QFileInfo(f).fileName()))error(text("El archivo ya existe o no se puede copiar.","The file already exists or cannot be copied.","O arquivo já existe ou não pode ser copiado."));}refresh();},&d,false,"plus");

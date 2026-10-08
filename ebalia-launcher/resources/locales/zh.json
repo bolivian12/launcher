@@ -542,5 +542,7 @@
   "Show less": "收起",
   "Memberships": "会员",
   "Edit": "编辑",
-  "Edit server": "编辑服务器"
+  "Edit server": "编辑服务器",
+  "Current skin": "当前皮肤",
+  "No premium: in-game default skin. Apply a skin locally to change it.": "No premium: in-game default skin. Apply a skin locally to change it."
 }

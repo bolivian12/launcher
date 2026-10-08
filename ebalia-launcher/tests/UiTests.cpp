@@ -20,6 +20,7 @@
 #include "InstanceIcons.hpp"
 #include "InstanceViews.hpp"
 #include "ServerList.hpp"
+#include "SkinsPage.hpp"
 #include <QTcpSocket>
 #include <QUrlQuery>
 class UiTests:public QObject {
@@ -361,6 +362,35 @@ printf started > launched-marker
         InstanceDetail detail;detail.resize(1280,900);detail.show();InstanceInfo info;info.base=McInstance{"Servers",dir,"1.21.1","vanilla",true,4096,0,0};detail.showInstance(info);
         auto servers=detail.findChild<QListWidget*>("instanceServers");QCOMPARE(servers->count(),1);QVERIFY(servers->item(0)->text().startsWith("Green Bold\n"));
         QVERIFY(detail.findChild<QPushButton*>("editServer"));
+    }
+    void modIconsInManageMods(){
+        const auto folder=qEnvironmentVariable("EBALIA_MOD_JARS");if(folder.isEmpty())QSKIP("Set EBALIA_MOD_JARS to a folder of mod jars");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,820);window.show();auto manager=window.findChild<McInstanceManager*>();auto dir=manager->createInstance("Mods","1.21.1","fabric");
+        for(const auto &f:QDir(folder).entryList({"*.jar"}))QFile::copy(folder+"/"+f,dir+"/mods/"+f);
+        QTimer::singleShot(6000,&window,[&]{QDialog *d=nullptr;for(auto w:QApplication::topLevelWidgets())if(w->objectName()=="modsWindow"&&w->isVisible())d=qobject_cast<QDialog*>(w);if(!d)return;
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())d->grab().save(out+"/mod-icons.png");d->reject();});
+        window.openMods(dir);
+    }
+    void microsoftSkinOnSkinsPage(){
+        if(!qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS"))QSKIP("Opt-in network test");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});qunsetenv("EBALIA_NO_NETWORK");auto net=qScopeGuard([]{qputenv("EBALIA_NO_NETWORK","1");});
+        MainWindow window;window.resize(1280,820);window.show();auto accounts=window.findChild<AccountManager*>();
+        accounts->addAccount({"msa","Notch","069a79f444e94726a5befca90e38aaf5","token","refresh"});accounts->setActive("069a79f444e94726a5befca90e38aaf5");
+        window.showPage(MainWindow::Skins);
+        QTRY_VERIFY_WITH_TIMEOUT(QFile::exists(data.path()+"/mc/cache/skins/069a79f444e94726a5befca90e38aaf5.png"),20000);QTest::qWait(300);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/skins-microsoft.png");
+    }
+    void offlineDefaultSkin(){
+        const auto jar=qEnvironmentVariable("EBALIA_TEST_JARS").section(';',0,0);if(jar.isEmpty())QSKIP("Set EBALIA_TEST_JARS to a Minecraft client jar");
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        QDir().mkpath(data.path()+"/mc/versions/1.21.1");QFile::copy(jar,data.path()+"/mc/versions/1.21.1/1.21.1.jar");
+        MainWindow window;window.resize(1280,820);window.show();auto accounts=window.findChild<AccountManager*>();
+        // Offline UUID of "Steve" (OfflinePlayer:Steve).
+        accounts->addAccount({"offline","Steve","b876ec32-e396-376b-a3a2-17d0f3d6e4e5","",""});accounts->setActive("b876ec32-e396-376b-a3a2-17d0f3d6e4e5");
+        window.showPage(MainWindow::Skins);QTest::qWait(300);
+        auto list=window.findChild<QListWidget*>("skinList");QVERIFY(list->count()>=1);QVERIFY(list->item(0)->text().startsWith("Steve · "));
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty())window.grab().save(out+"/skins-offline.png");
     }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());

@@ -79,6 +79,20 @@ Mod read(const QString &jar){
     }
     return mod; // a library without mod metadata
 }
+QByteArray iconData(const QString &jar){
+    auto entry=[&](const QString &name){if(name.isEmpty())return QByteArray();try{return Archive::readEntry(jar,QString(name).remove(QRegularExpression("^/")),4*1024*1024);}catch(...){return QByteArray();}};
+    QStringList candidates;
+    for(auto file:{"quilt.mod.json","fabric.mod.json"}){
+        const auto o=QJsonDocument::fromJson(entry(file)).object();auto icon=file==QString("quilt.mod.json")?o["quilt_loader"].toObject()["metadata"].toObject()["icon"]:o["icon"];
+        if(icon.isString())candidates<<icon.toString();
+        else if(icon.isObject()){int best=0;QString path;const auto sizes=icon.toObject();for(auto it=sizes.begin();it!=sizes.end();++it)if(it.key().toInt()>=best){best=it.key().toInt();path=it.value().toString();}candidates<<path;}
+    }
+    for(auto file:{"META-INF/neoforge.mods.toml","META-INF/mods.toml"}){static const QRegularExpression logo(R"re(logoFile\s*=\s*["']([^"']+)["'])re");auto m=logo.match(QString::fromUtf8(entry(file)));if(m.hasMatch())candidates<<m.captured(1);}
+    {auto doc=QJsonDocument::fromJson(entry("mcmod.info"));auto list=doc.isArray()?doc.array():doc.object()["modList"].toArray();if(!list.isEmpty())candidates<<list[0].toObject()["logoFile"].toString();}
+    candidates<<"pack.png"<<"icon.png"<<"logo.png";
+    for(const auto &c:candidates){auto data=entry(c);if(!data.isEmpty())return data;}
+    return {};
+}
 QList<Mod> scan(const QString &dir){
     QList<Mod> out;for(const auto &f:QDir(dir).entryList({"*.jar"},QDir::Files,QDir::Name)){auto m=read(dir+"/"+f);if(!m.loader.isEmpty())out<<m;}
     return out;

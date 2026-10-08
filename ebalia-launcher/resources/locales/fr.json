@@ -542,5 +542,7 @@
   "Show less": "Voir moins",
   "Memberships": "Abonnements",
   "Edit": "Modifier",
-  "Edit server": "Modifier le serveur"
+  "Edit server": "Modifier le serveur",
+  "Current skin": "Skin actuel",
+  "No premium: in-game default skin. Apply a skin locally to change it.": "No premium: in-game default skin. Apply a skin locally to change it."
 }

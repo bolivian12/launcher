@@ -661,6 +661,20 @@ private slots:
         QDir().mkpath(instances+"/Fotos");writeFile(instances+"/Fotos/a.png","png");
         QVERIFY_THROWS_EXCEPTION(std::runtime_error,service.adopt(instances+"/Fotos"));QVERIFY(QFile::exists(instances+"/Fotos/a.png"));
     }
+    void modIcons(){
+        QImage red(16,16,QImage::Format_ARGB32);red.fill(Qt::red);QByteArray png;{QBuffer b(&png);b.open(QIODevice::WriteOnly);red.save(&b,"PNG");}
+        QTemporaryDir t;auto jar=[&](QString name,Files files){auto path=t.path()+"/"+name;zipEntries(path,files);return path;};
+        auto ok=[&](const QString &path){QImage i;i.loadFromData(ModCompat::iconData(path));return !i.isNull();};
+        QVERIFY(ok(jar("fabric.jar",{{"fabric.mod.json",encode(QJsonObject{{"id","a"},{"icon","assets/a/icon.png"}})},{"assets/a/icon.png",png}})));
+        QVERIFY(ok(jar("fabric-sizes.jar",{{"fabric.mod.json",encode(QJsonObject{{"id","a"},{"icon",QJsonObject{{"16","s.png"},{"64","big.png"}}}})},{"big.png",png}})));
+        QVERIFY(ok(jar("quilt.jar",{{"quilt.mod.json",encode(QJsonObject{{"quilt_loader",QJsonObject{{"id","q"},{"metadata",QJsonObject{{"icon","q.png"}}}}}})},{"q.png",png}})));
+        QVERIFY(ok(jar("forge.jar",{{"META-INF/mods.toml","[[mods]]\nmodId=\"f\"\nlogoFile=\"logo_f.png\"\n"},{"logo_f.png",png}})));
+        QVERIFY(ok(jar("neoforge.jar",{{"META-INF/neoforge.mods.toml","logoFile='n.png'\n"},{"n.png",png}})));
+        QVERIFY(ok(jar("old.jar",{{"mcmod.info",encode(QJsonArray{QJsonObject{{"modid","o"},{"logoFile","/assets/o/logo.png"}}})},{"assets/o/logo.png",png}})));
+        QVERIFY(ok(jar("nothing-declared.jar",{{"pack.png",png}})));QVERIFY(!ok(jar("none.jar",{{"a.txt","x"}})));
+        // Opt-in: real mods (EBALIA_MOD_JARS=folder).
+        if(auto folder=qEnvironmentVariable("EBALIA_MOD_JARS");!folder.isEmpty())for(const auto &f:QDir(folder).entryList({"*.jar"})){qInfo().noquote()<<f<<(ok(folder+"/"+f)?"icon in the jar":"no icon in the jar (Modrinth is asked)");}
+    }
     void modVersionRanges(){
         ModCompat::Mod fabric;fabric.loader="fabric";
         auto fits=[&](QStringList ranges,QString mc,bool maven=false){fabric.ranges=ranges;fabric.maven=maven;return ModCompat::accepts(fabric,mc);};

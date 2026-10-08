@@ -33,6 +33,8 @@ public:
     void showPage(int index);
     bool canUpdate() const;
     void startTour();
+    // Opens the mods window of an instance.
+    Q_INVOKABLE void openMods(const QString &dir){m_selectedDir=dir;manageMods();}
     // Launcher updates: the sidebar shows "Update to <version>" only while one is available.
     enum class LauncherUpdate{Unknown,Checking,Current,Available,Installing,Failed};
     void setLauncherUpdate(LauncherUpdate state,const QString &version={});

@@ -542,5 +542,7 @@
   "Show less": "Свернуть",
   "Memberships": "Подписки",
   "Edit": "Изменить",
-  "Edit server": "Изменить сервер"
+  "Edit server": "Изменить сервер",
+  "Current skin": "Текущий скин",
+  "No premium: in-game default skin. Apply a skin locally to change it.": "No premium: in-game default skin. Apply a skin locally to change it."
 }

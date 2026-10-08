@@ -12,6 +12,8 @@ struct Mod {
 };
 QList<Mod> scan(const QString &modsDir);
 Mod read(const QString &jar);
+// The mod's own picture: the icon its metadata names (Fabric, Quilt, Forge, NeoForge, mcmod.info), else pack.png/icon.png/logo.png in the jar.
+QByteArray iconData(const QString &jar);
 bool accepts(const Mod &mod, const QString &minecraft);
 struct Result {
     QString minecraft, loader;  // empty minecraft: no mod says which version it needs
