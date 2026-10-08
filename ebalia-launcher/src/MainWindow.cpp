@@ -148,7 +148,7 @@ public:
         }
         p->fillRect(r,QColor(27,31,36));if(!thumbnail.isNull()){const qreal cropHeight=thumbnail.width()*qreal(r.height())/r.width();p->setRenderHint(QPainter::SmoothPixmapTransform);p->drawPixmap(r,thumbnail,QRectF(0,0,thumbnail.width(),qMin(cropHeight,qreal(thumbnail.height()))));}
         QLinearGradient shade(r.topLeft(),r.topRight());shade.setColorAt(0,QColor(10,10,16,220));shade.setColorAt(1,QColor(10,10,16,65));p->fillRect(r,shade);
-        const auto category=data["category"].toString();p->drawPixmap(r.left()+14,r.center().y()-16,category=="horror"?icons::horror(32):category=="release"?icons::release(32):icons::alpha(32));
+        const auto category=data["category"].toString();p->drawPixmap(r.left()+14,r.center().y()-16,InstanceIcons::icon(category=="horror"?"horror":category=="release"?"crafting":"grass").pixmap(32,32));
         auto font=option.font;font.setPixelSize(14);font.setBold(true);p->setFont(font);p->setPen(Qt::white);const int width=r.width()-72;
         p->drawText(QRect(r.left()+58,r.top()+20,width,24),Qt::AlignVCenter,QFontMetrics(font).elidedText(data["name"].toString(),Qt::ElideRight,width));
         font.setPixelSize(11);font.setBold(false);p->setFont(font);p->setPen(QColor(214,220,224));p->drawText(QRect(r.left()+58,r.top()+46,width,20),Qt::AlignVCenter,data["label"].toString());

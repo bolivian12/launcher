@@ -2,6 +2,7 @@
 
 - Discover mods loads popular mods as soon as the tab opens (and when the instance or provider changes); Enter searches even while another task runs, and scrolling to the end loads more results.
 - Changing the theme is instant: only the colours are reapplied instead of rebuilding every page.
+- Lost versions use Minecraft textures too (grass block, jack o'lantern for horror versions, crafting table).
 - New instance: Custom shows the Minecraft grass block and Import a clean import icon.
 - Servers on the instance page: an Edit button, full server names (Minecraft colour codes removed) and the Servers and Screenshots titles stay at the top when the lists are empty.
 
