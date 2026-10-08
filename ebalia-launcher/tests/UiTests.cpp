@@ -351,6 +351,17 @@ printf started > launched-marker
         }
         Ui::setTheme("unknown");QCOMPARE(Ui::theme(),QString("ebalia"));
     }
+    void serverListEditing(){
+        QTemporaryDir t;const auto file=t.path()+"/servers.dat";
+        ServerList::add(file,"§6Hypixel §cNetwork","mc.hypixel.net");ServerList::add(file,"Local","localhost");
+        ServerList::edit(file,0,"Hypixel","hypixel.net");auto list=ServerList::read(file);QCOMPARE(list.size(),2);QCOMPARE(list[0].name,QString("Hypixel"));QCOMPARE(list[0].address,QString("hypixel.net"));QCOMPARE(list[1].address,QString("localhost"));
+        QVERIFY_THROWS_EXCEPTION(std::runtime_error,ServerList::edit(file,5,"x","y"));
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        McInstanceManager manager(data.path());auto dir=manager.createInstance("Servers","1.21.1","vanilla");ServerList::add(dir+"/servers.dat","§aGreen §lBold","play.example.org");
+        InstanceDetail detail;detail.resize(1280,900);detail.show();InstanceInfo info;info.base=McInstance{"Servers",dir,"1.21.1","vanilla",true,4096,0,0};detail.showInstance(info);
+        auto servers=detail.findChild<QListWidget*>("instanceServers");QCOMPARE(servers->count(),1);QVERIFY(servers->item(0)->text().startsWith("Green Bold\n"));
+        QVERIFY(detail.findChild<QPushButton*>("editServer"));
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

@@ -540,5 +540,7 @@
   "Could not save the icon.": "无法保存图标。",
   "Show more": "显示更多",
   "Show less": "收起",
-  "Memberships": "会员"
+  "Memberships": "会员",
+  "Edit": "编辑",
+  "Edit server": "编辑服务器"
 }

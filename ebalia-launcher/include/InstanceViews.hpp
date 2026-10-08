@@ -47,6 +47,6 @@ private:
     // Screenshots gallery and multiplayer servers, below the actions.
     void showScreenshots();
     void showServers();
-    QListWidget *m_gallery,*m_servers;QLabel *m_galleryEmpty,*m_serversEmpty,*m_galleryCount;QPushButton *m_addServer,*m_removeServer,*m_copyServer;bool m_running=false;QString m_gallerySignature;
+    QListWidget *m_gallery,*m_servers;QLabel *m_galleryEmpty,*m_serversEmpty,*m_galleryCount;QPushButton *m_addServer,*m_editServer,*m_removeServer,*m_copyServer;bool m_running=false;QString m_gallerySignature;
 };
 namespace InstanceText {QString lastPlayed(qint64 seconds);QString loader(const QString &loader);}

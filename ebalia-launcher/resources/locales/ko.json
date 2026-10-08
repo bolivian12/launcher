@@ -540,5 +540,7 @@
   "Could not save the icon.": "아이콘을 저장하지 못했습니다.",
   "Show more": "더 보기",
   "Show less": "접기",
-  "Memberships": "멤버십"
+  "Memberships": "멤버십",
+  "Edit": "편집",
+  "Edit server": "서버 편집"
 }

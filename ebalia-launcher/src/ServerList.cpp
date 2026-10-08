@@ -104,4 +104,14 @@ void remove(const QString &file,int index){
  for(int i=0;i<doc.servers.size();++i)if(!string(doc.servers[i],"ip").isEmpty()&&++visible==index){doc.servers.removeAt(i);save(file,doc);return;}
  fail("Server not found");
 }
+void edit(const QString &file,int index,const QString &name,const QString &address){
+ auto doc=load(file);
+ int visible=-1;
+ for(auto &server:doc.servers){
+  if(string(server,"ip").isEmpty()||++visible!=index)continue;
+  auto set=[&server](const char *key,const QString &value){for(auto &e:server)if(e.type==String&&e.name==key){e.payload=text(value);return;}server.append({String,key,text(value)});};
+  set("name",name.trimmed().isEmpty()?address.trimmed():name.trimmed());set("ip",address.trimmed());save(file,doc);return;
+ }
+ fail("Server not found");
+}
 }

@@ -188,14 +188,14 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     m_gallery->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);m_gallery->setFrameShape(QFrame::NoFrame);m_gallery->setCursor(Qt::PointingHandCursor);gallery.first->addWidget(m_gallery);
     connect(m_gallery,&QListWidget::itemActivated,this,[](QListWidgetItem *item){QDesktopServices::openUrl(QUrl::fromLocalFile(item->data(Qt::UserRole).toString()));});
     connect(m_gallery,&QListWidget::itemClicked,this,[](QListWidgetItem *item){QDesktopServices::openUrl(QUrl::fromLocalFile(item->data(Qt::UserRole).toString()));});
-    m_galleryEmpty=muted(t("No screenshots yet. Press F2 in the game and they will appear here."));gallery.first->addWidget(m_galleryEmpty);gallery.first->addStretch();
+    m_galleryEmpty=muted(t("No screenshots yet. Press F2 in the game and they will appear here."));m_galleryEmpty->setFixedHeight(150);m_galleryEmpty->setAlignment(Qt::AlignCenter);gallery.first->addWidget(m_galleryEmpty);gallery.first->addStretch();
     auto servers=section("globe",t("Servers"),nullptr);
     m_servers=new QListWidget;m_servers->setObjectName("instanceServers");m_servers->setIconSize(QSize(32,32));m_servers->setFixedHeight(150);m_servers->setFrameShape(QFrame::NoFrame);servers.first->addWidget(m_servers);
-    m_serversEmpty=muted(t("No servers yet. Add one here or from the game's Multiplayer menu."));servers.first->addWidget(m_serversEmpty);
+    m_serversEmpty=muted(t("No servers yet. Add one here or from the game's Multiplayer menu."));m_serversEmpty->setFixedHeight(150);m_serversEmpty->setAlignment(Qt::AlignCenter);servers.first->addWidget(m_serversEmpty);
     auto serverRow=new QHBoxLayout;serverRow->setSpacing(8);servers.first->addLayout(serverRow);
-    m_addServer=iconButton(t("Add server"),"plus","addServer");m_copyServer=iconButton(t("Copy address"),"copy","copyServer");m_removeServer=iconButton(t("Remove"),"trash-2","removeServer");
-    serverRow->addWidget(m_addServer);serverRow->addWidget(m_copyServer);serverRow->addStretch();serverRow->addWidget(m_removeServer);
-    connect(m_servers,&QListWidget::currentRowChanged,this,[this](int row){m_copyServer->setEnabled(row>=0);m_removeServer->setEnabled(row>=0&&!m_running);});
+    m_addServer=iconButton(t("Add server"),"plus","addServer");m_copyServer=iconButton(t("Copy address"),"copy","copyServer");m_editServer=iconButton(t("Edit"),"pencil","editServer");m_removeServer=iconButton(t("Remove"),"trash-2","removeServer");
+    serverRow->addWidget(m_addServer);serverRow->addWidget(m_editServer);serverRow->addWidget(m_copyServer);serverRow->addStretch();serverRow->addWidget(m_removeServer);
+    connect(m_servers,&QListWidget::currentRowChanged,this,[this](int row){m_copyServer->setEnabled(row>=0);m_editServer->setEnabled(row>=0&&!m_running);m_removeServer->setEnabled(row>=0&&!m_running);});
     connect(m_copyServer,&QPushButton::clicked,this,[this]{if(auto item=m_servers->currentItem())QGuiApplication::clipboard()->setText(item->data(Qt::UserRole).toString());});
     connect(m_addServer,&QPushButton::clicked,this,[this]{
         QDialog d(this);d.setObjectName("addServerDialog");d.setWindowTitle(t("Add server"));auto form=new QFormLayout(&d);form->setContentsMargins(20,18,20,16);
@@ -205,6 +205,17 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
         connect(buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
         if(Ui::openWindow(d)!=QDialog::Accepted)return;
         try{ServerList::add(m_dir+"/servers.dat",name->text(),address->text());}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
+        showServers();
+    });
+    connect(m_editServer,&QPushButton::clicked,this,[this]{
+        const int row=m_servers->currentRow();if(row<0)return;const auto current=m_servers->currentItem();
+        QDialog d(this);d.setObjectName("editServerDialog");d.setWindowTitle(t("Edit server"));auto form=new QFormLayout(&d);form->setContentsMargins(20,18,20,16);
+        auto name=new QLineEdit(current->data(Qt::UserRole+1).toString());name->setPlaceholderText(t("Minecraft Server"));auto address=new QLineEdit(current->data(Qt::UserRole).toString());address->setObjectName("serverAddress");address->setPlaceholderText("play.example.org");
+        form->addRow(t("Name"),name);form->addRow(t("Address"),address);auto buttons=new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form->addRow(buttons);
+        connect(address,&QLineEdit::textChanged,&d,[buttons](const QString &v){buttons->button(QDialogButtonBox::Save)->setEnabled(!v.trimmed().isEmpty()&&!v.contains(' '));});
+        connect(buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);
+        if(Ui::openWindow(d)!=QDialog::Accepted)return;
+        try{ServerList::edit(m_dir+"/servers.dat",row,name->text(),address->text());}catch(const std::exception &e){QMessageBox::warning(this,"EBALIA",Language::message(QString::fromUtf8(e.what())));}
         showServers();
     });
     connect(m_removeServer,&QPushButton::clicked,this,[this]{
@@ -234,13 +245,14 @@ void InstanceDetail::showServers(){
     const auto selected=m_servers->currentRow();m_servers->clear();
     const auto list=ServerList::read(m_dir+"/servers.dat");
     for(const auto &server:list){
-        auto item=new QListWidgetItem(server.icon.isNull()?InstanceIcons::icon("server"):QIcon(QPixmap::fromImage(server.icon)),server.name+"\n"+server.address,m_servers);
-        item->setData(Qt::UserRole,server.address);item->setSizeHint(QSize(0,44));
+        auto name=server.name;name.remove(QRegularExpression("§."));// Minecraft colour codes
+        auto item=new QListWidgetItem(server.icon.isNull()?InstanceIcons::icon("server"):QIcon(QPixmap::fromImage(server.icon)),name.trimmed()+"\n"+server.address,m_servers);
+        item->setData(Qt::UserRole,server.address);item->setData(Qt::UserRole+1,name.trimmed());item->setSizeHint(QSize(0,54));item->setToolTip(name.trimmed()+"\n"+server.address);
     }
     m_servers->setVisible(!list.isEmpty());m_serversEmpty->setVisible(list.isEmpty());
     if(selected>=0&&selected<m_servers->count())m_servers->setCurrentRow(selected);
     m_addServer->setEnabled(!m_running);m_addServer->setToolTip(m_running?t("Close the game to edit its server list."):QString());
-    m_copyServer->setEnabled(m_servers->currentRow()>=0);m_removeServer->setEnabled(m_servers->currentRow()>=0&&!m_running);
+    m_copyServer->setEnabled(m_servers->currentRow()>=0);m_editServer->setEnabled(m_servers->currentRow()>=0&&!m_running);m_removeServer->setEnabled(m_servers->currentRow()>=0&&!m_running);
 }
 // Cards reflow to two or one column; narrow windows keep action labels in tooltips.
 void InstanceDetail::arrange(){

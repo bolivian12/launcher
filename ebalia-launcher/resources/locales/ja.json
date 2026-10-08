@@ -540,5 +540,7 @@
   "Could not save the icon.": "アイコンを保存できませんでした。",
   "Show more": "もっと見る",
   "Show less": "閉じる",
-  "Memberships": "メンバーシップ"
+  "Memberships": "メンバーシップ",
+  "Edit": "編集",
+  "Edit server": "サーバーを編集"
 }

@@ -540,5 +540,7 @@
   "Could not save the icon.": "No se pudo guardar el icono.",
   "Show more": "Ver más",
   "Show less": "Ver menos",
-  "Memberships": "Membresías"
+  "Memberships": "Membresías",
+  "Edit": "Editar",
+  "Edit server": "Editar servidor"
 }

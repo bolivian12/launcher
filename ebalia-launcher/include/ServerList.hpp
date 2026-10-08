@@ -10,4 +10,6 @@ QList<Server> read(const QString &file);
 // Both throw std::runtime_error when the file cannot be read or written.
 void add(const QString &file,const QString &name,const QString &address);
 void remove(const QString &file,int index);
+// Changes name and address; the icon and other fields stay.
+void edit(const QString &file,int index,const QString &name,const QString &address);
 }

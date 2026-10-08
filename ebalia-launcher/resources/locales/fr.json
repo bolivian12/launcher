@@ -540,5 +540,7 @@
   "Could not save the icon.": "Impossible d’enregistrer l’icône.",
   "Show more": "Voir plus",
   "Show less": "Voir moins",
-  "Memberships": "Abonnements"
+  "Memberships": "Abonnements",
+  "Edit": "Modifier",
+  "Edit server": "Modifier le serveur"
 }

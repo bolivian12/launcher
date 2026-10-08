@@ -540,5 +540,7 @@
   "Could not save the icon.": "Das Symbol konnte nicht gespeichert werden.",
   "Show more": "Mehr anzeigen",
   "Show less": "Weniger anzeigen",
-  "Memberships": "Mitgliedschaften"
+  "Memberships": "Mitgliedschaften",
+  "Edit": "Bearbeiten",
+  "Edit server": "Server bearbeiten"
 }

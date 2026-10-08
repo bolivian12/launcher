@@ -2,6 +2,7 @@
 
 - Changing the theme is instant: only the colours are reapplied instead of rebuilding every page.
 - New instance: Custom shows the Minecraft grass block and Import a clean import icon.
+- Servers on the instance page: an Edit button, full server names (Minecraft colour codes removed) and the Servers and Screenshots titles stay at the top when the lists are empty.
 
 # 1.1.3
 

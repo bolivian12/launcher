@@ -540,5 +540,7 @@
   "Could not save the icon.": "Не удалось сохранить значок.",
   "Show more": "Показать больше",
   "Show less": "Свернуть",
-  "Memberships": "Подписки"
+  "Memberships": "Подписки",
+  "Edit": "Изменить",
+  "Edit server": "Изменить сервер"
 }
