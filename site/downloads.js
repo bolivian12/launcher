@@ -14,7 +14,7 @@
   };
   let copied = null;
   const names = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
-  let state = 'checking', selected = null, busy = false, version = '1.1.0', current = null;
+  let state = 'checking', selected = null, busy = false, version = '1.1.1', current = null;
   let assets = new Map();
   const parse = tag => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(tag || '')?.slice(1).map(Number);
   const compare = (a,b) => { for(let i=0;i<3;i++) if(a[i]!==b[i]) return a[i]-b[i]; return 0; };
@@ -37,7 +37,7 @@
     if(current) notes.href=current.url;
     if (!selected) return;
     const list = assets.get(selected) || [];
-    window.renderLinuxGuide?.(selected, version, current?.tag || 'v1.1.0');
+    window.renderLinuxGuide?.(selected, version, current?.tag || 'v1.1.1');
     document.querySelector('#download-title').textContent = names[selected];
     document.querySelector('#download-message').textContent = t(list.length ? 'panelReady' : busy ? 'checking' : state === 'unavailable' ? 'panelError' : 'panelPending');
     options.replaceChildren(...list.map(asset => {
@@ -86,9 +86,17 @@
   }
   async function releases(source) {
     const endpoint = source === 'github' ? 'https://api.github.com/repos/ebalia-real/launcher/releases?per_page=30' : 'https://gitgud.io/api/v4/projects/51367/releases?per_page=30';
-    const response=await fetch(endpoint,{cache:'no-store',signal:AbortSignal.timeout(12000)});
-    if(!response.ok) throw new Error('Release service unavailable');
-    const data=await response.json();if(!Array.isArray(data))throw new Error('Invalid release response');
+    // GitHub answers 60 requests an hour per visitor: keep the last good answer and use it when the service refuses.
+    const key='ebalia-releases-'+source;let data;
+    try{
+      const response=await fetch(endpoint,{cache:'no-store',signal:AbortSignal.timeout(12000)});
+      if(!response.ok) throw new Error('Release service unavailable');
+      data=await response.json();if(!Array.isArray(data))throw new Error('Invalid release response');
+      try{localStorage.setItem(key,JSON.stringify(data));}catch{}
+    }catch(error){
+      try{data=JSON.parse(localStorage.getItem(key)||'null');}catch{data=null;}
+      if(!Array.isArray(data))throw error;
+    }
     return data.filter(r=>parse(r.tag_name)&&!r.draft&&!r.prerelease&&!r.upcoming_release&&(!r.released_at||Date.parse(r.released_at)<=Date.now())).map(r=>({
       version:parse(r.tag_name),tag:r.tag_name,source,
       url:source==='github'?r.html_url:r._links?.self,
@@ -136,8 +144,9 @@
   dialog.addEventListener('click',event=>{const b=dialog.getBoundingClientRect();if(event.target===dialog&&(event.clientX<b.left||event.clientX>b.right||event.clientY<b.top||event.clientY>b.bottom))dialog.close();});
   retry.addEventListener('click',check);
   window.addEventListener('ebalia-language-change',render);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
+  let lastCheck=Date.now();const due=()=>Date.now()-lastCheck>600000;
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&due()){lastCheck=Date.now();check();}});
   window.addEventListener('online',check);
-  setInterval(()=>{if(!document.hidden)check();},60000);
+  setInterval(()=>{if(!document.hidden&&due()){lastCheck=Date.now();check();}},60000);
   check();
 })();
