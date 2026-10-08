@@ -339,9 +339,9 @@ void MainWindow::openCreatorDialog(bool patreonOnly){
 QWidget *MainWindow::buildExplore() {
     auto s=section(k("Discover mods"),Language::key("Mods for your Minecraft version and loader. Select one or more mods."));auto l=s.layout;
     auto filters=new QHBoxLayout;filters->setSpacing(10);l->addLayout(filters);
-    m_target=new QComboBox;m_target->setObjectName("modTarget");m_target->setMinimumWidth(240);filters->addWidget(m_target,1);connect(m_target,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_hits={};});
+    m_target=new QComboBox;m_target->setObjectName("modTarget");m_target->setMinimumWidth(240);filters->addWidget(m_target,1);connect(m_target,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_hits={};searchMods();});
     m_modProvider=new QComboBox;m_modProvider->addItem(InstanceIcons::provider("modrinth"),"Modrinth","modrinth");m_modProvider->addItem(InstanceIcons::provider("curseforge"),"CurseForge","curseforge");m_modProvider->setMinimumWidth(170);filters->addWidget(m_modProvider);
-    connect(m_modProvider,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;});
+    connect(m_modProvider,qOverload<int>(&QComboBox::activated),this,[this]{m_results->clear();m_offset=0;searchMods();});
     auto search=new QHBoxLayout;search->setSpacing(10);l->addLayout(search);m_query=new QLineEdit;m_query->setObjectName("modQuery");m_query->setPlaceholderText("Sodium, Dynamic Lights, FallingTree, Veinminer…");m_query->addAction(Ui::icon("search",dim),QLineEdit::LeadingPosition);m_query->setClearButtonEnabled(true);search->addWidget(m_query,1);
     button(text("Buscar","Search","Buscar"),search,[this]{searchMods();},this,true,"search");connect(m_query,&QLineEdit::returnPressed,this,[this]{searchMods();});
     m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);l->addWidget(m_results,1);
@@ -572,6 +572,8 @@ void MainWindow::showPage(int i) {
     if(!m_pages)return;i=qBound(0,i,m_pages->count()-1);m_pages->setCurrentIndex(i);
     {QSignalBlocker block(m_nav);if(i==Settings){m_nav->setCurrentRow(-1);m_nav->clearSelection();}else m_nav->setCurrentRow(i);}
     m_navSettings->setChecked(i==Settings);
+    // The mod list loads when the tab opens: popular mods for the selected instance until something is searched.
+    if(i==Explore&&m_results&&m_results->count()==0&&!m_target->currentData().toString().isEmpty())searchMods();
 }
 void MainWindow::setLauncherUpdate(LauncherUpdate state,const QString &version){
     m_launcherUpdate=state;if(!version.isEmpty())m_launcherVersion=version;
@@ -1041,6 +1043,8 @@ void MainWindow::preview(QJsonArray projects,QString dir){
     });
 }
 void MainWindow::searchMods(int offset){
+    // Another background task is running (an install, an import): search as soon as it ends instead of ignoring Enter.
+    if(m_jobs){QTimer::singleShot(400,this,[this,offset]{searchMods(offset);});return;}
     auto dir=m_target->currentData().toString();if(dir.isEmpty()){error(text("Creá una instancia con cargador de mods primero.","Create an instance with a mod loader first.","Crie uma instância com carregador de mods primeiro."));return;}
     QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}auto root=m_root,query=m_query->text(),provider=m_modProvider->currentData().toString();
     work(Language::key("Searching provider…"),[root,query,info,offset,provider]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider)}};},[this,offset](QJsonObject r){
