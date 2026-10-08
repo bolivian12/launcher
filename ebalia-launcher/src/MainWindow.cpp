@@ -347,7 +347,12 @@ QWidget *MainWindow::buildExplore() {
     m_results=new QListWidget;m_results->setObjectName("modResults");m_results->setSelectionMode(QAbstractItemView::ExtendedSelection);m_results->setIconSize(QSize(44,44));m_results->setWordWrap(true);l->addWidget(m_results,1);
     auto browseRow=new Ui::ResponsiveRow(720);l->addWidget(browseRow);auto browse=browseRow->box();browse->setSpacing(10);
     button(text("Ver instalación y dependencias","Preview installation & dependencies","Ver instalação e dependências"),browse,[this]{QJsonArray projects;for(auto item:m_results->selectedItems()){auto p=item->data(Qt::UserRole).toJsonObject();projects.append(QJsonObject{{"project_id",p["project_id"]},{"name",p["title"]}});}if(!projects.isEmpty())preview(projects,m_target->currentData().toString());},this,true,"download");
-    button(text("Más resultados","More results","Mais resultados"),browse,[this]{searchMods(m_offset+30);},this,false,"plus");browse->addStretch();
+    browse->addStretch();
+    // Like Prism Launcher: reaching the end of the list loads the next results.
+    connect(m_results->verticalScrollBar(),&QScrollBar::valueChanged,this,[this](int value){
+        auto bar=m_results->verticalScrollBar();
+        if(m_jobs||m_results->count()==0||m_results->property("lastPage").toBool()||value<bar->maximum()-48)return;
+        searchMods(m_offset+30);});
     return s.widget;
 }
 QWidget *MainWindow::buildLost() {
@@ -1048,7 +1053,7 @@ void MainWindow::searchMods(int offset){
     auto dir=m_target->currentData().toString();if(dir.isEmpty()){error(text("Creá una instancia con cargador de mods primero.","Create an instance with a mod loader first.","Crie uma instância com carregador de mods primeiro."));return;}
     QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){error(exception());return;}auto root=m_root,query=m_query->text(),provider=m_modProvider->currentData().toString();
     work(Language::key("Searching provider…"),[root,query,info,offset,provider]{return QJsonObject{{"hits",ModRepository(root).search(query,info["mcVersion"].toString(),info["loader"].toString(),offset,provider)}};},[this,offset](QJsonObject r){
-        m_offset=offset;if(offset==0)m_results->clear();auto hits=r["hits"].toArray();
+        m_offset=offset;if(offset==0)m_results->clear();auto hits=r["hits"].toArray();m_results->setProperty("lastPage",hits.size()<30);
         for(const auto &v:hits){
             auto p=v.toObject();auto item=new QListWidgetItem(Ui::icon("puzzle",dim),p["title"].toString()+"  ·  "+p["author"].toString()+"\n"+p["description"].toString(),m_results);item->setData(Qt::UserRole,p);item->setToolTip(p["description"].toString());
             const auto url=p["icon_url"].toString();
