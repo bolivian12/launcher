@@ -258,7 +258,7 @@ QWidget *MainWindow::buildSidebar() {
     connect(m_sidebarUpdate,&QPushButton::clicked,this,[this]{emit installLauncherUpdateRequested();});l->addWidget(m_sidebarUpdate);
     m_navSettings=new QPushButton(Ui::navigationIcon("settings"),"  "+k("Settings"));m_navSettings->setObjectName("navSettings");m_navSettings->setCheckable(true);m_navSettings->setIconSize(QSize(28,28));m_navSettings->setCursor(Qt::PointingHandCursor);
     connect(m_navSettings,&QPushButton::clicked,this,[this]{showPage(Settings);});l->addWidget(m_navSettings);
-    auto version=label("EBALIA Launcher "+QCoreApplication::applicationVersion().section('.',0,1),l,"sidebarVersion",false);version->setContentsMargins(12,0,0,0);
+    auto version=label("EBALIA Launcher "+QCoreApplication::applicationVersion(),l,"sidebarVersion",false);version->setContentsMargins(12,0,0,0);
     if(QCoreApplication::applicationVersion().isEmpty())version->setText("EBALIA Launcher 1.0.0");
     return bar;
 }
