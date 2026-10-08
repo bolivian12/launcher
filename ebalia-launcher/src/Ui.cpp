@@ -167,8 +167,7 @@ QPushButton[patreon=true]{background:#ed6957;border:1px solid #f58978;color:#fff
 #playBar{background:#1b1b1e;border-top:1px solid #26262a;}
 #instancePicker{background:#232327;border:1px solid #303036;border-radius:10px;padding:0;text-align:left;}#instancePicker:hover{background:#2a2a2f;border-color:#46464e;}
 #pickerName,#playerName{font-weight:800;font-size:14px;}#pickerSub,#playerType{color:#9a9aa3;font-size:12px;}
-#homePlay{font-size:21px;letter-spacing:1px;}#detailPlay{font-size:17px;}
-#newsCard{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;padding:0;text-align:left;}#newsCard:hover{border-color:#4a9e31;background:#232327;}#newsCard QLabel{background:transparent;}
+#homePlay{font-size:21px;letter-spacing:1px;}#detailPlay{font-size:17px;}#newsCard,#modCard{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;padding:0;text-align:left;}#newsCard:hover,#modCard:hover{border-color:#4a9e31;background:#232327;}#newsCard QLabel,#modCard QLabel{background:transparent;}
 #newsTitle{font-weight:800;font-size:13px;}#newsMeta{color:#6fd15b;font-size:11px;font-weight:700;}
 #chip{background:rgba(26,26,30,220);border:1px solid #3a3a41;border-radius:7px;padding:6px 11px;font-weight:700;}#chip[accent=true]{background:#3c8527;border-color:#4a9e31;color:#ffffff;}
 #instanceCard{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#instanceCard:hover{border-color:#4a9e31;background:#222227;}#instanceCard[selected=true]{border:2px solid #4a9e31;}

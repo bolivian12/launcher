@@ -149,8 +149,37 @@ void AccountManager::setPicture(const QString &uuid, const QImage &picture)
         emit accountsChanged();
 }
 
+bool AccountManager::hasCustomPicture(const QString &uuid) const
+{
+    const QString path = picturePath(uuid);
+    return !path.isEmpty() && QFile::exists(path.chopped(4) + QStringLiteral("-custom.png"));
+}
+
+void AccountManager::setCustomPicture(const QString &uuid, const QImage &picture)
+{
+    const QString path = picturePath(uuid);
+    if (path.isEmpty() || picture.isNull())
+        return;
+    QDir().mkpath(m_dir + QStringLiteral("/avatars"));
+    QSaveFile f(path.chopped(4) + QStringLiteral("-custom.png"));
+    if (f.open(QIODevice::WriteOnly) && picture.save(&f, "PNG") && f.commit())
+        emit accountsChanged();
+}
+
+void AccountManager::clearCustomPicture(const QString &uuid)
+{
+    const QString path = picturePath(uuid);
+    if (!path.isEmpty() && QFile::remove(path.chopped(4) + QStringLiteral("-custom.png")))
+        emit accountsChanged();
+}
+
 QPixmap AccountManager::picture(const McAccount &account, int size) const
 {
+    if (hasCustomPicture(account.uuid)) {
+        const QPixmap custom(picturePath(account.uuid).chopped(4) + QStringLiteral("-custom.png"));
+        if (!custom.isNull())
+            return Ui::cover(custom, QSize(size, size), int(size * 0.28));
+    }
     if (hasPicture(account.uuid)) {
         const QPixmap source(picturePath(account.uuid));
         if (!source.isNull())

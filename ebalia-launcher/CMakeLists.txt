@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(EBALIA_Launcher VERSION 1.1.1 LANGUAGES CXX)
+project(EBALIA_Launcher VERSION 1.1.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -8,7 +8,7 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network Concurrent)
 find_package(LibArchive REQUIRED)
 add_library(ebalia-core STATIC
   src/JavaDownloader.cpp src/LostInstaller.cpp src/PackService.cpp src/Download.cpp src/JavaRuntime.cpp src/SkinManager.cpp src/ModRepository.cpp src/Loaders.cpp src/McInstanceManager.cpp src/Archive.cpp src/JavaRunner.cpp
-  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp
+  src/VersionManager.cpp src/Language.cpp src/ServerList.cpp src/LostNative.cpp src/SoftwareGl.cpp src/ModCompat.cpp src/CrashReport.cpp src/GpuInfo.cpp
   include/McInstanceManager.hpp include/JavaRunner.hpp include/VersionManager.hpp)
 target_include_directories(ebalia-core PUBLIC include)
 # Configure the key for this build without putting it in the source code.

@@ -537,5 +537,8 @@
   "Address": "地址",
   "Remove this server from the list?": "要从列表中移除此服务器吗？",
   "Close the game to edit its server list.": "请先关闭游戏再编辑服务器列表。",
-  "Could not save the icon.": "无法保存图标。"
+  "Could not save the icon.": "无法保存图标。",
+  "Show more": "显示更多",
+  "Show less": "收起",
+  "Memberships": "会员"
 }

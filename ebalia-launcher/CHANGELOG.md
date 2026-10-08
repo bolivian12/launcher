@@ -1,3 +1,13 @@
+# 1.1.2
+
+- Graphics driver crashes and missing OpenGL show your graphics card (dedicated or built into the processor) and open its driver: the exact driver page for NVIDIA GeForce and AMD Radeon RX cards, Intel's pages for Arc and 7th–10th generation graphics, and the maker's automatic detection tool (NVIDIA App, AMD Auto-Detect, Intel Driver & Support Assistant) when the exact page is not found. Laptops and branded PCs also get their maker's support page (Dell, HP, Lenovo, ASUS, Acer, MSI, GIGABYTE, Samsung).
+- Bedrock: the launcher installs the Microsoft Visual C++ runtime the Bedrock manager needs (it stopped with "You need VC++ Runtime 14.14…"), and once the manager is installed a Play button starts it.
+- Instance icons use Minecraft's own textures (diamond pickaxe, TNT, crafting table, creeper…), read from the game the launcher downloaded.
+- Choose your own profile picture from the account menu (and go back to the Microsoft one at any time).
+- Home shows EBALIA Mods with covers, above the news.
+- A cleaner Patreon page: membership card, tidy posts with readable dates and "Show more", in Community and News.
+- Removed the Patreon service address setting; no empty strip under the pages; "Support & community" shows its "&".
+
 # 1.1.1
 
 - Virtual machines and computers without a graphics driver: when Minecraft closes because there is no OpenGL, the launcher offers to start it with software graphics (OpenGL drawn by the processor; Mesa on Windows, the system Mesa on Linux). It can also be turned on in the instance settings. Windows uses it for Minecraft 1.13 and later.

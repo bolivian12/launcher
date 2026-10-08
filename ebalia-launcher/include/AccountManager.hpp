@@ -36,6 +36,11 @@ public:
     bool hasPicture(const QString &uuid) const;
     void setPicture(const QString &uuid, const QImage &picture);
     QPixmap picture(const McAccount &account, int size) const;
+    // A picture the player chose (avatars/<uuid>-custom.png): shown instead of the Microsoft or initial-letter one
+    // and kept when Microsoft refreshes its picture.
+    bool hasCustomPicture(const QString &uuid) const;
+    void setCustomPicture(const QString &uuid, const QImage &picture);
+    void clearCustomPicture(const QString &uuid);
 
 signals:
     void accountsChanged();

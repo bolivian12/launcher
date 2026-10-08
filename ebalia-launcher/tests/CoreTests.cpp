@@ -21,6 +21,7 @@
 #include "SoftwareGl.hpp"
 #include "ModCompat.hpp"
 #include "CrashReport.hpp"
+#include "GpuInfo.hpp"
 #include <stdexcept>
 #include <clocale>
 #include <functional>
@@ -670,6 +671,44 @@ private slots:
         QVERIFY(fits({"[1.18,1.19),[1.20,1.21)"},"1.20.1",true));QVERIFY(!fits({"[1.18,1.19),[1.20,1.21)"},"1.19.2",true));QVERIFY(fits({"[26.3,)"},"26.3",true));QVERIFY(fits({"1.20.1"},"1.19",true)); // bare: a preference
         QList<ModCompat::Mod> mods;ModCompat::Mod a;a.name="A";a.loader="fabric";a.ranges={"~1.20.1"};ModCompat::Mod b;b.name="B";b.loader="fabric";b.ranges={"1.21.1"};mods<<a<<b;
         auto r=ModCompat::detect(mods,{"1.21.1","1.20.4","1.20.1"});QVERIFY(!r.compatible());QCOMPARE(r.problems.size(),1);
+    }
+    void graphicsDriverLinks(){
+        using GpuInfo::describe;
+        QCOMPARE(describe("NVIDIA GeForce RTX 5060").vendor,QString("NVIDIA"));QVERIFY(!describe("NVIDIA GeForce RTX 5060").integrated);
+        QVERIFY(describe("Intel(R) UHD Graphics 620").integrated);QVERIFY(describe("Intel(R) Arc(TM) Graphics").integrated);QVERIFY(!describe("Intel(R) Arc(TM) B580 Graphics").integrated);
+        QVERIFY(describe("AMD Radeon(TM) Graphics").integrated);QVERIFY(describe("AMD Radeon 780M Graphics").integrated);QVERIFY(!describe("AMD Radeon RX 7600").integrated);
+        QVERIFY(describe("Microsoft Basic Display Adapter").virtualAdapter);QVERIFY(describe("VMware SVGA 3D").virtualAdapter);
+        // A laptop: the crash in the NVIDIA driver points at the NVIDIA card, otherwise the dedicated one is chosen.
+        const QList<GpuInfo::Gpu> laptop{describe("Intel(R) UHD Graphics 630"),describe("NVIDIA GeForce RTX 4060 Laptop GPU")};
+        QCOMPARE(GpuInfo::pick(laptop,"Intel").name,QString("Intel(R) UHD Graphics 630"));QCOMPARE(GpuInfo::pick(laptop).name,QString("NVIDIA GeForce RTX 4060 Laptop GPU"));
+        // NVIDIA: product id from NVIDIA's list, then the newest driver's page (responses trimmed from the real services).
+        QMap<QString,QByteArray> web{{"https://www.nvidia.com/Download/API/lookupValueSearch.aspx?TypeID=3",
+            "<LookupValueSearch><LookupValues><LookupValue ParentID=\"131\">\n<Name>NVIDIA GeForce RTX 5060 Ti</Name>\n<Value>1076</Value>\n</LookupValue><LookupValue ParentID=\"131\">\n<Name>NVIDIA GeForce RTX 5060</Name>\n<Value>1078</Value>\n</LookupValue><LookupValue ParentID=\"129\">\n<Name>GeForce RTX 4060 Laptop GPU</Name>\n<Value>1007</Value>\n</LookupValue></LookupValues></LookupValueSearch>"}};
+        QStringList asked;auto fetch=[&](const QUrl &u)->QByteArray{asked<<u.toString();const auto q=QUrlQuery(u);
+            if(u.host()=="gfwsl.geforce.com"){const auto id=q.queryItemValue("pfid");return encode(QJsonObject{{"IDS",QJsonArray{QJsonObject{{"downloadInfo",QJsonObject{{"Version",id=="1078"?"617.42":"612.10"},{"DetailsURL","https://www.nvidia.com/en-us/drivers/details/"+id+"/"}}}}}}});}
+            if(web.contains(u.toString()))return web[u.toString()];throw std::runtime_error("404");};
+        auto link=GpuInfo::driverLink(describe("NVIDIA GeForce RTX 5060"),fetch,"windows");QVERIFY(link.exact);QCOMPARE(link.url,QString("https://www.nvidia.com/en-us/drivers/details/1078/"));QVERIFY(link.title.contains("617.42"));
+        QVERIFY(asked.last().contains("psid=131")&&asked.last().contains("pfid=1078"));
+        QCOMPARE(GpuInfo::driverLink(describe("NVIDIA GeForce RTX 4060 Laptop GPU"),fetch,"windows").url,QString("https://www.nvidia.com/en-us/drivers/details/1007/"));
+        link=GpuInfo::driverLink(describe("NVIDIA GeForce RTX 9999"),fetch,"windows");QVERIFY(!link.exact);QCOMPARE(link.url,GpuInfo::autoDetect("NVIDIA").url); // unknown model: NVIDIA App
+        link=GpuInfo::driverLink(describe("NVIDIA GeForce RTX 5060"),[](const QUrl &)->QByteArray{throw std::runtime_error("offline");},"windows");QCOMPARE(link.url,GpuInfo::autoDetect("NVIDIA").url);
+        // AMD: the model's page when it exists, AMD's detection tool otherwise and for Radeon inside Ryzen processors.
+        const QString rx7600="https://www.amd.com/en/support/downloads/drivers.html/graphics/radeon-rx/radeon-rx-7000-series/amd-radeon-rx-7600.html";web[rx7600]="<html>";
+        web["https://www.amd.com/en/support/downloads/drivers.html/graphics/radeon-rx/radeon-rx-9000-series/amd-radeon-rx-9070-xt.html"]="<html>";
+        QCOMPARE(GpuInfo::driverLink(describe("AMD Radeon RX 7600"),fetch,"windows").url,rx7600);
+        QVERIFY(GpuInfo::driverLink(describe("AMD Radeon(TM) RX 9070 XT"),fetch,"windows").exact);
+        QCOMPARE(GpuInfo::driverLink(describe("AMD Radeon RX 7650 GRE"),fetch,"windows").url,GpuInfo::autoDetect("AMD").url);
+        QCOMPARE(GpuInfo::driverLink(describe("AMD Radeon 780M Graphics"),fetch,"windows").url,GpuInfo::autoDetect("AMD").url);
+        // Intel: Arc cards, 7th–10th generation graphics, Intel's assistant for the rest.
+        QVERIFY(GpuInfo::driverLink(describe("Intel(R) Arc(TM) A770 Graphics"),fetch,"windows").url.contains("785597"));
+        QVERIFY(GpuInfo::driverLink(describe("Intel(R) UHD Graphics 620"),fetch,"windows").url.contains("776137"));
+        QCOMPARE(GpuInfo::driverLink(describe("Intel(R) Iris(R) Xe Graphics"),fetch,"windows").url,GpuInfo::autoDetect("Intel").url);
+        // Linux: NVIDIA's Linux driver; AMD and Intel come with the system (no page); macOS updates itself.
+        QVERIFY(GpuInfo::driverLink(describe("NVIDIA GeForce RTX 5060"),fetch,"linux").url.contains("/drivers/unix/"));QVERIFY(GpuInfo::driverLink(describe("AMD Radeon RX 7600"),fetch,"linux").url.isEmpty());
+        QVERIFY(GpuInfo::manufacturerSupport({"HP","HP Pavilion Laptop 15"}).url.contains("support.hp.com"));QVERIFY(GpuInfo::manufacturerSupport({"LENOVO","82XV"}).url.contains("lenovo"));
+        QVERIFY(GpuInfo::manufacturerSupport({"Micro-Star International Co., Ltd.","MS-7C91"}).url.contains("msi.com"));
+        if(qEnvironmentVariableIsSet("EBALIA_LIVE_TESTS")){auto live=[](const QUrl &u){return ModRepository::fetch(u);};
+            for(auto name:{"NVIDIA GeForce RTX 5060","NVIDIA GeForce RTX 3060","AMD Radeon RX 7600","AMD Radeon RX 6700 XT"}){auto l=GpuInfo::driverLink(describe(name),live,"windows");qInfo().noquote()<<name<<"->"<<l.url<<l.title;QVERIFY2(l.exact,name);}}QVERIFY(GpuInfo::manufacturerSupport({"System manufacturer","System Product Name"}).url.isEmpty());
     }
     void crashSummaries(){
         // Lines from real crash logs (Forge 26.3 with Biomes O' Plenty, an AMD driver crash, a virtual machine, Fabric).

@@ -537,5 +537,8 @@
   "Address": "주소",
   "Remove this server from the list?": "이 서버를 목록에서 제거할까요?",
   "Close the game to edit its server list.": "서버 목록을 편집하려면 게임을 닫으세요.",
-  "Could not save the icon.": "아이콘을 저장하지 못했습니다."
+  "Could not save the icon.": "아이콘을 저장하지 못했습니다.",
+  "Show more": "더 보기",
+  "Show less": "접기",
+  "Memberships": "멤버십"
 }

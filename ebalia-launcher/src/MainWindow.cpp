@@ -16,6 +16,7 @@
 #include "LostNative.hpp"
 #include "SoftwareGl.hpp"
 #include "CrashReport.hpp"
+#include "GpuInfo.hpp"
 #include "JavaRuntime.hpp"
 #include "SetupDialog.hpp"
 #include "CreateInstanceDialog.hpp"
@@ -157,12 +158,33 @@ private:
     mutable QSet<QString> m_pending;
 };
 }
+namespace {
+class TaskBarFilter:public QObject {
+public:
+    explicit TaskBarFilter(QStatusBar *bar):QObject(bar),m_bar(bar){}
+    bool eventFilter(QObject *object,QEvent *event) override {
+        if(object==m_bar&&event->type()==QEvent::ChildAdded)if(auto w=qobject_cast<QWidget*>(static_cast<QChildEvent*>(event)->child()))w->installEventFilter(this);
+        if(event->type()==QEvent::ChildAdded||event->type()==QEvent::ChildRemoved||event->type()==QEvent::ShowToParent||event->type()==QEvent::HideToParent||event->type()==QEvent::Show||event->type()==QEvent::Hide)
+            QMetaObject::invokeMethod(this,[this]{update();},Qt::QueuedConnection);
+        return false;
+    }
+private:
+    void update(){bool any=false;for(auto w:m_bar->findChildren<QWidget*>(QString(),Qt::FindDirectChildrenOnly))if(!w->isWindow()&&w->objectName()!="qt_statusbar_sizegrip"&&w->isVisibleTo(m_bar)&&w->sizeHint().height()>0&&!qobject_cast<QLabel*>(w))any=true;m_bar->setVisible(any);}
+    QStatusBar *m_bar;
+};
+}
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
+    // The window's own status bar only holds background tasks (installs, updates): hidden while it has none,
+    // so no empty strip shows under the page.
+    {auto bar=statusBar();bar->setSizeGripEnabled(false);bar->hide();
+     auto filter=new TaskBarFilter(bar);bar->installEventFilter(filter);}
     m_root=qEnvironmentVariable("EBALIA_DATA_DIR");if(m_root.isEmpty())m_root=QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir().mkpath(m_root);Language::current=QSettings().value("ui/language",QLocale::system().name().left(2)).toString();
     if(qEnvironmentVariableIsSet("EBALIA_LANGUAGE"))Language::current=qEnvironmentVariable("EBALIA_LANGUAGE");
     if(!Language::available().contains(Language::current))Language::current="en";
     m_mc=new McInstanceManager(m_root,this);m_mc->nameFolders();
+    // Instance icons with Minecraft's own textures once a game version was downloaded.
+    QTimer::singleShot(0,this,[this]{InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();});});
     // Instances of other launchers pasted into the instances folder become EBALIA instances, also while the launcher is open.
     {auto watcher=new QFileSystemWatcher({m_mc->instancesRoot()},this);m_pasteTimer=new QTimer(this);m_pasteTimer->setSingleShot(true);m_pasteTimer->setInterval(3000);
      connect(watcher,&QFileSystemWatcher::directoryChanged,m_pasteTimer,qOverload<>(&QTimer::start));connect(m_pasteTimer,&QTimer::timeout,this,[this]{adoptPastedInstances();});m_pasteTimer->start(1500);}m_versions=new VersionManager(this);m_versions->loadVersions();
@@ -173,7 +195,7 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent) {
     connect(m_mc,&McInstanceManager::manifestReady,this,[this](const QList<McVersion> &v){m_manifest=v;m_catalog->setText(text("Catálogo actualizado · ","Catalog updated · ","Catálogo atualizado · ")+QString::number(v.size())+text(" versiones"," versions"," versões"));});
     connect(m_mc,&McInstanceManager::manifestFailed,this,[this](const QString &e){m_catalog->setText(Language::message(e));});
     connect(m_mc,&McInstanceManager::installProgress,this,[this](const QString &,int p,const QString &stage){m_progress->show();m_progress->setRange(0,100);m_progress->setValue(p);m_status->setText(Language::message(stage));});
-    connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
+    connect(m_mc,&McInstanceManager::installDone,this,[this](const QString &dir,bool ok,const QString &e){m_installing.remove(dir);if(ok)InstanceIcons::useGameTextures(m_mc->mcDir(),this,[this]{refreshInstances();});const bool start=m_launchAfterInstall.remove(dir)&&ok;if(start)QTimer::singleShot(0,this,[this,dir]{for(const auto &i:m_mc->instances())if(i.dir==dir&&i.ready)launchInstance(i);});m_progress->setValue(ok?100:0);m_progress->setVisible(!m_installing.isEmpty());m_status->setText(ok?text("Instancia lista para jugar","Instance ready to play","Instância pronta para jogar"):Language::message(e));refreshInstances();if(!ok)error(e);});
     connect(m_mc,&McInstanceManager::gameStarted,this,[this](const QString &){refreshInstances();m_status->setText(text("Minecraft en ejecución","Minecraft is running","Minecraft em execução"));});
     connect(m_mc,&McInstanceManager::gameEnded,this,[this](const QString &dir,int code){refreshInstances();m_status->setText(text("Minecraft terminó · código ","Minecraft exited · code ","Minecraft terminou · código ")+QString::number(code));if(code)showCrash(dir);});
     connect(m_mc,&McInstanceManager::launchFailed,this,[this](const QString &,const QString &e){error(e);refreshInstances();});
@@ -258,9 +280,30 @@ QWidget *MainWindow::buildHome() {
     auto playerText=new QVBoxLayout;playerText->setSpacing(1);playerLayout->addLayout(playerText,1);m_playerName=elided(playerText,"playerName",Qt::AlignRight|Qt::AlignVCenter);m_playerType=elided(playerText,"playerType",Qt::AlignRight|Qt::AlignVCenter);
     m_playerAvatar=new QLabel;m_playerAvatar->setObjectName("playerAvatar");m_playerAvatar->setFixedSize(44,44);playerLayout->addWidget(m_playerAvatar,0,Qt::AlignVCenter);
     auto playerSlot=new QWidget;auto playerSlotLayout=new QHBoxLayout(playerSlot);playerSlotLayout->setContentsMargins(0,0,0,0);playerSlotLayout->addStretch();playerSlotLayout->addWidget(player);bl->addWidget(playerSlot,0,2);bl->setColumnStretch(0,1);bl->setColumnStretch(2,1);l->addWidget(bar);
-    auto creator=new QWidget;creator->setObjectName("creatorStrip");auto creatorLayout=new QHBoxLayout(creator);creatorLayout->setContentsMargins(28,12,28,0);creatorLayout->setSpacing(12);
-    auto mods=button(k("My Mods"),creatorLayout,[this]{openCreatorDialog(false);},this,false,"package");mods->setObjectName("myModsButton");mods->setIcon(Ui::navigationIcon("package"));mods->setIconSize({24,24});
-    creatorLayout->addStretch();auto patreon=button("EBALIA · Patreon",creatorLayout,[this]{openCreatorDialog(true);},this,false,"heart");patreon->setObjectName("patreonInviteButton");patreon->setProperty("patreon",true);patreon->setIcon(Ui::icon("heart",Qt::white));l->addWidget(creator);
+    // EBALIA's own mods, with covers like the news below them.
+    auto modsSection=new QWidget;modsSection->setObjectName("homeMods");auto ml=new QVBoxLayout(modsSection);ml->setContentsMargins(28,16,28,0);ml->setSpacing(12);
+    auto modsHead=new QHBoxLayout;modsHead->setSpacing(12);ml->addLayout(modsHead);label("EBALIA Mods",modsHead,"sectionTitle",false);modsHead->addStretch();
+    auto patreon=button("EBALIA · Patreon",modsHead,[this]{openCreatorDialog(true);},this,false,"heart");patreon->setObjectName("patreonInviteButton");patreon->setProperty("patreon",true);patreon->setIcon(Ui::icon("heart",Qt::white));
+    auto allMods=button(k("See all"),modsHead,[this]{openCreatorDialog(false);},this);allMods->setObjectName("myModsButton");allMods->setProperty("link",true);allMods->setIcon(Ui::icon("chevron-right",green));allMods->setLayoutDirection(Qt::RightToLeft);
+    auto modCards=new QHBoxLayout;modCards->setSpacing(14);ml->addLayout(modCards);
+    {const auto art=InstanceIcons::backgrounds();
+     for(const auto &mod:creatorMods()){
+        auto card=new ContentButton;card->setObjectName("modCard");card->setCursor(Qt::PointingHandCursor);card->setAccessibleName(mod.name);card->setToolTip(Language::key(mod.description));card->setMinimumWidth(150);card->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);
+        auto cl=new QVBoxLayout(card);cl->setContentsMargins(1,1,1,12);cl->setSpacing(8);auto cover=new Cover(11);cover->setObjectName("newsCover");cover->setAspectRatio(16.0/9.0);cl->addWidget(cover);
+        auto body=new QVBoxLayout;body->setContentsMargins(14,0,14,0);body->setSpacing(4);cl->addLayout(body);
+        auto meta=elided(body,"newsMeta");meta->setText("EBALIA  ·  "+(mod.soon?text("PRÓXIMAMENTE","COMING SOON","EM BREVE"):QString("CURSEFORGE")));auto title=label(mod.name,body,"newsTitle");title->setAlignment(Qt::AlignLeft|Qt::AlignTop);body->addStretch();
+        for(auto w:{static_cast<QWidget*>(meta),static_cast<QWidget*>(title)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
+        connect(card,&QPushButton::clicked,this,[this,mod]{if(mod.soon)openCreatorDialog(false);else QDesktopServices::openUrl(QUrl(mod.url()));});modCards->addWidget(card,1);
+        // The square mod picture over a darkened launcher background, so it fills the cover like a news image.
+        const auto background=art.isEmpty()?QString(":/art/f1_2.jpg"):art[int(qHash(mod.slug)%uint(art.size()))];const auto picture=":/creations/"+mod.slug+".png";
+        Ui::loadArt(background,{640,360},cover,[cover,picture](const QPixmap &p){
+            QPixmap canvas(640,360);canvas.fill(QColor(20,20,24));QPainter painter(&canvas);painter.setRenderHint(QPainter::SmoothPixmapTransform);painter.setRenderHint(QPainter::Antialiasing);
+            painter.drawPixmap(0,0,Ui::cover(p,{640,360}));painter.fillRect(canvas.rect(),QColor(10,10,14,150));
+            const QPixmap image(picture);if(!image.isNull()){QRect box(0,0,240,240);box.moveCenter(canvas.rect().center());QPainterPath frame;frame.addRoundedRect(QRectF(box.adjusted(-6,-6,6,6)),24,24);painter.fillPath(frame,QColor(0,0,0,120));
+                QPainterPath clip;clip.addRoundedRect(QRectF(box),18,18);painter.setClipPath(clip);painter.drawPixmap(box,image);}
+            painter.end();cover->setPixmap(canvas);});
+     }}
+    l->addWidget(modsSection);
     auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,14,28,20);nl->setSpacing(12);
     auto head=new QHBoxLayout;nl->addLayout(head);label(k("What's new"),head,"sectionTitle",false);head->addStretch();
     auto all=button(k("See all"),head,[this]{showPage(News);},this);all->setProperty("link",true);all->setIcon(Ui::icon("chevron-right",green));all->setLayoutDirection(Qt::RightToLeft);
@@ -381,7 +424,7 @@ QWidget *MainWindow::buildNews() {
 QWidget *MainWindow::buildCommunity() {
     auto s=section(k("Community"),{});auto tabs=new QTabWidget;tabs->setObjectName("communityTabs");tabs->setIconSize(QSize(18,18));tabs->setDocumentMode(true);tabs->setUsesScrollButtons(false);tabs->setElideMode(Qt::ElideRight);s.layout->addWidget(tabs,1);
     const QList<QPair<QString,QString>> sections{{"image",k("Fan arts")},{"globe",k("Servers")},{"book-open",k("Learn")},{"heart",k("Support & community")},{"sparkles",k("EBALIA · Patreon")}};
-    for(int n=0;n<sections.size();++n)tabs->addTab(new CommunityPage(n,m_root,m_patreon),Ui::icon(sections[n].first),sections[n].second);
+    for(int n=0;n<sections.size();++n)tabs->addTab(new CommunityPage(n,m_root,m_patreon),Ui::icon(sections[n].first),QString(sections[n].second).replace("&","&&")); // "&" would mark a keyboard shortcut and show as "_"
     return s.widget;
 }
 void MainWindow::startTour() {
@@ -495,6 +538,10 @@ void MainWindow::accountMenu(){
     if(!m_accounts->accounts().isEmpty())menu.addSeparator();
     menuAction(menu,"plus",k("Add Microsoft account"),this,[this]{account(true);});
     menuAction(menu,"user-round",k("Add local profile"),this,[this]{account(false);});
+    if(!active.isEmpty()){
+        menuAction(menu,"image",text("Cambiar imagen de perfil…","Change profile picture…","Mudar imagem de perfil…"),this,[this,active]{auto picture=InstanceIcons::chooseImage(this,256);if(!picture.isNull())m_accounts->setCustomPicture(active,picture);});
+        if(m_accounts->hasCustomPicture(active))menuAction(menu,"refresh-cw",m_accounts->active().type=="msa"?text("Volver a la imagen de Microsoft","Back to the Microsoft picture","Voltar à imagem da Microsoft"):text("Quitar imagen de perfil","Remove profile picture","Remover imagem de perfil"),this,[this,active]{m_accounts->clearCustomPicture(active);});
+    }
     if(!active.isEmpty())menuAction(menu,"trash-2",k("Remove active account"),this,[this]{auto a=m_accounts->active();if(QMessageBox::question(this,"EBALIA",text("¿Quitar la cuenta del launcher?","Remove this account from the launcher?","Remover esta conta do launcher?"))==QMessageBox::Yes)m_accounts->removeAccount(a.uuid);});
     menu.addSeparator();menuAction(menu,"settings",k("Settings"),this,[this]{showPage(Settings);});
     menu.setMinimumWidth(m_accountButton->width());menu.exec(m_accountButton->mapToGlobal(QPoint(0,m_accountButton->height()+4)));
@@ -671,7 +718,7 @@ void MainWindow::showCrash(const QString &dir){
     QString log;{QFile f(dir+"/launcher.log");if(f.open(QIODevice::ReadOnly)){if(f.size()>4*1024*1024)f.seek(f.size()-4*1024*1024);log=QString::fromUtf8(f.readAll());}}
     const auto findings=CrashReport::analyze(log);QJsonObject info;try{info=ModRepository::read(dir+"/instance.json");}catch(...){}
     const auto instanceName=info["name"].toString();
-    QDialog d(this);d.setObjectName("crashSummaryWindow");d.setWindowTitle(text("Minecraft se cerró","Minecraft closed","Minecraft fechou")+" · "+instanceName);Ui::fitToScreen(&d,{620,420});
+    QDialog d(this);d.setObjectName("crashSummaryWindow");d.setWindowTitle(text("Minecraft se cerró","Minecraft closed","Minecraft fechou")+" · "+instanceName);Ui::fitToScreen(&d,{760,460});
     QVBoxLayout lay(&d);lay.setContentsMargins(22,20,22,18);lay.setSpacing(12);
     label(findings.isEmpty()?text("Minecraft se cerró con un error","Minecraft closed with an error","Minecraft fechou com um erro"):text("Minecraft se cerró. Esto es lo que falló:","Minecraft closed. This is what failed:","Minecraft fechou. Isto é o que falhou:"),&lay,"sectionTitle");
     if(findings.isEmpty())label(text("No reconocimos la causa. El registro tiene los detalles; si pedís ayuda, compartilo.","The cause was not recognised. The log has the details; share it if you ask for help.","A causa não foi reconhecida. O registro tem os detalhes; compartilhe-o se pedir ajuda."),&lay,"muted");
@@ -679,7 +726,7 @@ void MainWindow::showCrash(const QString &dir){
     for(const auto &f:findings){
         auto card=new QFrame;card->setObjectName("crashFinding");card->setStyleSheet("#crashFinding{background:#1f1f24;border:1px solid #34343c;border-radius:12px;}");
         auto cl=new QVBoxLayout(card);cl->setContentsMargins(16,12,16,12);cl->setSpacing(6);lay.addWidget(card);
-        QString title,body;auto actions=new QHBoxLayout;actions->setSpacing(8);
+        QString title,body;auto actionsRow=new Ui::ResponsiveRow(700);auto actions=actionsRow->box();actions->setSpacing(8);
         switch(f.kind){
         case CrashReport::Finding::MissingMod:{
             title=text("Falta el mod %1","The mod %1 is missing","Falta o mod %1").arg(f.mod);
@@ -697,16 +744,41 @@ void MainWindow::showCrash(const QString &dir){
             title=text("Mods incompatibles","Incompatible mods","Mods incompatíveis");body=f.detail;
             button(text("Administrar mods","Manage mods","Gerenciar mods"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;manageMods();},&d,false,"puzzle");break;
         case CrashReport::Finding::GraphicsDriver:
-            title=text("Falló el driver de gráficos %1","The %1 graphics driver crashed","O driver de vídeo %1 falhou").arg(f.vendor);
-            body=text("El juego se cerró dentro del driver de tu tarjeta %1 (no es un problema de Minecraft ni del launcher). Instalá el driver más reciente desde la página oficial y reiniciá el equipo.","The game closed inside your %1 graphics driver (not a Minecraft or launcher problem). Install the latest driver from the official page and restart the computer.","O jogo fechou dentro do driver da sua placa %1 (não é um problema do Minecraft nem do launcher). Instale o driver mais recente pela página oficial e reinicie o computador.").arg(f.vendor);
-            button(text("Descargar driver %1","Download %1 driver","Baixar driver %1").arg(f.vendor),actions,[url=CrashReport::driverPage(f.vendor)]{QDesktopServices::openUrl(QUrl(url));},&d,true,"external-link");
-            if(SoftwareGl::available()&&!info["softwareRendering"].toBool())button(text("Probar con gráficos por software","Try software graphics","Tentar gráficos por software"),actions,[this,dir,&d]{d.accept();useSoftwareRendering(dir);},&d,false,"refresh-cw");
-            break;
-        case CrashReport::Finding::NoOpenGL:
-            title=text("Tu tarjeta gráfica no ofrece OpenGL","Your graphics card does not provide OpenGL","Sua placa de vídeo não oferece OpenGL");
-            body=text("Minecraft lo necesita. Pasa en máquinas virtuales y en equipos sin el driver de gráficos instalado. Los gráficos por software funcionan en cualquier equipo, pero van más lentos.","Minecraft needs it. This happens in virtual machines and on computers without a graphics driver. Software graphics work on any computer but run slower.","O Minecraft precisa dele. Isso acontece em máquinas virtuais e em computadores sem driver de vídeo. Os gráficos por software funcionam em qualquer computador, mas são mais lentos.");
-            if(SoftwareGl::available()&&!info["softwareRendering"].toBool())button(text("Usar gráficos por software y jugar","Use software graphics and play","Usar gráficos por software e jogar"),actions,[this,dir,&d]{d.accept();useSoftwareRendering(dir);},&d,true,"play");
-            break;
+        case CrashReport::Finding::NoOpenGL:{
+            const bool crash=f.kind==CrashReport::Finding::GraphicsDriver;
+            const auto gpus=GpuInfo::detect();const auto gpu=GpuInfo::pick(gpus,f.vendor);
+            const auto card=gpu.name.isEmpty()?QString():gpu.name+(gpu.integrated?text(" (integrada en el procesador)"," (built into the processor)"," (integrada no processador)"):QString());
+            if(crash){
+                title=text("Falló el driver de gráficos %1","The %1 graphics driver crashed","O driver de vídeo %1 falhou").arg(f.vendor);
+                body=text("El juego se cerró dentro del driver de tu tarjeta (no es un problema de Minecraft ni del launcher). Instalá el driver más reciente y reiniciá el equipo.","The game closed inside your graphics driver (not a Minecraft or launcher problem). Install the latest driver and restart the computer.","O jogo fechou dentro do driver da sua placa (não é um problema do Minecraft nem do launcher). Instale o driver mais recente e reinicie o computador.");
+            }else if(gpu.virtualAdapter||gpus.isEmpty()){
+                title=text("Tu tarjeta gráfica no ofrece OpenGL","Your graphics card does not provide OpenGL","Sua placa de vídeo não oferece OpenGL");
+                body=text("Parece una máquina virtual o un equipo sin driver de gráficos (%1). Los gráficos por software funcionan en cualquier equipo, pero van más lentos.","This looks like a virtual machine or a computer without a graphics driver (%1). Software graphics work on any computer but run slower.","Parece uma máquina virtual ou um computador sem driver de vídeo (%1). Os gráficos por software funcionam em qualquer computador, mas são mais lentos.").arg(gpu.name.isEmpty()?text("sin tarjeta detectada","no card detected","nenhuma placa detectada"):gpu.name);
+            }else{
+                title=text("Tu tarjeta gráfica no ofrece OpenGL","Your graphics card does not provide OpenGL","Sua placa de vídeo não oferece OpenGL");
+                body=text("Minecraft lo necesita y llega con el driver de tu tarjeta. Instalá el driver más reciente; mientras tanto podés jugar con gráficos por software (más lento).","Minecraft needs it and it comes with your card's driver. Install the latest driver; meanwhile you can play with software graphics (slower).","O Minecraft precisa dele e ele vem com o driver da sua placa. Instale o driver mais recente; enquanto isso, você pode jogar com gráficos por software (mais lento).");
+            }
+            if(!card.isEmpty()&&!gpu.virtualAdapter)body+="\n"+text("Tu tarjeta: %1","Your graphics card: %1","Sua placa: %1").arg(card);
+            const bool linuxMesa=QSysInfo::productType()!="windows"&&QSysInfo::productType()!="macos"&&gpu.vendor!="NVIDIA"&&!gpu.vendor.isEmpty();
+            if(linuxMesa)body+="\n"+text("En Linux el driver de %1 llega con las actualizaciones del sistema (Mesa): actualizá tu distribución.","On Linux the %1 driver comes with system updates (Mesa): update your distribution.","No Linux o driver %1 vem com as atualizações do sistema (Mesa): atualize sua distribuição.").arg(gpu.vendor);
+            if(!gpu.vendor.isEmpty()&&!gpu.virtualAdapter&&!linuxMesa){
+                // The exact driver page of this card, found when pressed (NVIDIA and AMD are asked online); the maker's detection tool otherwise.
+                auto driver=button(text("Descargar driver para %1","Download the driver for %1","Baixar driver para %1").arg(gpu.name),actions,{},&d,true,"download");driver->setObjectName("downloadGraphicsDriver");
+                connect(driver,&QPushButton::clicked,&d,[driver,gpu]{
+                    driver->setEnabled(false);const auto label=driver->text();driver->setText(" "+text("Buscando el driver de tu tarjeta…","Looking for your card's driver…","Procurando o driver da sua placa…"));
+                    auto watcher=new QFutureWatcher<GpuInfo::DriverLink>(driver);
+                    QObject::connect(watcher,&QFutureWatcher<GpuInfo::DriverLink>::finished,driver,[driver,watcher,label,gpu]{
+                        auto link=watcher->result();watcher->deleteLater();if(link.url.isEmpty())link=GpuInfo::autoDetect(gpu.vendor);
+                        driver->setEnabled(true);driver->setText(label);driver->setToolTip(link.title);if(!link.url.isEmpty())QDesktopServices::openUrl(QUrl(link.url));
+                    });
+                    watcher->setFuture(QtConcurrent::run([gpu]{try{return GpuInfo::driverLink(gpu,[](const QUrl &url){return ModRepository::fetch(url);});}catch(...){return GpuInfo::DriverLink{};}}));
+                });
+                // Laptops and integrated graphics: the computer maker may ship its own customized driver.
+                const auto maker=GpuInfo::manufacturerSupport(GpuInfo::computer());
+                if(!maker.url.isEmpty())button(maker.title,actions,[url=maker.url]{QDesktopServices::openUrl(QUrl(url));},&d,false,"external-link");
+            }
+            if(SoftwareGl::available()&&!info["softwareRendering"].toBool())button(crash?text("Probar con gráficos por software","Try software graphics","Tentar gráficos por software"):text("Usar gráficos por software y jugar","Use software graphics and play","Usar gráficos por software e jogar"),actions,[this,dir,&d]{d.accept();useSoftwareRendering(dir);},&d,!crash&&(gpu.virtualAdapter||gpus.isEmpty()),"play");
+            break;}
         case CrashReport::Finding::JavaVersion:
             title=text("Hace falta Java %1","Java %1 is needed","É preciso Java %1").arg(f.versions);
             body=text("Un mod o el juego necesita Java %1 o más nuevo. Elegí \"Automático\" en los ajustes de la instancia para que el launcher use el correcto.","A mod or the game needs Java %1 or newer. Choose \"Automatic\" in the instance settings so the launcher uses the right one.","Um mod ou o jogo precisa do Java %1 ou mais novo. Escolha \"Automático\" nas configurações da instância para o launcher usar o correto.").arg(f.versions);
@@ -716,7 +788,7 @@ void MainWindow::showCrash(const QString &dir){
             body=text("Tiene %1 MB. Subí la memoria en los ajustes de la instancia (6144 MB o más para packs grandes).","It has %1 MB. Raise the memory in the instance settings (6144 MB or more for large packs).","Ele tem %1 MB. Aumente a memória nas configurações da instância (6144 MB ou mais para packs grandes).").arg(info["xmx"].toInt(4096));
             button(Language::key("Instance settings"),actions,[this,dir,&d]{d.accept();m_selectedDir=dir;editInstance();},&d,false,"settings");break;
         }
-        auto t=label(title,cl,"",true);t->setStyleSheet("font-weight:800;font-size:15px;");label(body,cl,"muted");actions->addStretch();cl->addLayout(actions);
+        auto t=label(title,cl,"",true);t->setStyleSheet("font-weight:800;font-size:15px;");label(body,cl,"muted");if(actions->direction()==QBoxLayout::LeftToRight)actions->addStretch();cl->addWidget(actionsRow);
     }
     lay.addStretch();
     auto bottom=new QHBoxLayout;lay.addLayout(bottom);

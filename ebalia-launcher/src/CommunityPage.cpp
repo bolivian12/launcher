@@ -1,4 +1,5 @@
 #include "CommunityPage.hpp"
+#include "PatreonNewsPage.hpp"
 #include "PatreonAuth.hpp"
 #include "Language.hpp"
 #include "Ui.hpp"
@@ -8,7 +9,7 @@
 namespace {
 QString trc(const char *s){return Language::key(QString::fromUtf8(s));}
 QLabel *label(const QString &text,QVBoxLayout *l,const char *name="muted"){auto w=new QLabel(text);w->setTextFormat(Qt::PlainText);w->setWordWrap(true);w->setObjectName(name);l->addWidget(w);return w;}
-QPushButton *button(const QString &text,QBoxLayout *l,QObject *context,std::function<void()> action){auto b=new QPushButton(text);l->addWidget(b);QObject::connect(b,&QPushButton::clicked,context,action);return b;}
+QPushButton *button(const QString &text,QBoxLayout *l,QObject *context,std::function<void()> action){auto b=new QPushButton(QString(text).replace("&","&&"));l->addWidget(b);QObject::connect(b,&QPushButton::clicked,context,action);return b;}
 void link(const QString &text,const QString &url,QBoxLayout *l,QObject *context){auto b=button(text+"  ↗",l,context,[url]{QDesktopServices::openUrl(QUrl(url));});b->setToolTip(url);}
 // Calls back when the watched widget changes size (the fan art grid reflows to the window width).
 class OnResize:public QObject {
@@ -46,10 +47,8 @@ CommunityPage::CommunityPage(int section,const QString &root,PatreonAuth *auth,Q
     }else if(section==3){
         label(trc("Get help, follow development and support EBALIA."),l);link("Discord · "+trc("Support & community"),"https://discord.gg/ZrgMwfdwZB",l,this);link("YouTube · EBALIA","https://www.youtube.com/@EBALIA",l,this);link(trc("Patreon membership"),"https://www.patreon.com/c/ebalia/membership",l,this);link(trc("Patreon shop"),"https://www.patreon.com/c/ebalia/shop",l,this);link("Alphaver Wiki","https://alphaver.miraheze.org/",l,this);label(trc("For launcher problems, include the game version, loader and instance log. Never share account tokens."),l);
     }else{
-        label(trc("Public posts appear without signing in. Link Patreon to add posts included in your active membership. Refreshes every minute."),l);auto member=label("",l,"sectionTitle");auto status=label("",l);auto actions=new QHBoxLayout;l->addLayout(actions);button(trc("Link Patreon"),actions,this,[auth]{auth->startLogin();});auto unlink=button(trc("Unlink"),actions,this,[auth]{auth->logout();});button(trc("Refresh now"),actions,this,[auth]{auth->refreshNews();});link(trc("Open Patreon"),"https://www.patreon.com/c/ebalia/posts",l,this);
-        auto list=new QListWidget;list->setObjectName("patreonPosts");list->setWordWrap(true);list->setMinimumHeight(270);l->addWidget(list);connect(list,&QListWidget::itemDoubleClicked,this,[](QListWidgetItem *item){auto url=item->data(Qt::UserRole).toUrl();if(!url.isEmpty())QDesktopServices::openUrl(url);});button(trc("Read post"),l,this,[list]{if(auto item=list->currentItem()){auto url=item->data(Qt::UserRole).toUrl();if(!url.isEmpty())QDesktopServices::openUrl(url);}});
-        auto render=[auth,member,status,list,unlink]{member->setText(auth->verified()?auth->patronName()+" · "+auth->tierTitle():trc("Free · public posts"));status->setText(auth->status());unlink->setEnabled(auth->hasTokens());auto selected=list->currentItem()?list->currentItem()->data(Qt::UserRole).toUrl():QUrl();list->clear();for(auto value:auth->posts()){auto p=value.toObject();auto item=new QListWidgetItem(p["title"].toString()+"\n"+p["date"].toString().left(10)+"\n"+p["excerpt"].toString(),list);item->setData(Qt::UserRole,QUrl(p["url"].toString()));if(selected==item->data(Qt::UserRole).toUrl())list->setCurrentItem(item);}if(list->count()==0)list->addItem(trc("No posts to show yet."));};connect(auth,&PatreonAuth::changed,this,render);render();
-        button(trc("Patreon service settings"),l,this,[this,auth]{QDialog d(this);d.setWindowTitle(trc("Patreon service settings"));QFormLayout form(&d);QLineEdit url(PatreonAuth::serviceUrl());form.addRow("EBALIA HTTPS URL",&url);auto note=new QLabel(trc("Use the EBALIA service address. Patreon passwords and creator keys are never entered here."));note->setWordWrap(true);form.addRow(note);QDialogButtonBox buttons(QDialogButtonBox::Save|QDialogButtonBox::Cancel);form.addRow(&buttons);connect(&buttons,&QDialogButtonBox::accepted,&d,&QDialog::accept);connect(&buttons,&QDialogButtonBox::rejected,&d,&QDialog::reject);if(Ui::openWindow(d)==QDialog::Accepted){QUrl u(url.text().trimmed());if(u.scheme()!="https"||u.host().isEmpty()||!u.userInfo().isEmpty()||!u.query().isEmpty()||!u.fragment().isEmpty()){QMessageBox::warning(this,"EBALIA",trc("Enter a valid HTTPS address."));return;}QSettings().setValue("patreon/serviceUrl",url.text().trimmed());auth->refreshNews();}});
+        label(trc("Public posts appear without signing in. Link Patreon to add posts included in your active membership. Refreshes every minute."),l);
+        auto page=new PatreonNewsPage(auth,this);page->setMinimumHeight(560);l->addWidget(page,1);
     }
     l->addStretch();
 }

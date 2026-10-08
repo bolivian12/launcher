@@ -2,6 +2,9 @@
 #include "Icons.hpp"
 #include "Language.hpp"
 #include "Ui.hpp"
+#include "Archive.hpp"
+#include <QtConcurrent>
+#include <QFutureWatcher>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImageReader>
@@ -35,12 +38,62 @@ QIcon InstanceIcons::icon(const QString &value,const QString &dir){
     if(key=="world")key="globe";else if(key=="mods")key="crafting";else if(key=="adventure")key="book";
     if(key=="ebalia")return QIcon(":/icon.png");
     if(!keys().contains(key))key="grass";
-    // 16×16 pixel art, enlarged without blurring.
-    static QHash<QString,QIcon> cache;
-    if(!cache.contains(key)){QImage art(":/icons/instances/"+key+".png");cache.insert(key,QPixmap::fromImage(art.scaled(128,128,Qt::IgnoreAspectRatio,Qt::FastTransformation)));}
+    // 16×16 pixel art, enlarged without blurring: Minecraft's own textures when they were read from the game,
+    // the bundled pictures until then.
+    static QHash<QString,QIcon> cache;static QString cachedFrom;
+    if(cachedFrom!=textureFolder()){cache.clear();cachedFrom=textureFolder();}
+    if(!cache.contains(key)){
+        QImage art;if(!cachedFrom.isEmpty())art.load(cachedFrom+"/"+key+".png");
+        if(art.isNull())art.load(":/icons/instances/"+key+".png");
+        cache.insert(key,QPixmap::fromImage(art.scaled(128,128,Qt::IgnoreAspectRatio,Qt::FastTransformation)));
+    }
     return cache.value(key);
 }
-QImage InstanceIcons::chooseImage(QWidget *parent){
+namespace {
+QString &textures(){static QString folder;return folder;}
+// Textures of each icon inside the client jar: the 1.13+ path, then the older one. A rectangle crops a texture sheet.
+struct Texture{const char *key;QStringList paths;QRect crop;};
+const QList<Texture> &gameTextures(){
+    static const QList<Texture> list{
+        {"grass",{"block/grass_block_side.png","blocks/grass_side.png"},{}},
+        {"creeper",{"entity/creeper/creeper.png"},QRect(8,8,8,8)}, // the face on the creeper's skin
+        {"tnt",{"block/tnt_side.png","blocks/tnt_side.png"},{}},
+        {"pickaxe",{"item/diamond_pickaxe.png","items/diamond_pickaxe.png"},{}},
+        {"gem",{"item/diamond.png","items/diamond.png"},{}},
+        {"crafting",{"block/crafting_table_front.png","blocks/crafting_table_front.png"},{}},
+        {"book",{"item/enchanted_book.png","items/book_enchanted.png"},{}},
+        {"globe",{"item/map.png","items/map_empty.png"},{}},
+        {"server",{"block/command_block_front.png","blocks/command_block.png"},{}},
+        {"star",{"item/nether_star.png","items/nether_star.png"},{}},
+        {"horror",{"block/jack_o_lantern.png","blocks/pumpkin_face_on.png"},{}}};
+    return list;
+}
+}
+QString InstanceIcons::textureFolder(){return textures();}
+bool InstanceIcons::extractGameTextures(const QString &jar,const QString &folder){
+    QDir().mkpath(folder);int written=0;
+    for(const auto &t:gameTextures()){
+        QImage image;
+        for(const auto &path:t.paths){try{image.loadFromData(Archive::readEntry(jar,"assets/minecraft/textures/"+path,1024*1024),"PNG");}catch(...){}if(!image.isNull())break;}
+        if(image.isNull())continue;
+        if(!t.crop.isNull()){const int scale=qMax(1,image.width()/64);image=image.copy(QRect(t.crop.topLeft()*scale,t.crop.size()*scale));}
+        else if(image.height()>image.width())image=image.copy(0,0,image.width(),image.width()); // animated strips: the first frame
+        if(image.save(folder+"/"+t.key+".png","PNG"))++written;
+    }
+    return written==gameTextures().size();
+}
+void InstanceIcons::useGameTextures(const QString &mcRoot,QObject *context,std::function<void()> ready){
+    const auto folder=mcRoot+"/cache/instance-icons";
+    if(QFile::exists(folder+"/.complete")){if(textures()!=folder){textures()=folder;if(ready)ready();}return;}
+    // The newest client jar the launcher downloaded from Mojang.
+    QString jar;QDateTime newest;
+    for(const auto &v:QDir(mcRoot+"/versions").entryInfoList(QDir::Dirs|QDir::NoDotAndDotDot)){const QFileInfo f(v.filePath()+"/"+v.fileName()+".jar");if(f.exists()&&f.size()>1000000&&(jar.isEmpty()||f.lastModified()>newest)){jar=f.filePath();newest=f.lastModified();}}
+    if(jar.isEmpty())return;
+    auto watcher=new QFutureWatcher<bool>(context);
+    QObject::connect(watcher,&QFutureWatcher<bool>::finished,context,[watcher,folder,ready]{const bool ok=watcher->result();watcher->deleteLater();if(!ok)return;textures()=folder;if(ready)ready();});
+    watcher->setFuture(QtConcurrent::run([jar,folder]{if(!extractGameTextures(jar,folder))return false;QFile done(folder+"/.complete");return done.open(QIODevice::WriteOnly);}));
+}
+QImage InstanceIcons::chooseImage(QWidget *parent,int size){
     const auto file=QFileDialog::getOpenFileName(parent,Language::key("Choose an icon"),QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),Language::key("Images")+" (*.png *.jpg *.jpeg *.webp *.gif *.bmp *.ico)");
     if(file.isEmpty())return {};
     QImageReader reader(file);reader.setAutoTransform(true);
@@ -51,7 +104,7 @@ QImage InstanceIcons::chooseImage(QWidget *parent){
     const int side=qMin(image.width(),image.height());
     image=image.copy((image.width()-side)/2,(image.height()-side)/2,side,side).convertToFormat(QImage::Format_ARGB32);
     const bool pixelArt=side<=64;
-    return image.scaled(128,128,Qt::IgnoreAspectRatio,pixelArt?Qt::FastTransformation:Qt::SmoothTransformation);
+    return image.scaled(size,size,Qt::IgnoreAspectRatio,pixelArt?Qt::FastTransformation:Qt::SmoothTransformation);
 }
 bool InstanceIcons::saveCustom(const QString &dir,const QImage &picture){
     if(dir.isEmpty()||picture.isNull())return false;

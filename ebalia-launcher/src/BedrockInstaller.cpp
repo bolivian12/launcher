@@ -3,6 +3,13 @@
 #include "Archive.hpp"
 #include <QtCore>
 #include <stdexcept>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 namespace {
 void run(const QString &exe,const QStringList &args) {
     QProcess p;p.start(exe,args);
@@ -11,6 +18,32 @@ void run(const QString &exe,const QStringList &args) {
     if(p.exitStatus()!=QProcess::NormalExit||p.exitCode()!=0)
         throw std::runtime_error(QString("Falló %1: %2").arg(exe,QString::fromUtf8(p.readAllStandardError()).right(1600)).toStdString());
 }
+}
+bool BedrockInstaller::vcRuntimeReady() {
+#ifdef Q_OS_WIN
+    // The same registry value BedrockLauncher reads at start.
+    QSettings key(R"(HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64)",QSettings::Registry64Format);
+    auto version=key.value("Version").toString();version.remove('v');
+    return key.value("Installed").toInt()==1&&QVersionNumber::compare(QVersionNumber::fromString(version),QVersionNumber(14,14,26405))>=0;
+#else
+    return true;
+#endif
+}
+void BedrockInstaller::installVcRuntime(const QString &root) {
+#ifdef Q_OS_WIN
+    if(vcRuntimeReady())return;
+    QDir().mkpath(root);const auto installer=root+"/vc_redist.x64.exe";
+    // Microsoft's permanent link to the latest Visual C++ 2015-2022 redistributable.
+    Download::file(QUrl("https://aka.ms/vs/17/release/vc_redist.x64.exe"),installer);
+    const auto file=QDir::toNativeSeparators(installer).toStdWString();const std::wstring parameters=L"/install /passive /norestart";
+    SHELLEXECUTEINFOW info{};info.cbSize=sizeof(info);info.fMask=SEE_MASK_NOCLOSEPROCESS;info.lpVerb=L"runas";info.lpFile=file.c_str();info.lpParameters=parameters.c_str();info.nShow=SW_SHOWNORMAL;
+    if(!ShellExecuteExW(&info)||!info.hProcess){QFile::remove(installer);throw std::runtime_error("Visual C++ was not installed: Windows did not get permission to run the installer.");}
+    WaitForSingleObject(info.hProcess,INFINITE);DWORD code=1;GetExitCodeProcess(info.hProcess,&code);CloseHandle(info.hProcess);QFile::remove(installer);
+    // 3010: installed, restart pending; 1638: a newer version is already there.
+    if((code!=0&&code!=3010&&code!=1638)||!vcRuntimeReady())throw std::runtime_error(QString("The Visual C++ installer did not finish (code %1).").arg(code).toStdString());
+#else
+    Q_UNUSED(root);
+#endif
 }
 QString BedrockInstaller::install(const QString &root) {
     QDir().mkpath(root);
@@ -60,6 +93,7 @@ QString BedrockInstaller::install(const QString &root) {
         if(winget.isEmpty())throw std::runtime_error("Falta .NET Desktop Runtime 8 y no se encontró winget para instalarlo. Instalá App Installer y volvé a intentar.");
         run(winget,{"install","--id","Microsoft.DotNet.DesktopRuntime.8","--exact","--accept-source-agreements","--accept-package-agreements","--disable-interactivity"});
     }
+    installVcRuntime(root);
     return executable;
 #else
     const auto mount=stage.path()+"/mount";

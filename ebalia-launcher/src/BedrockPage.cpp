@@ -115,6 +115,10 @@ BedrockPage::BedrockPage(const QString &dataRoot, QWidget *parent) : QWidget(par
         if(property("bedrockInstalling").toBool())return;
         *command = value;launch->setEnabled(value.valid());status->setText(message);detect->setEnabled(true);
         path->setEnabled(true);browse->setEnabled(true);
+        // Installed: one big Play button; the installer stays available as "Reinstall".
+        launch->setText(value.valid()?tr("▶  Jugar Bedrock","▶  Play Bedrock"):tr("Abrir gestor Bedrock","Open Bedrock manager"));launch->setProperty("play",value.valid());launch->setMinimumHeight(value.valid()?48:0);
+        launch->style()->unpolish(launch);launch->style()->polish(launch);
+        if(auto install=findChild<QPushButton*>("bedrockInstall"))install->setText(value.valid()?tr("Reinstalar gestor","Reinstall manager"):tr("Instalar gestor Bedrock","Install Bedrock manager"));
     };
     const QString flatpak = QStandardPaths::findExecutable("flatpak");
     connect(probe,qOverload<int,QProcess::ExitStatus>(&QProcess::finished),this,[=](int code,QProcess::ExitStatus exit) {
@@ -194,12 +198,24 @@ BedrockPage::BedrockPage(const QString &dataRoot, QWidget *parent) : QWidget(par
     });
     connect(launch,&QPushButton::clicked,this,[=, this] {
         if(!command->valid()) return;
+        // BedrockLauncher stops at start without the Visual C++ runtime: install it first (Windows asks for permission).
+        if(windows&&!BedrockInstaller::vcRuntimeReady()&&!property("bedrockRuntime").toBool()){
+            setProperty("bedrockRuntime",true);launch->setEnabled(false);
+            status->setText(tr("Instalando Microsoft Visual C++ (lo necesita el gestor). Windows va a pedir permiso.","Installing Microsoft Visual C++ (the manager needs it). Windows will ask for permission."));
+            auto runtime=new QFutureWatcher<QString>(this);
+            connect(runtime,&QFutureWatcher<QString>::finished,this,[=,this]{
+                const auto error=runtime->result();runtime->deleteLater();setProperty("bedrockRuntime",false);launch->setEnabled(true);
+                if(error.isEmpty())launch->click();else status->setText(error);
+            });
+            runtime->setFuture(QtConcurrent::run([dataRoot]{try{BedrockInstaller::installVcRuntime(dataRoot+"/bedrock");return QString();}catch(const std::exception &e){return QString::fromUtf8(e.what());}}));
+            return;
+        }
         QProcess process;
         process.setProgram(command->program);process.setArguments(command->arguments);
         process.setWorkingDirectory(QFileInfo(command->program).absolutePath());
         const bool started=process.startDetached();
         status->setText(started
-            ? tr("Gestor iniciado. Elegí la versión e iniciá sesión allí. El juego aún no está verificado.","Manager started. Choose a version and sign in there. The game is not yet verified.")
+            ? tr("Gestor iniciado: elegí la versión y pulsá Jugar allí. La primera vez, iniciá sesión con la cuenta que tiene Minecraft.","Manager started: choose the version and press Play there. The first time, sign in with the account that owns Minecraft.")
             : tr("No se pudo abrir el gestor. Comprobá la instalación y sus dependencias.","Could not open the manager. Check its installation and dependencies."));
     });
     QTimer::singleShot(0,this,refresh);

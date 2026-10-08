@@ -537,5 +537,8 @@
   "Address": "Address",
   "Remove this server from the list?": "Remove this server from the list?",
   "Close the game to edit its server list.": "Close the game to edit its server list.",
-  "Could not save the icon.": "Could not save the icon."
+  "Could not save the icon.": "Could not save the icon.",
+  "Show more": "Show more",
+  "Show less": "Show less",
+  "Memberships": "Memberships"
 }

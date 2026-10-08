@@ -13,7 +13,7 @@ QString plain(const QString &html){QTextDocument d;d.setHtml(html);return d.toPl
 PatreonAuth::PatreonAuth(QObject *p):QObject(p),m_timer(new QTimer(this)){
     m_nam.setTransferTimeout(30000);m_timer->setInterval(60000);connect(m_timer,&QTimer::timeout,this,[this]{if(!qEnvironmentVariableIsSet("EBALIA_NO_NETWORK"))refreshNews();});m_timer->start();
 }
-QString PatreonAuth::serviceUrl(){auto url=qEnvironmentVariable("EBALIA_PATREON_SERVICE_URL");if(url.isEmpty())url=QSettings().value("patreon/serviceUrl",QString::fromUtf8(EBALIA_BUILTIN_PATREON_SERVICE)).toString();while(url.endsWith('/'))url.chop(1);return url;}
+QString PatreonAuth::serviceUrl(){auto url=qEnvironmentVariable("EBALIA_PATREON_SERVICE_URL");if(url.isEmpty())url=QString::fromUtf8(EBALIA_BUILTIN_PATREON_SERVICE); /* not editable in the launcher */while(url.endsWith('/'))url.chop(1);return url;}
 bool PatreonAuth::isConfigured()const{QUrl u(serviceUrl());return u.isValid()&&u.scheme()=="https"&&!u.host().isEmpty()&&u.userInfo().isEmpty()&&u.query().isEmpty()&&u.fragment().isEmpty();}
 QString PatreonAuth::sessionKey()const{return "patreon/sessions/"+QString::fromLatin1(QCryptographicHash::hash(serviceUrl().toUtf8(),QCryptographicHash::Sha256).toHex());}
 bool PatreonAuth::hasTokens()const{return !QSettings().value(sessionKey()).toString().isEmpty();}

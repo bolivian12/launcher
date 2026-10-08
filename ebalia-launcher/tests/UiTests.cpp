@@ -305,6 +305,31 @@ printf started > launched-marker
         QTRY_VERIFY_WITH_TIMEOUT([&]{for(const auto &i:manager->instances())if(i.name=="Copied From Prism"&&i.loader=="fabric"&&i.mcVersion=="1.21.1")return true;return false;}(),20000);
         QVERIFY(QFile::exists(manager->instancesRoot()+"/Copied From Prism/mods/a.jar"));
     }
+    void instanceIconsFromGameTextures(){
+        // Opt-in: EBALIA_TEST_JARS=<client jars separated by ;> (Minecraft is not part of the repository).
+        const auto jars=qEnvironmentVariable("EBALIA_TEST_JARS").split(';',Qt::SkipEmptyParts);if(jars.isEmpty())QSKIP("Set EBALIA_TEST_JARS to Minecraft client jars");
+        QImage sheet(16*13*4,int(jars.size())*16*4+8,QImage::Format_ARGB32);sheet.fill(QColor(24,24,28));QPainter p(&sheet);
+        for(int row=0;row<jars.size();++row){QTemporaryDir t;QVERIFY2(InstanceIcons::extractGameTextures(jars[row],t.path()),qPrintable(jars[row]));int col=0;
+            for(const auto &key:InstanceIcons::keys())if(key!="ebalia"){QImage icon(t.path()+"/"+key+".png");QVERIFY2(!icon.isNull()&&icon.width()==icon.height(),qPrintable(key));p.drawImage(QRect(col++*72+4,row*68+4,64,64),icon);}}
+        p.end();if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);sheet.save(out+"/instance-icons.png");}
+    }
+    void patreonPostsLookTidy(){
+        // A public post as Patreon's editor writes it: small caps, font sizes, empty paragraphs and long text.
+        PatreonAuth auth;auth.m_status="Updated · 12:16:28";
+        QString body="<p><span style='font-size:18px'>English:</span></p><p>If you are a paying member, tell me and you will have an exclusive role.</p><p><br></p><p><br></p>"
+            "<p><span style='font-variant:small-caps;font-family:Georgia'>Unete a mi server de Discord para descargar el mod y se parte de la comunidad!</span></p>"
+            "<p><font size='5' color='red'>HERE</font> / <a href='https://discord.gg/x'>AQUI</a> (PERMANENT LINK)</p>";
+        for(int n=0;n<6;++n)body+="<p>Línea "+QString::number(n+1)+" de una publicación larga para comprobar que se recorta con Ver más.</p>";
+        auth.m_posts=QJsonArray{QJsonObject{{"title","NEW EBALIA LAUNCHER - COMING SOON"},{"date","2024-08-10"},{"is_public",true},{"url","https://www.patreon.com/EBALIA"},{"content",body}},
+                                QJsonObject{{"title","Devlog #3"},{"date","2024-07-01"},{"is_public",true},{"url","https://www.patreon.com/EBALIA"},{"content","<p>Short update.</p>"}}};
+        PatreonNewsPage page(&auth);page.setStyleSheet(Ui::styleSheet());page.resize(900,760);page.show();QTest::qWait(100);
+        auto cards=page.findChild<QScrollArea*>("patreonPublicPosts")->findChildren<QFrame*>("patreonPostCard");QCOMPARE(cards.size(),2);
+        auto text=cards[0]->findChild<QTextBrowser*>("patreonPostBody");QVERIFY(!text->toHtml().contains("small-caps"));QVERIFY(!text->toHtml().contains("Georgia"));
+        auto more=cards[0]->findChild<QPushButton*>("patreonShowMore");QVERIFY(more->isVisible());const int closed=text->height();QTest::mouseClick(more,Qt::LeftButton);QVERIFY(text->height()>closed);
+        QVERIFY(!cards[1]->findChild<QPushButton*>("patreonShowMore")->isVisible());
+        QTest::mouseClick(more,Qt::LeftButton);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);page.grab().save(out+"/patreon-page.png");}
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

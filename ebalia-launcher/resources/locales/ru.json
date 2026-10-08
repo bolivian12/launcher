@@ -537,5 +537,8 @@
   "Address": "Адрес",
   "Remove this server from the list?": "Удалить этот сервер из списка?",
   "Close the game to edit its server list.": "Закройте игру, чтобы изменить список серверов.",
-  "Could not save the icon.": "Не удалось сохранить значок."
+  "Could not save the icon.": "Не удалось сохранить значок.",
+  "Show more": "Показать больше",
+  "Show less": "Свернуть",
+  "Memberships": "Подписки"
 }
