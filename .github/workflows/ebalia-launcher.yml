@@ -99,6 +99,9 @@ jobs:
         run: |
           cmake --install build --config Release --prefix package
           windeployqt --release --compiler-runtime --no-translations package/bin/ebalia-launcher.exe
+          # The in-app updater starts a downloaded version with the offscreen platform to check it (1.1.0 and later).
+          New-Item -ItemType Directory -Force package/bin/platforms | Out-Null
+          Copy-Item "$env:QT_ROOT_DIR/plugins/platforms/qoffscreen.dll" package/bin/platforms
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin/*.dll" package/bin
           $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
           $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -109,6 +112,14 @@ jobs:
             if (!(Test-Path "package/bin/$dll")) { throw "Missing runtime: $dll" }
           }
 
+      - name: Updater startup check (as the in-app updater runs a downloaded version)
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $p = Start-Process package/bin/ebalia-launcher.exe -ArgumentList '--update-probe' -RedirectStandardOutput probe.txt -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(60000)) { Stop-Process -Id $p.Id -Force; throw "The packaged launcher did not answer the update probe" }
+          Get-Content probe.txt
+          if (-not (Select-String -Path probe.txt -Pattern '"version"')) { throw "The packaged launcher failed the update probe" }
       - run: python packaging/write-update-manifest.py --root package/bin
       - uses: actions/upload-artifact@v4
         with:
@@ -241,7 +252,24 @@ jobs:
         if: failure()
         run: QT_QPA_PLATFORM=offscreen lldb --batch -o run -k "thread backtrace all" -- build/ebalia-tests
       - run: cmake --install build --prefix package
-      - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -dmg -always-overwrite'
+      - run: '"$(brew --prefix qt)/bin/macdeployqt" package/ebalia-launcher.app -always-overwrite'
+      - name: Offscreen platform for the in-app updater check, then the disk image
+        run: |
+          app=package/ebalia-launcher.app
+          plugin="$app/Contents/PlugIns/platforms/libqoffscreen.dylib"
+          cp "$(brew --prefix qt)/share/qt/plugins/platforms/libqoffscreen.dylib" "$plugin" 2>/dev/null || cp "$(brew --prefix qt)/plugins/platforms/libqoffscreen.dylib" "$plugin"
+          chmod u+w "$plugin"
+          # Load Qt from the bundle, like the plugins macdeployqt deployed.
+          for lib in $(otool -L "$plugin" | awk 'NR>1{print $1}' | grep -E '/(Qt[A-Za-z]+)\.framework/'); do
+            name=$(echo "$lib" | sed -E 's#.*/(Qt[A-Za-z]+\.framework/.*)#\1#'); install_name_tool -change "$lib" "@rpath/$name" "$plugin"
+          done
+          install_name_tool -add_rpath @loader_path/../../Frameworks "$plugin" 2>/dev/null || true
+          codesign --force --sign - "$plugin"
+          otool -L "$plugin"
+          if otool -L "$plugin" | awk 'NR>1{print $1}' | grep -E '^(/opt/homebrew|/usr/local)'; then echo "offscreen plugin still links Homebrew"; exit 1; fi
+          out=$(QT_QPA_PLATFORM=offscreen "$app/Contents/MacOS/ebalia-launcher" --update-probe)
+          echo "$out"; echo "$out" | grep -q '"version"'
+          hdiutil create -volname "EBALIA Launcher" -srcfolder "$app" -ov -format UDZO package/ebalia-launcher.dmg
       - name: Portable zip
         run: |
           mkdir -p "portable/EBALIA Launcher"
