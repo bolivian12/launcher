@@ -8,6 +8,8 @@ class QBoxLayout;
 class QDialog;
 class QWidget;
 // Shared look of the launcher: Lucide icons (resources/icons/ui, ISC license), the dark theme and window helpers.
+#include <QColor>
+#include <QList>
 namespace Ui {
 // A row that becomes a column before its controls need to squeeze together.
 class ResponsiveRow:public QWidget {
@@ -24,6 +26,14 @@ QPixmap pixmap(const QString &name,int size,const QColor &color=QColor(232,232,2
 QIcon icon(const QString &name,const QColor &color=QColor(232,232,236));
 QIcon navigationIcon(const QString &name);
 QString styleSheet();
+// Colour themes: the same layout with another accent and tinted dark backgrounds (setting "ui/theme").
+struct Theme { QString id, name; int accentHue; int backgroundHue; double backgroundSaturation; };
+QList<Theme> themes();
+QString theme();
+void setTheme(const QString &id);
+// A colour of the EBALIA (green) theme in the current theme.
+QColor themed(const QColor &color);
+QColor accent();
 // Landscape art cropped to size, with rounded corners when radius > 0.
 QPixmap art(const QString &resource,QSize size,int radius=0);
 // Decode and resize artwork on a bounded worker pool. Callbacks run on the UI thread

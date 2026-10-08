@@ -38,7 +38,7 @@
 using Language::text;
 namespace {
 QString k(const char *source){return Language::key(QString::fromUtf8(source));}
-const QColor green(111,209,91),dim(180,180,188);
+const QColor dim(180,180,188);
 class PlayBar:public QFrame {
 protected:
     void resizeEvent(QResizeEvent *event) override {
@@ -125,7 +125,7 @@ Section section(const QString &title,const QString &subtitle) {
 // A rounded card with an icon, a title and an optional description, used by Settings.
 QVBoxLayout *settingsCard(QVBoxLayout *parent,const QString &icon,const QString &title,const QString &description) {
     auto frame=new QFrame;frame->setObjectName("settingsCard");auto l=new QVBoxLayout(frame);l->setContentsMargins(22,18,22,20);l->setSpacing(12);
-    auto head=new QHBoxLayout;head->setSpacing(10);l->addLayout(head);auto i=new QLabel;i->setPixmap(Ui::pixmap(icon,22,green));head->addWidget(i);label(title,head,"sectionTitle",false);head->addStretch();
+    auto head=new QHBoxLayout;head->setSpacing(10);l->addLayout(head);auto i=new QLabel;i->setPixmap(Ui::pixmap(icon,22,Ui::accent()));head->addWidget(i);label(title,head,"sectionTitle",false);head->addStretch();
     if(!description.isEmpty())label(description,l,"muted");parent->addWidget(frame);return l;
 }
 QString exception() {try{throw;}catch(const std::exception &e){return QString::fromUtf8(e.what());}catch(...){return "Unknown error";}}
@@ -152,7 +152,7 @@ public:
         auto font=option.font;font.setPixelSize(14);font.setBold(true);p->setFont(font);p->setPen(Qt::white);const int width=r.width()-72;
         p->drawText(QRect(r.left()+58,r.top()+20,width,24),Qt::AlignVCenter,QFontMetrics(font).elidedText(data["name"].toString(),Qt::ElideRight,width));
         font.setPixelSize(11);font.setBold(false);p->setFont(font);p->setPen(QColor(214,220,224));p->drawText(QRect(r.left()+58,r.top()+46,width,20),Qt::AlignVCenter,data["label"].toString());
-        p->setClipping(false);p->setBrush(Qt::NoBrush);p->setPen(QPen(option.state&QStyle::State_Selected?green:QColor(65,65,74),option.state&QStyle::State_Selected?2:1));p->drawRoundedRect(r,10,10);p->restore();
+        p->setClipping(false);p->setBrush(Qt::NoBrush);p->setPen(QPen(option.state&QStyle::State_Selected?Ui::accent():QColor(65,65,74),option.state&QStyle::State_Selected?2:1));p->drawRoundedRect(r,10,10);p->restore();
     }
 private:
     mutable QSet<QString> m_pending;
@@ -284,7 +284,7 @@ QWidget *MainWindow::buildHome() {
     auto modsSection=new QWidget;modsSection->setObjectName("homeMods");auto ml=new QVBoxLayout(modsSection);ml->setContentsMargins(28,16,28,0);ml->setSpacing(12);
     auto modsHead=new QHBoxLayout;modsHead->setSpacing(12);ml->addLayout(modsHead);label("EBALIA Mods",modsHead,"sectionTitle",false);modsHead->addStretch();
     auto patreon=button("EBALIA · Patreon",modsHead,[this]{openCreatorDialog(true);},this,false,"heart");patreon->setObjectName("patreonInviteButton");patreon->setProperty("patreon",true);patreon->setIcon(Ui::icon("heart",Qt::white));
-    auto allMods=button(k("See all"),modsHead,[this]{openCreatorDialog(false);},this);allMods->setObjectName("myModsButton");allMods->setProperty("link",true);allMods->setIcon(Ui::icon("chevron-right",green));allMods->setLayoutDirection(Qt::RightToLeft);
+    auto allMods=button(k("See all"),modsHead,[this]{openCreatorDialog(false);},this);allMods->setObjectName("myModsButton");allMods->setProperty("link",true);allMods->setIcon(Ui::icon("chevron-right",Ui::accent()));allMods->setLayoutDirection(Qt::RightToLeft);
     auto modCards=new QHBoxLayout;modCards->setSpacing(14);ml->addLayout(modCards);
     {const auto art=InstanceIcons::backgrounds();
      for(const auto &mod:creatorMods()){
@@ -295,10 +295,10 @@ QWidget *MainWindow::buildHome() {
         for(auto w:{static_cast<QWidget*>(meta),static_cast<QWidget*>(title)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(card,&QPushButton::clicked,this,[this,mod]{if(mod.soon)openCreatorDialog(false);else QDesktopServices::openUrl(QUrl(mod.url()));});modCards->addWidget(card,1);
         // The square mod picture over a darkened launcher background, so it fills the cover like a news image.
-        const auto background=art.isEmpty()?QString(":/art/f1_2.jpg"):art[int(qHash(mod.slug)%uint(art.size()))];const auto picture=":/creations/"+mod.slug+".png";
+        const auto background=!mod.background.isEmpty()?mod.background:art.isEmpty()?QString(":/art/f1_2.jpg"):art[int(qHash(mod.slug)%uint(art.size()))];const auto picture=":/creations/"+mod.slug+".png";
         Ui::loadArt(background,{640,360},cover,[cover,picture](const QPixmap &p){
             QPixmap canvas(640,360);canvas.fill(QColor(20,20,24));QPainter painter(&canvas);painter.setRenderHint(QPainter::SmoothPixmapTransform);painter.setRenderHint(QPainter::Antialiasing);
-            painter.drawPixmap(0,0,Ui::cover(p,{640,360}));painter.fillRect(canvas.rect(),QColor(10,10,14,150));
+            painter.drawPixmap(0,0,Ui::cover(p,{640,360}));painter.fillRect(canvas.rect(),QColor(8,8,12,170));
             const QPixmap image(picture);if(!image.isNull()){QRect box(0,0,240,240);box.moveCenter(canvas.rect().center());QPainterPath frame;frame.addRoundedRect(QRectF(box.adjusted(-6,-6,6,6)),24,24);painter.fillPath(frame,QColor(0,0,0,120));
                 QPainterPath clip;clip.addRoundedRect(QRectF(box),18,18);painter.setClipPath(clip);painter.drawPixmap(box,image);}
             painter.end();cover->setPixmap(canvas);});
@@ -306,7 +306,7 @@ QWidget *MainWindow::buildHome() {
     l->addWidget(modsSection);
     auto news=new QWidget;news->setObjectName("homeNews");auto nl=new QVBoxLayout(news);nl->setContentsMargins(28,14,28,20);nl->setSpacing(12);
     auto head=new QHBoxLayout;nl->addLayout(head);label(k("What's new"),head,"sectionTitle",false);head->addStretch();
-    auto all=button(k("See all"),head,[this]{showPage(News);},this);all->setProperty("link",true);all->setIcon(Ui::icon("chevron-right",green));all->setLayoutDirection(Qt::RightToLeft);
+    auto all=button(k("See all"),head,[this]{showPage(News);},this);all->setProperty("link",true);all->setIcon(Ui::icon("chevron-right",Ui::accent()));all->setLayoutDirection(Qt::RightToLeft);
     m_homeNews=new QHBoxLayout;m_homeNews->setSpacing(14);nl->addLayout(m_homeNews);l->addWidget(news);
     return home;
 }
@@ -449,6 +449,69 @@ QWidget *MainWindow::buildGuide() {
         "<h2>1. Choose your mode</h2><p><b>My instances</b> is the regular Minecraft client. <b>Lost versions</b> opens the EBALIA archive.</p><h2>2. Create an instance</h2><p>Choose a name, game version and loader. Vanilla is the original game; Fabric, Quilt, Forge or NeoForge support mods. Worlds and settings stay separate. The catalog refreshes at startup and every 30 minutes. Existing instances keep their game version to protect your worlds.</p><h2>3. Add mods</h2><p>In <b>Discover mods</b>, choose your instance and search for Sodium, dynamic lights, FallingTree or Veinminer. Review dependencies and confirm installation. Published compatibility does not guarantee that all mods work together.</p><h2>4. Save your favorites as a pack</h2><p>Use <b>Save mods as a pack</b> on your instance. Apply it to another instance from <b>My packs</b>. We look up builds for its game version and loader; unavailable mods are listed before downloading. Incompatible JARs are never copied. Local mods must be identifiable on Modrinth; disabled mods are excluded.</p><h2>5. Play</h2><p>Add an account, install Java and press <b>Play / Install</b>. After installation finishes, press Play. If Java is missing, the launcher tells you which version the game requires. Choose its path and memory in instance settings.</p><h2>Troubleshooting</h2><p>Open <b>Instance settings → Log</b>. Repair verifies game downloads again. Removing an instance moves it to local trash with its worlds. Forge and NeoForge use their official installers and require Java before installation. Lost versions may require Wine, older Java or original packages that are no longer available.</p>",
         "<h2>1. Escolha seu modo</h2><p><b>Minhas instâncias</b> é o cliente normal do Minecraft. <b>Versões perdidas</b> abre o arquivo da EBALIA.</p><h2>2. Crie uma instância</h2><p>Escolha um nome, uma versão e um carregador. Vanilla é o jogo original; Fabric, Quilt, Forge ou NeoForge permitem mods. Mundos e ajustes ficam separados. O catálogo é atualizado ao abrir e a cada 30 minutos. Instâncias existentes mantêm sua versão para preservar seus mundos.</p><h2>3. Adicione mods</h2><p>Em <b>Explorar mods</b>, escolha a instância e busque Sodium, luzes dinâmicas, FallingTree ou Veinminer. Revise as dependências e confirme a instalação. A compatibilidade publicada não garante que todos os mods funcionem juntos.</p><h2>4. Salve seus favoritos como pack</h2><p>Use <b>Salvar mods como pack</b> na instância. Depois aplique em outra instância por <b>Meus packs</b>. Buscamos edições para a versão e o carregador de destino; mods indisponíveis são mostrados antes do download. Não copiamos JARs incompatíveis. Mods locais precisam ser identificados no Modrinth; mods desativados não entram no pack.</p><h2>5. Jogue</h2><p>Adicione uma conta, instale Java e clique em <b>Jogar / Instalar</b>. Ao terminar a instalação, clique em Jogar. Se faltar Java, o launcher indica a versão necessária. Escolha o caminho e a memória nos ajustes da instância.</p><h2>Se algo falhar</h2><p>Abra <b>Ajustes da instância → Registro</b>. Reparar verifica novamente os downloads do jogo. Remover uma instância move seus mundos para a lixeira local. Forge e NeoForge usam seus instaladores oficiais e precisam de Java antes da instalação. Versões perdidas podem precisar de Wine, Java antigo ou pacotes originais indisponíveis.</p>"));l->addWidget(guide,1);
     auto row=new QHBoxLayout;l->addLayout(row);button(text("Crear mi primera instancia","Create my first instance","Criar minha primeira instância"),row,[this]{showPage(Instances);createInstance();},this,true,"plus");row->addStretch();
+    // Questions and answers: a question opens its answer.
+    label(text("Preguntas frecuentes","Questions & answers","Perguntas frequentes"),l,"sectionTitle",false)->setObjectName("guideFaqTitle");
+    struct Qa{const char *es,*en,*pt,*aes,*aen,*apt;};
+    const Qa faq[]{
+        {"¿Cómo importo un modpack o una instancia de otro launcher?","How do I import a modpack or another launcher's instance?","Como importo um modpack ou uma instância de outro launcher?",
+         "En Instancias, pulsá Importar y elegí el archivo (.zip, .mrpack) o la carpeta. Sirven packs de CurseForge y Modrinth, instancias de Prism, MultiMC, la app de CurseForge, FTB, ATLauncher, GDLauncher, Modrinth App, TLauncher y carpetas .minecraft. También podés pegar la carpeta dentro de la carpeta de instancias: el launcher la convierte sola. La versión de Minecraft y el cargador se detectan automáticamente.",
+         "In Instances, press Import and choose the file (.zip, .mrpack) or folder. CurseForge and Modrinth packs work, and so do Prism, MultiMC, CurseForge app, FTB, ATLauncher, GDLauncher, Modrinth App and TLauncher instances and .minecraft folders. You can also paste the folder into the instances folder: the launcher converts it by itself. The Minecraft version and loader are detected automatically.",
+         "Em Instâncias, clique em Importar e escolha o arquivo (.zip, .mrpack) ou a pasta. Funcionam packs do CurseForge e Modrinth, instâncias do Prism, MultiMC, app do CurseForge, FTB, ATLauncher, GDLauncher, Modrinth App, TLauncher e pastas .minecraft. Você também pode colar a pasta dentro da pasta de instâncias: o launcher a converte sozinho. A versão do Minecraft e o carregador são detectados automaticamente."},
+        {"El juego se cierra al abrirlo, ¿qué hago?","The game closes when it starts. What do I do?","O jogo fecha ao abrir. O que eu faço?",
+         "Al cerrarse, el launcher muestra qué falló y un botón para arreglarlo: instalar un mod que falta, descargar el driver de tu tarjeta gráfica, usar gráficos por software o cambiar la memoria. Si no reconoce la causa, abrí el registro completo y compartilo en el Discord de EBALIA.",
+         "When it closes, the launcher shows what failed and a button to fix it: install a missing mod, download your graphics card's driver, use software graphics or change the memory. If the cause is not recognised, open the full log and share it on the EBALIA Discord.",
+         "Ao fechar, o launcher mostra o que falhou e um botão para corrigir: instalar um mod que falta, baixar o driver da sua placa de vídeo, usar gráficos por software ou mudar a memória. Se a causa não for reconhecida, abra o registro completo e compartilhe no Discord da EBALIA."},
+        {"¿Necesito comprar Minecraft?","Do I need to buy Minecraft?","Preciso comprar o Minecraft?",
+         "Con una cuenta Microsoft que tenga Minecraft podés jugar en servidores oficiales y con tu skin. El perfil local sirve para jugar sin conexión. Bedrock necesita su propia compra (Minecraft para Windows o Google Play).",
+         "A Microsoft account that owns Minecraft lets you play on official servers and with your skin. A local profile is for offline play. Bedrock needs its own purchase (Minecraft for Windows or Google Play).",
+         "Uma conta Microsoft com Minecraft permite jogar em servidores oficiais e com sua skin. O perfil local serve para jogar offline. O Bedrock precisa de compra própria (Minecraft para Windows ou Google Play)."},
+        {"¿Cómo instalo mods?","How do I install mods?","Como instalo mods?",
+         "Creá una instancia con Fabric, Quilt, Forge o NeoForge, abrí Explorar mods, elegí la instancia y buscá el mod. El launcher elige la versión compatible e instala sus dependencias.",
+         "Create an instance with Fabric, Quilt, Forge or NeoForge, open Discover mods, choose the instance and search for the mod. The launcher picks the compatible version and installs its dependencies.",
+         "Crie uma instância com Fabric, Quilt, Forge ou NeoForge, abra Explorar mods, escolha a instância e procure o mod. O launcher escolhe a versão compatível e instala as dependências."},
+        {"¿Qué Java necesito?","Which Java do I need?","Qual Java eu preciso?",
+         "Ninguno: el launcher descarga el Java que necesita cada versión de Minecraft. Si querés usar otro, elegilo en los ajustes de la instancia.",
+         "None: the launcher downloads the Java each Minecraft version needs. To use another one, choose it in the instance settings.",
+         "Nenhum: o launcher baixa o Java que cada versão do Minecraft precisa. Para usar outro, escolha-o nas configurações da instância."},
+        {"¿Funciona en una máquina virtual o sin tarjeta gráfica?","Does it work in a virtual machine or without a graphics card?","Funciona em máquina virtual ou sem placa de vídeo?",
+         "Sí, con gráficos por software: el launcher te lo ofrece si el juego no encuentra OpenGL, o activalo en los ajustes de la instancia. Va más lento que con una tarjeta gráfica.",
+         "Yes, with software graphics: the launcher offers it when the game finds no OpenGL, or turn it on in the instance settings. It runs slower than with a graphics card.",
+         "Sim, com gráficos por software: o launcher oferece quando o jogo não encontra OpenGL, ou ative nas configurações da instância. Fica mais lento do que com placa de vídeo."},
+        {"¿Dónde están mis mundos y mods?","Where are my worlds and mods?","Onde estão meus mundos e mods?",
+         "Cada instancia tiene su carpeta con su nombre. Abrila con el botón de carpeta en la página de la instancia: ahí están saves (mundos), mods, resourcepacks y shaderpacks.",
+         "Each instance has its own folder with its name. Open it with the folder button on the instance page: saves (worlds), mods, resourcepacks and shaderpacks are there.",
+         "Cada instância tem sua pasta com seu nome. Abra com o botão de pasta na página da instância: lá estão saves (mundos), mods, resourcepacks e shaderpacks."},
+        {"¿Cómo actualizo el launcher?","How do I update the launcher?","Como atualizo o launcher?",
+         "Cuando hay una versión nueva aparece Actualizar en la barra lateral: descarga, verifica y reinicia el launcher. Tus instancias, mundos y cuentas se conservan.",
+         "When a new version is out, Update appears in the sidebar: it downloads, verifies and restarts the launcher. Your instances, worlds and accounts are kept.",
+         "Quando há uma versão nova, Atualizar aparece na barra lateral: baixa, verifica e reinicia o launcher. Suas instâncias, mundos e contas são mantidos."},
+        {"¿Puedo usarlo sin instalarlo, desde un USB?","Can I use it without installing, from a USB stick?","Posso usar sem instalar, de um pendrive?",
+         "Sí: descargá la versión Portable desde la página. Todo (instancias, cuentas y ajustes) queda en su carpeta ebalia-data.",
+         "Yes: download the Portable version from the website. Everything (instances, accounts and settings) stays in its ebalia-data folder.",
+         "Sim: baixe a versão Portable no site. Tudo (instâncias, contas e configurações) fica na pasta ebalia-data."},
+        {"¿Cómo cambio el icono, el fondo o mi foto de perfil?","How do I change the icon, background or my profile picture?","Como mudo o ícone, o fundo ou minha foto de perfil?",
+         "Icono y fondo: en los ajustes de la instancia o en su página (Cambiar fondo). Foto de perfil: en el menú de tu cuenta, arriba a la izquierda, Cambiar imagen de perfil.",
+         "Icon and background: in the instance settings or on its page (Change background). Profile picture: in your account menu, top left, Change profile picture.",
+         "Ícone e fundo: nas configurações da instância ou na sua página (Mudar fundo). Foto de perfil: no menu da sua conta, no canto superior esquerdo, Mudar imagem de perfil."},
+        {"¿Qué son las versiones perdidas?","What are the lost versions?","O que são as versões perdidas?",
+         "Versiones raras y antiguas de Minecraft rescatadas por EBALIA. Se descargan y verifican desde el launcher y se juegan con Java directamente, sin instalar nada más.",
+         "Rare and old Minecraft versions rescued by EBALIA. They are downloaded and verified from the launcher and run with Java directly, with nothing else to install.",
+         "Versões raras e antigas do Minecraft resgatadas pela EBALIA. São baixadas e verificadas pelo launcher e rodam com Java diretamente, sem instalar mais nada."},
+        {"Mi antivirus o Windows avisa al descargar, ¿es seguro?","My antivirus or Windows warns when downloading. Is it safe?","Meu antivírus ou o Windows avisa ao baixar. É seguro?",
+         "El launcher todavía no está firmado digitalmente, por eso Windows puede avisar. Descargalo solo desde la página oficial o GitHub y comprobá su SHA-256, que figura junto a cada descarga.",
+         "The launcher is not digitally signed yet, so Windows may warn. Download it only from the official website or GitHub and check its SHA-256, shown next to each download.",
+         "O launcher ainda não tem assinatura digital, por isso o Windows pode avisar. Baixe somente pelo site oficial ou GitHub e confira o SHA-256, mostrado ao lado de cada download."}};
+    auto faqBox=new QVBoxLayout;faqBox->setSpacing(8);l->addLayout(faqBox);
+    for(const auto &qa:faq){
+        auto card=new QFrame;card->setObjectName("faqItem");card->setStyleSheet("#faqItem{background:#1e1e22;border:1px solid #2b2b30;border-radius:12px;}#faqItem QLabel{background:transparent;}");faqBox->addWidget(card);
+        auto cl=new QVBoxLayout(card);cl->setContentsMargins(6,4,14,8);cl->setSpacing(2);
+        auto question=new ContentButton;question->setObjectName("faqQuestion");question->setCheckable(true);question->setCursor(Qt::PointingHandCursor);question->setAccessibleName(text(qa.es,qa.en,qa.pt));
+        question->setStyleSheet("#faqQuestion{border:0;background:transparent;padding:0;text-align:left;}");question->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Preferred);cl->addWidget(question);
+        auto ql=new QHBoxLayout(question);ql->setContentsMargins(4,8,4,8);ql->setSpacing(8);auto arrow=new QLabel;arrow->setPixmap(Ui::pixmap("chevron-right",16,Ui::accent()));ql->addWidget(arrow,0,Qt::AlignTop);
+        auto qtext=label(text(qa.es,qa.en,qa.pt),ql,"faqQuestionText");qtext->setStyleSheet("font-weight:700;font-size:14px;");qtext->setAlignment(Qt::AlignLeft|Qt::AlignVCenter);ql->setStretch(1,1);arrow->setFixedWidth(18);for(QWidget *w:{static_cast<QWidget*>(arrow),static_cast<QWidget*>(qtext)})w->setAttribute(Qt::WA_TransparentForMouseEvents);
+        auto answer=label(text(qa.aes,qa.aen,qa.apt),cl,"muted");answer->setObjectName("faqAnswer");answer->setContentsMargins(28,0,0,6);answer->hide();
+        connect(question,&QPushButton::toggled,card,[arrow,answer](bool open){answer->setVisible(open);arrow->setPixmap(Ui::pixmap(open?"chevron-down":"chevron-right",16,Ui::accent()));});
+    }
     return s.widget;
 }
 QWidget *MainWindow::buildSettings() {
@@ -471,6 +534,15 @@ QWidget *MainWindow::buildSettings() {
     for(const auto &entry:QList<QPair<QString,QString>>{{"Español","es"},{"English","en"},{"Português","pt"},{"Deutsch","de"},{"Français","fr"},{"Italiano","it"},{"Русский","ru"},{"日本語","ja"},{"한국어","ko"},{"简体中文","zh"}})languages->addItem(entry.first,entry.second);
     languages->setCurrentIndex(languages->findData(Language::current));language->addWidget(languages);
     connect(languages,qOverload<int>(&QComboBox::activated),this,[this,languages]{Language::current=languages->currentData().toString();QSettings().setValue("ui/language",Language::current);QTimer::singleShot(0,this,[this]{build();});});
+    // Theme: applied at once, like the language.
+    auto appearance=settingsCard(column,"palette",text("Tema","Theme","Tema"),text("Cambia el color de acento y el tono de fondo del launcher.","Changes the launcher's accent colour and background tone.","Muda a cor de destaque e o tom de fundo do launcher."));
+    auto themeRow=new QGridLayout;themeRow->setSpacing(8);appearance->addLayout(themeRow);int themeIndex=0;
+    for(const auto &t:Ui::themes()){
+        auto choice=new QPushButton(t.name);choice->setObjectName("themeChoice");choice->setProperty("theme",t.id);choice->setCheckable(true);choice->setChecked(Ui::theme()==t.id);choice->setCursor(Qt::PointingHandCursor);
+        QPixmap dot(14,14);dot.fill(Qt::transparent);{QPainter p(&dot);p.setRenderHint(QPainter::Antialiasing);p.setBrush(QColor::fromHslF(t.accentHue/360.0f,0.55f,0.5f));p.setPen(Qt::NoPen);p.drawEllipse(0,0,14,14);}choice->setIcon(QIcon(dot));
+        themeRow->addWidget(choice,themeIndex/3,themeIndex%3);++themeIndex;
+        connect(choice,&QPushButton::clicked,this,[this,id=t.id]{Ui::setTheme(id);qApp->setStyleSheet(Ui::styleSheet());QTimer::singleShot(0,this,[this]{build();showPage(Settings);});});
+    }
     // Java and diagnostics
     auto java=settingsCard(column,"wrench",k("Setup & diagnostics"),k("Java, OpenGL, OpenAL and Wine checks for every version. EBALIA downloads the Java each version needs."));
     auto javaRow=new QHBoxLayout;java->addLayout(javaRow);button(k("Setup & diagnostics"),javaRow,[this]{SetupDialog dialog(this);Ui::openWindow(dialog);},this,false,"wrench");javaRow->addStretch();
@@ -576,7 +648,7 @@ void MainWindow::refreshInstances(){
     if(m_library->currentWidget()==m_detail){if(current.base.dir.isEmpty())m_library->setCurrentWidget(m_grid);else m_detail->showInstance(current);}
     int idx=m_target->findData(target);if(idx>=0)m_target->setCurrentIndex(idx);
     if(m_pickerIcon){
-        if(current.base.dir.isEmpty()){m_pickerIcon->setPixmap(Ui::pixmap("plus",26,green));m_pickerName->setText(k("Create my first instance"));m_pickerSub->setText("Vanilla · Fabric · Forge · NeoForge");}
+        if(current.base.dir.isEmpty()){m_pickerIcon->setPixmap(Ui::pixmap("plus",26,Ui::accent()));m_pickerName->setText(k("Create my first instance"));m_pickerSub->setText("Vanilla · Fabric · Forge · NeoForge");}
         else{m_pickerIcon->setPixmap(InstanceIcons::icon(current.icon,current.base.dir).pixmap(36,36));m_pickerName->setText(current.base.name);m_pickerSub->setText(InstanceText::loader(current.base.loader)+" "+current.base.mcVersion);}
         m_instancePicker->setAccessibleName(m_pickerName->text());m_instancePicker->setToolTip(m_pickerName->text()+"\n"+m_pickerSub->text());
     }
@@ -592,7 +664,7 @@ void MainWindow::selection(){
 }
 void MainWindow::refreshPacks(){
     m_packs->clear();
-    try{m_packData=ModRepository(m_root).packs();for(const auto &v:m_packData){auto p=v.toObject();m_packs->addItem(new QListWidgetItem(Ui::icon("package",green),p["name"].toString()+"\n"+QString::number(p["projects"].toArray().size())+" mods"));}
+    try{m_packData=ModRepository(m_root).packs();for(const auto &v:m_packData){auto p=v.toObject();m_packs->addItem(new QListWidgetItem(Ui::icon("package",Ui::accent()),p["name"].toString()+"\n"+QString::number(p["projects"].toArray().size())+" mods"));}
         if(m_packs->count())m_packs->setCurrentRow(0);else m_packDetails->setText(text("Todavía no hay packs. Guardá los mods de una instancia para empezar.","No packs yet. Save an instance's mods to get started.","Ainda não há packs. Salve os mods de uma instância para começar."));}
     catch(...){m_packDetails->setText(exception());}
 }
@@ -926,7 +998,7 @@ void MainWindow::manageMods(){
     auto i=selected();if(i.dir.isEmpty())return;if(m_mc->isRunning(i.dir)||m_installing.contains(i.dir)){error(text("La instancia está en uso.","The instance is in use.","A instância está em uso."));return;}
     QDialog d(this);d.setObjectName("modsWindow");d.setWindowTitle(i.name+" · Mods");Ui::fitToScreen(&d,{820,580});QVBoxLayout lay(&d);lay.setContentsMargins(20,18,20,18);lay.setSpacing(12);
     label(i.name+" · Mods",&lay,"sectionTitle",false);QListWidget list;list.setObjectName("modList");list.setIconSize(QSize(22,22));lay.addWidget(&list,1);
-    auto refresh=[&]{list.clear();for(const auto &f:QDir(i.dir+"/mods").entryList({"*.jar","*.jar.disabled"},QDir::Files)){auto item=new QListWidgetItem(Ui::icon("puzzle",f.endsWith(".disabled")?QColor(110,110,118):green),f,&list);if(f.endsWith(".disabled"))item->setForeground(QColor(130,130,138));}};refresh();
+    auto refresh=[&]{list.clear();for(const auto &f:QDir(i.dir+"/mods").entryList({"*.jar","*.jar.disabled"},QDir::Files)){auto item=new QListWidgetItem(Ui::icon("puzzle",f.endsWith(".disabled")?QColor(110,110,118):Ui::accent()),f,&list);if(f.endsWith(".disabled"))item->setForeground(QColor(130,130,138));}};refresh();
     auto row=new QHBoxLayout;row->setSpacing(8);lay.addLayout(row);
     button(text("Activar / desactivar","Enable / disable","Ativar / desativar"),row,[&]{if(!list.currentItem())return;auto name=list.currentItem()->text();auto to=name.endsWith(".disabled")?name.chopped(9):name+".disabled";if(!QFile::rename(i.dir+"/mods/"+name,i.dir+"/mods/"+to))error(text("No se pudo cambiar el archivo.","Could not change the file.","Não foi possível alterar o arquivo."));refresh();},&d,false,"square");
     button(text("Agregar JAR local","Add local JAR","Adicionar JAR local"),row,[&]{for(const auto &f:QFileDialog::getOpenFileNames(&d,{}, {},"Mods (*.jar)")){QDir().mkpath(i.dir+"/mods");if(!QFile::copy(f,i.dir+"/mods/"+QFileInfo(f).fileName()))error(text("El archivo ya existe o no se puede copiar.","The file already exists or cannot be copied.","O arquivo já existe ou não pode ser copiado."));}refresh();},&d,false,"plus");
@@ -951,7 +1023,7 @@ void MainWindow::preview(QJsonArray projects,QString dir){
     },[this,dir,root](QJsonObject plan){
         QDialog d(this);d.setObjectName("installReview");d.setWindowTitle(text("Revisar instalación","Review installation","Revisar instalação"));Ui::fitToScreen(&d,{760,560});QVBoxLayout lay(&d);lay.setContentsMargins(20,18,20,18);lay.setSpacing(12);
         label(plan["game"].toString()+" / "+plan["loader"].toString(),&lay,"sectionTitle");QListWidget list;list.setIconSize(QSize(20,20));lay.addWidget(&list,1);
-        for(const auto &v:plan["versions"].toArray()){auto o=v.toObject();new QListWidgetItem(Ui::icon("download",green),o["name"].toString()+"\n"+o["file"].toObject()["filename"].toString(),&list);}
+        for(const auto &v:plan["versions"].toArray()){auto o=v.toObject();new QListWidgetItem(Ui::icon("download",Ui::accent()),o["name"].toString()+"\n"+o["file"].toObject()["filename"].toString(),&list);}
         for(const auto &v:plan["missing"].toArray())new QListWidgetItem(Ui::icon("x",QColor(255,140,150)),v.toObject()["name"].toString()+"\n"+Language::message(v.toObject()["reason"].toString()),&list);
         for(const auto &v:plan["missing"].toArray()){
             auto reason=v.toObject()["reason"].toString();auto match=QRegularExpression("https://www\\.curseforge\\.com/[^\\s]+").match(reason);

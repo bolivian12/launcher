@@ -330,6 +330,27 @@ printf started > launched-marker
         QTest::mouseClick(more,Qt::LeftButton);
         if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);page.grab().save(out+"/patreon-page.png");}
     }
+    void guideQuestionsAndAnswers(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");});
+        MainWindow window;window.resize(1280,900);window.show();window.showPage(MainWindow::Guide);QTest::qWait(100);
+        auto questions=window.findChildren<QPushButton*>("faqQuestion");QVERIFY(questions.size()>=10);auto answers=window.findChildren<QLabel*>("faqAnswer");
+        for(auto a:answers)QVERIFY(!a->isVisible());
+        QTest::mouseClick(questions[0],Qt::LeftButton);QVERIFY(answers[0]->isVisible());QVERIFY(answers[0]->text().contains(".mrpack"));
+        QTest::mouseClick(questions[1],Qt::LeftButton);QTest::qWait(50);
+        if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){QDir().mkpath(out);auto page=questions[0]->window()->findChild<QWidget*>("guide")->parentWidget();page->grab().save(out+"/guide-faq.png");
+            for(auto card:window.findChildren<QFrame*>("modCard")){}window.showPage(MainWindow::Home);QTest::qWait(400);window.grab().save(out+"/home-mods.png");}
+        QTest::mouseClick(questions[0],Qt::LeftButton);QVERIFY(!answers[0]->isVisible());
+    }
+    void colourThemes(){
+        QTemporaryDir data;qputenv("EBALIA_DATA_DIR",data.path().toUtf8());auto restore=qScopeGuard([]{qunsetenv("EBALIA_DATA_DIR");Ui::setTheme("ebalia");qApp->setStyleSheet(Ui::styleSheet());});
+        QCOMPARE(Ui::themed(QColor("#3c8527")),QColor("#3c8527"));QCOMPARE(Ui::styleSheet().contains("#3c8527"),true);
+        for(const auto &t:Ui::themes()){
+            Ui::setTheme(t.id);QCOMPARE(Ui::theme(),t.id);const auto sheet=Ui::styleSheet();
+            if(t.id!="ebalia"){QVERIFY2(!sheet.contains("#3c8527")&&!sheet.contains("#4a9e31"),qPrintable(t.id));QCOMPARE(Ui::themed(QColor("#ed6957")),QColor("#ed6957"));QCOMPARE(Ui::themed(Qt::white),QColor(Qt::white));}
+            if(auto out=qEnvironmentVariable("EBALIA_TEST_ARTIFACTS");!out.isEmpty()){qApp->setStyleSheet(sheet);MainWindow window;window.resize(1280,820);window.show();window.showPage(MainWindow::Settings);QTest::qWait(150);window.grab().save(out+"/theme-"+t.id+".png");}
+        }
+        Ui::setTheme("unknown");QCOMPARE(Ui::theme(),QString("ebalia"));
+    }
     void releaseDetection(){
         QVERIFY(!UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/ebalia-real/launcher/releases/tag/v1.1.0"}},false).isEmpty());
         QVERIFY(UpdateChecker::releasePage(QJsonObject{{"html_url","https://github.com/other/launcher/releases/tag/v1.1.0"}},false).isEmpty());

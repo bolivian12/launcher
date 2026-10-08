@@ -1,5 +1,8 @@
+#include <QSettings>
+#include <QRegularExpression>
 #include <QFileInfo>
 #include "Ui.hpp"
+#include "Language.hpp"
 #include <QtWidgets>
 #include <QtConcurrent>
 namespace {
@@ -117,10 +120,11 @@ int Ui::openWindow(QDialog &dialog){
     for(auto &w:blocked)if(w)w->setEnabled(true);
     return dialog.isVisible()?(dialog.hide(),QDialog::Rejected):result;
 }
-QString Ui::styleSheet(){return QStringLiteral(R"(
+static QString baseStyleSheet(){return QStringLiteral(R"(
 QWidget{background:transparent;color:#f1f1f3;font-size:13px;}
 QMainWindow,QDialog,#content{background:#141416;}
 QMenu{background:#1e1e22;border:1px solid #34343a;border-radius:10px;padding:6px;}QMenu::item{padding:8px 26px 8px 10px;border-radius:7px;}QMenu::item:selected{background:#2b3a27;}QMenu::separator{height:1px;background:#2e2e33;margin:5px 8px;}QMenu::icon{padding-left:8px;}
+#themeChoice:checked{border:2px solid #4a9e31;background:#2b3a27;color:#ffffff;}
 QToolTip{background:#26262b;color:#ffffff;border:1px solid #3a3a41;padding:5px;}
 #sidebar{background:#1b1b1e;border-right:1px solid #26262a;}
 #accountButton{background:#232327;border:1px solid #2e2e33;border-radius:12px;padding:0;text-align:left;}#accountButton:hover{background:#2a2a2f;border-color:#3d3d44;}
@@ -181,3 +185,27 @@ QPushButton[patreon=true]{background:#ed6957;border:1px solid #f58978;color:#fff
 #lostDetail{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#lostDetail QLabel{background:transparent;}#skinPreview{background:#1e1e22;border:1px solid #2b2b30;border-radius:14px;}#statusBar{background:#18181b;border-top:1px solid #26262a;}#statusText{color:#a4a4ad;}
 #instanceSources::item{padding:6px 8px;}
 )");}
+QList<Ui::Theme> Ui::themes(){
+    return {{"ebalia",Language::text("EBALIA (verde)","EBALIA (green)","EBALIA (verde)"),105,0,0},
+            {"deepdark",Language::text("Deep Dark (turquesa)","Deep Dark (teal)","Deep Dark (turquesa)"),182,195,0.24},
+            {"nether",Language::text("Nether (rojo)","Nether (red)","Nether (vermelho)"),8,0,0.22},
+            {"end",Language::text("End (morado)","End (purple)","End (roxo)"),275,268,0.24},
+            {"ocean",Language::text("Océano (azul)","Ocean (blue)","Oceano (azul)"),212,218,0.26},
+            {"cherry",Language::text("Cerezo (rosa)","Cherry (pink)","Cerejeira (rosa)"),330,330,0.16}};
+}
+QString Ui::theme(){const auto id=QSettings().value("ui/theme","ebalia").toString();for(const auto &t:themes())if(t.id==id)return id;return "ebalia";}
+void Ui::setTheme(const QString &id){QSettings().setValue("ui/theme",id);}
+QColor Ui::themed(const QColor &color){
+    const auto id=theme();if(id=="ebalia")return color;Theme t;for(const auto &x:themes())if(x.id==id)t=x;
+    float h,s,l,a;color.getHslF(&h,&s,&l,&a);const int hue=h<0?-1:int(h*360);
+    if(hue>=70&&hue<=150&&s>0.18)return QColor::fromHslF(t.accentHue/360.0f,s,l,a);          // EBALIA's greens become the accent
+    if(s<0.12&&l<0.36)return QColor::fromHslF(t.backgroundHue/360.0f,float(t.backgroundSaturation),l,a); // dark greys take its tint
+    return color;
+}
+QColor Ui::accent(){return themed(QColor(111,209,91));}
+QString Ui::styleSheet(){
+    auto sheet=baseStyleSheet();if(theme()=="ebalia")return sheet;
+    static const QRegularExpression hex("#([0-9a-fA-F]{6})\\b");QString out;int last=0;
+    for(auto it=hex.globalMatch(sheet);it.hasNext();){auto m=it.next();out+=sheet.mid(last,m.capturedStart()-last);out+=themed(QColor("#"+m.captured(1))).name();last=m.capturedEnd();}
+    return out+sheet.mid(last);
+}

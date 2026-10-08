@@ -1,3 +1,9 @@
+# 1.1.3
+
+- Themes: EBALIA (green), Deep Dark (teal), Nether (red), End (purple), Ocean (blue) and Cherry (pink), in Settings, applied at once.
+- Questions & answers in Guide & tutorial: importing packs, crashes, buying Minecraft, mods, Java, virtual machines, where worlds are, updates, portable use, icons and pictures, lost versions and antivirus warnings.
+- EBALIA Mods covers on Home use dark artwork (Nether, Deep Dark, mineshaft).
+
 # 1.1.2
 
 - Graphics driver crashes and missing OpenGL show your graphics card (dedicated or built into the processor) and open its driver: the exact driver page for NVIDIA GeForce and AMD Radeon RX cards, Intel's pages for Arc and 7th–10th generation graphics, and the maker's automatic detection tool (NVIDIA App, AMD Auto-Detect, Intel Driver & Support Assistant) when the exact page is not found. Laptops and branded PCs also get their maker's support page (Dell, HP, Lenovo, ASUS, Acer, MSI, GIGABYTE, Samsung).

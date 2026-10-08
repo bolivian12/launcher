@@ -13,9 +13,10 @@ QPushButton *link(const QString &text,const QString &url,QBoxLayout *layout,cons
 }
 QString CreatorMod::url() const { return "https://www.curseforge.com/minecraft/mc-mods/" + slug; }
 QList<CreatorMod> creatorMods(){
-    return {{"ooo.jar","ooo-jar","An unsettling adventure hidden in your Minecraft world.",false},
-            {"In Your World","in-your-world","Something in your world is not quite right.",false},
-            {"Secret 01","secret-01-proyect","A new mystery by EBALIA. Coming soon.",true}};
+    // Dark artwork that suits horror mods.
+    return {{"ooo.jar","ooo-jar","An unsettling adventure hidden in your Minecraft world.",false,":/art/backgrounds/nether.png"},
+            {"In Your World","in-your-world","Something in your world is not quite right.",false,":/art/backgrounds/warden.png"},
+            {"Secret 01","secret-01-proyect","A new mystery by EBALIA. Coming soon.",true,":/art/backgrounds/mineshaft.png"}};
 }
 CreatorDialog::CreatorDialog(bool patreonOnly,QWidget *parent):QDialog(parent){
     setObjectName(patreonOnly?"patreonInvite":"myModsDialog");setWindowTitle(patreonOnly?"EBALIA · Patreon":QString("EBALIA Mods"));setMinimumSize(480,400);

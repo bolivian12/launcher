@@ -8,7 +8,7 @@
 namespace {
 QString t(const char *s){return Language::key(QString::fromUtf8(s));}
 constexpr int spacing=16;
-const QColor green(111,209,91),light(225,225,230);
+const QColor light(225,225,230);
 // Landscape art with the instance icon in a dark badge; the HUD at the bottom of some screenshots is cropped away.
 class Banner:public QWidget {
 public:
@@ -122,7 +122,7 @@ void InstanceGrid::rebuild(){
     }
     if(m_items.isEmpty()){
         auto empty=new QFrame;empty->setObjectName("card");auto el=new QVBoxLayout(empty);el->setContentsMargins(30,30,30,30);el->setSpacing(10);
-        auto icon=new QLabel;icon->setPixmap(Ui::pixmap("layout-grid",40,green));el->addWidget(icon);
+        auto icon=new QLabel;icon->setPixmap(Ui::pixmap("layout-grid",40,Ui::accent()));el->addWidget(icon);
         auto title=new QLabel(t("A place for every world"));title->setObjectName("sectionTitle");el->addWidget(title);
         el->addWidget(muted(t("Create your first instance. You can have several of the same version with different mods; each keeps its own worlds and settings.")));
         auto create=iconButton(t("New instance"),"plus","emptyNewInstance",true);create->setMaximumWidth(260);el->addWidget(create);connect(create,&QPushButton::clicked,this,[this]{if(this->create)this->create();});
@@ -138,7 +138,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     auto scroll=new QScrollArea;scroll->setWidgetResizable(true);scroll->setFrameShape(QFrame::NoFrame);scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);scroll->viewport()->setAutoFillBackground(false);outer->addWidget(scroll);
     auto content=new QWidget;content->setObjectName("instanceDetailContent");scroll->setWidget(content);
     auto l=new QVBoxLayout(content);l->setContentsMargins(32,18,32,24);l->setSpacing(14);
-    auto backRow=new QHBoxLayout;backRow->setSpacing(6);l->addLayout(backRow);auto backButton=new QPushButton(Ui::icon("chevron-left",green),t("All instances"));backButton->setObjectName("backButton");backButton->setProperty("link",true);backButton->setCursor(Qt::PointingHandCursor);backRow->addWidget(backButton);backRow->addStretch();
+    auto backRow=new QHBoxLayout;backRow->setSpacing(6);l->addLayout(backRow);auto backButton=new QPushButton(Ui::icon("chevron-left",Ui::accent()),t("All instances"));backButton->setObjectName("backButton");backButton->setProperty("link",true);backButton->setCursor(Qt::PointingHandCursor);backRow->addWidget(backButton);backRow->addStretch();
     connect(backButton,&QPushButton::clicked,this,[this]{if(back)back();});
     auto tools=backRow; // quick tools sit at the top right, over the artwork
     auto tool=[this,tools](const QString &icon,const QString &tip,const char *name,std::function<void()> InstanceDetail::*action){auto b=toolButton(icon,tip,name);tools->addWidget(b);connect(b,&QToolButton::clicked,this,[this,action]{if(this->*action)(this->*action)();});};
@@ -160,7 +160,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     const QList<Stat> stats{{"puzzle",t("Mods"),t("MANAGE MODS"),"mods"},{"palette",t("Resource packs"),t("MANAGE RESOURCE PACKS"),"resourcepacks"},{"sparkles",t("Shader packs"),t("MANAGE SHADER PACKS"),"shaderpacks"},{"map",t("Worlds"),t("MANAGE WORLDS"),"saves"}};
     for(int n=0;n<stats.size();++n){
         auto card=new QFrame;card->setObjectName("statCard");card->setFixedHeight(150);m_cards<<card;auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,12);cl->setSpacing(6);
-        auto icon=new QLabel;icon->setObjectName("statIcon");m_cardIcons<<icon;icon->setFixedSize(40,40);icon->setAlignment(Qt::AlignCenter);icon->setPixmap(Ui::pixmap(stats[n].icon,22,green));cl->addWidget(icon);
+        auto icon=new QLabel;icon->setObjectName("statIcon");m_cardIcons<<icon;icon->setFixedSize(40,40);icon->setAlignment(Qt::AlignCenter);icon->setPixmap(Ui::pixmap(stats[n].icon,22,Ui::accent()));cl->addWidget(icon);
         auto title=new QLabel(stats[n].title);title->setObjectName("statTitle");cl->addWidget(title);
         auto value=muted({});m_counts<<value;cl->addWidget(value);cl->addStretch();
         auto action=new QPushButton(stats[n].action);action->setProperty("link",true);action->setCursor(Qt::PointingHandCursor);cl->addWidget(action);
@@ -175,7 +175,7 @@ InstanceDetail::InstanceDetail(QWidget *parent):QWidget(parent){
     auto section=[extras](const QString &icon,const QString &title,QLabel **count){
         auto card=new QFrame;card->setObjectName("statCard");card->setMinimumHeight(250);auto cl=new QVBoxLayout(card);cl->setContentsMargins(18,16,18,16);cl->setSpacing(10);
         auto head=new QHBoxLayout;head->setSpacing(10);cl->addLayout(head);
-        auto badge=new QLabel;badge->setObjectName("statIcon");badge->setFixedSize(32,32);badge->setAlignment(Qt::AlignCenter);badge->setPixmap(Ui::pixmap(icon,18,green));head->addWidget(badge);
+        auto badge=new QLabel;badge->setObjectName("statIcon");badge->setFixedSize(32,32);badge->setAlignment(Qt::AlignCenter);badge->setPixmap(Ui::pixmap(icon,18,Ui::accent()));head->addWidget(badge);
         auto label=new QLabel(title);label->setObjectName("statTitle");head->addWidget(label);
         if(count){*count=muted({});head->addWidget(*count);}
         head->addStretch();extras->box()->addWidget(card,1);return qMakePair(cl,head);
